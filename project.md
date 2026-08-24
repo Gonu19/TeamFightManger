@@ -100,6 +100,8 @@ tags: [teamfight-manager, requirements, spring-boot, data-analysis]
 - [ ] `.\gradlew.bat test` 가 전부 통과한다 (Windows 로컬 Postgres `tfm_test` 대상, 트랜잭션 롤백 격리)
 - [ ] `tests/verify_schema.sql` 이 24/24 통과한다 — 스키마를 고칠 때마다 다시 돌린다
 - [ ] **Java 파서가 `tests/baseline/*.json` 골든 파일을 그대로 통과한다** — Python 레퍼런스와 결과가 일치한다
+- [ ] 바이트 수준 계약(부호 없는 readByte, 7-bit 길이, 버퍼 초과 예외)에 단위 테스트가 있다.
+      **골든 파일로 대신하지 않는다** — 표본에 없는 입력은 골든 파일이 지켜주지 않는다 (D34)
 - [ ] `java -jar` 한 번으로 워처·집계·웹이 모두 뜬다. 별도 프로세스를 띄우지 않아도 된다
 
 ## 나중에 정할 것 (지금은 아래 기본값으로 진행)
