@@ -1,0 +1,77 @@
+{
+  "slot_638064443900084435": {
+    "bytes": 564233,
+    "sha256": "592559f1c43130fef28011c98ef2d5e434e2f373b53a307dc6a2a96cfff44937",
+    "summary": {
+      "ban_count_distribution": {
+        "2": 214,
+        "3": 342
+      },
+      "champions": 31,
+      "games": 278,
+      "patches": 11,
+      "scrim_team_size_distribution": {
+        "2": 17,
+        "3": 21,
+        "4": 113
+      },
+      "scrims": 151,
+      "seasons": [
+        2026
+      ],
+      "today": {
+        "day": 40,
+        "run": 0,
+        "season": 2026
+      }
+    }
+  },
+  "slot_638377270248153191": {
+    "bytes": 486958,
+    "sha256": "b24fd39d5933f3232cd73e121de11a19a3d46c8b241bc48c75b4c8cf5025c645",
+    "summary": {
+      "ban_count_distribution": {
+        "3": 466
+      },
+      "champions": 40,
+      "games": 233,
+      "patches": 19,
+      "scrim_team_size_distribution": {
+        "4": 117
+      },
+      "scrims": 117,
+      "seasons": [
+        2025
+      ],
+      "today": {
+        "day": 40,
+        "run": 0,
+        "season": 2025
+      }
+    }
+  },
+  "slot_638683925954242004": {
+    "bytes": 639527,
+    "sha256": "07fccc029cac32f48e66473476c11128a50c363e31f3b9549312ffd63089f1d1",
+    "summary": {
+      "ban_count_distribution": {
+        "3": 588
+      },
+      "champions": 40,
+      "games": 294,
+      "patches": 19,
+      "scrim_team_size_distribution": {
+        "4": 181
+      },
+      "scrims": 181,
+      "seasons": [
+        2025
+      ],
+      "today": {
+        "day": 46,
+        "run": 0,
+        "season": 2025
+      }
+    }
+  }
+}

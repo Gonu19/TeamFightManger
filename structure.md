@@ -1,0 +1,112 @@
+---
+title: 팀파이트 매니저 티어 분석 - 파일 구조
+created: 2026-08-25
+updated: 2026-08-25
+para:
+project:
+areas: []
+status:
+tags: [teamfight-manager, architecture, structure]
+---
+
+# 파일 구조
+
+패키지를 **기능/도메인으로 나눈다.** 타입별(`controller/`, `service/`, `dto/`)로 나누지 않는다.
+경계가 곧 규칙이 되도록 배치했다 — 문서에만 적힌 규칙은 지켜지지 않는다.
+
+```
+A:\project\TeamFighter\
+├─ build.gradle · settings.gradle · gradle.properties
+├─ gradlew.bat · gradle/wrapper/            Gradle 9.5.1
+├─ .gitignore
+│
+├─ *.md                                     설계 문서 (루트 유지)
+├─ fixtures/                                세이브 스냅샷 (라이브 파일 대신)
+├─ tests/
+│   ├─ verify_schema.sql                    스키마 제약 검증 24/24
+│   └─ baseline/*.json                       ★ 언어 무관 골든 파일
+│
+├─ src/main/java/com/teamfighter/tfm/
+│   ├─ TfmApplication.java
+│   ├─ config/                              설정 로딩, 보안, 데이터소스
+│   ├─ parser/          ★ Spring 의존 0
+│   │   ├─ nrbf/                            NrbfReader · RecordType · ObjectGraph
+│   │   ├─ save/                            SaveFileParser · GameStat/Scrim/PatchNews 매퍼
+│   │   └─ model/                           파서 출력 DTO (DB 무관)
+│   ├─ ingest/          JPA
+│   │   ├─ watcher/                         SaveWatcher · SlotPathResolver
+│   │   ├─ entity/ · repository/
+│   │   ├─ IngestService · ParticipantMatcher · PatchAssigner
+│   ├─ analysis/        JdbcTemplate
+│   │   ├─ decay/                           이중 감쇠        (D15a)
+│   │   ├─ shrink/                          2단 축소         (D15b)
+│   │   ├─ strength/                        Bradley-Terry    (D14)
+│   │   ├─ counter/ · synergy/ · performance/
+│   │   └─ dao/
+│   ├─ draft/           밴픽 시뮬            (banpick.md)
+│   │   ├─ DraftStateMachine · DraftSessionService · EvidenceGate
+│   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
+│   │   └─ dao/
+│   ├─ web/
+│   │   ├─ 컨트롤러: Tier · Champion · Synergy · Gaps · Draft · Slot
+│   │   ├─ sse/                             실시간 갱신
+│   │   └─ view/                            서버가 계산해 내려보내는 표시 모델
+│   └─ common/
+│
+├─ src/main/resources/
+│   ├─ application.yml                      비밀번호는 환경변수로만
+│   ├─ db/migration/V1__init.sql            ★ 스키마의 유일한 원본
+│   ├─ seed/champions.csv                   ★ 챔피언 40종 + 역할군 (원본 1벌)
+│   ├─ templates/ + templates/fragments/
+│   └─ static/css · static/js
+│
+└─ src/test/java/...                        main 과 거울 구조
+```
+
+## 왜 이렇게 나눴나
+
+**`parser/` 에 Spring 의존을 0 으로 둔다.** 이 프로젝트에서 조용히 틀릴 위험이 가장 큰 곳이다
+— Java 의 `byte` 는 부호가 있는데 NRBF 는 unsigned 를 다루므로 `& 0xFF` 를 빼먹으면
+예외 없이 틀린 값이 나온다. Spring 컨텍스트 없이 순수 JUnit 으로 골든 파일과 대조할 수 있어야
+그 검증이 빠르고 확실하다. 파서는 라이브러리처럼 취급한다.
+
+**`ingest/`(JPA)와 `analysis/`(JdbcTemplate)를 패키지로 가른다.** D22 가 정한 규칙인데,
+같은 패키지에 두면 지켜지지 않는다. 가중합·2단 축소·백분위 컷·`NULLS NOT DISTINCT` 업서트는
+Hibernate 가 약한 영역이라 JdbcTemplate 으로 가고, 경계를 파일 위치로 강제한다.
+
+**`draft/` 를 `analysis/` 아래에 두지 않는다.** 시뮬레이터는 집계값을 **소비**할 뿐
+생산하지 않는다. 아래에 두면 시뮬이 집계 로직을 직접 부르고 싶어진다.
+
+**`web/view/` 가 따로 있다.** 디자인 요구가 "표본에 따른 시각적 약화, 신뢰구간 막대, 티어 뱃지를
+서버에서 계산해 내려보낸다"이다. 클라이언트가 통계를 다시 계산하지 않는다는 규칙을
+템플릿 안 로직이 아니라 별도 모델로 만들어 지킨다.
+
+## `schema.sql` 을 옮긴 이유
+
+`src/main/resources/db/migration/V1__init.sql` **하나만 둔다.** 루트의 `schema.sql` 은 없앴다.
+
+문서가 `schema.sql` 을 "스키마의 기준"이라 부르는데 Flyway 마이그레이션 사본을 따로 두면
+440줄 DDL 이 두 벌이 되어 반드시 어긋난다. 어느 쪽이 진짜인지 애매해지는 순간
+"바꾸면 마이그레이션을 추가한다"는 규칙이 무너진다.
+
+psql 로 직접 적용할 때도 이 경로를 쓰면 된다.
+
+```powershell
+chcp 65001
+& 'C:\Program Files\PostgreSQL\16\bin\psql.exe' -U postgres -d tfm_test `
+  -v ON_ERROR_STOP=1 -f src/main/resources/db/migration/V1__init.sql
+```
+
+## 확인된 빌드
+
+Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 21.
+`gradlew.bat build` 성공, `bootJar` 생성 확인 (D31).
+
+## 아직 만들지 않은 것
+
+빈 클래스 파일을 미리 깔지 않는다. 위 트리는 **목표 구조**이고, 각 파일은 실제로 필요할 때 만든다.
+지금 존재하는 것은 `TfmApplication.java` 와 설정·빌드 파일뿐이다.
+
+---
+
+[[teamFighterManger.README]]

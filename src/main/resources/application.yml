@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: tfm
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/${TFM_DB_NAME:tfm}
+    username: ${TFM_DB_USER:postgres}
+    # 비밀번호를 파일에 적지 않는다. 환경변수로 넣는다.
+    # PowerShell 은 따옴표가 없으면 값을 명령어로 해석한다. 반드시 따옴표를 쓸 것:
+    #   $env:TFM_DB_PASSWORD = 'your-password'
+    password: ${TFM_DB_PASSWORD}
+    hikari:
+      maximum-pool-size: 10
+
+  jpa:
+    hibernate:
+      ddl-auto: validate      # 스키마의 주인은 Flyway 다. Hibernate 가 손대지 않는다
+    open-in-view: false
+    properties:
+      hibernate.jdbc.time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+    baseline-on-migrate: false
+
+  thymeleaf:
+    cache: false            # 로컬 실행 전제라 템플릿을 즉시 반영한다
+
+server:
+  # 8080 은 로컬 LLM 서버(llama-server)가 쓰고 있다
+  port: ${TFM_PORT:8088}
+
+tfm:
+  # 워처가 감시할 세이브 폴더. slot_*.tfm 만 잡는다 (D28: *.tfm_backup 제외)
+  save-dir: ${TFM_SAVE_DIR:${user.home}/AppData/LocalLow/samoyed/Teamfight Manager}
+  # 세이브 쓰기 감지 후 이만큼 기다렸다 읽는다. 쓰는 도중에 읽으면 스트림이 잘린다 (D12)
+  watch-debounce-ms: 1500
+  # 세이브 파일은 읽기만 한다. 어떤 경우에도 쓰지 않는다.
+  read-only: true
+
+logging:
+  level:
+    com.teamfighter.tfm: DEBUG
+    org.flywaydb: INFO

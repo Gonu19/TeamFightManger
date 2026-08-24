@@ -1,0 +1,17 @@
+# 줄바꿈을 LF 로 고정한다.
+#
+# Windows 의 core.autocrlf 가 켜져 있으면 체크아웃 때 CRLF 로 바꾼다.
+# 그러면 tests/baseline/*.json 의 sha256 이 전부 달라진다 —
+# 골든 파일의 계약이 "바이트 일치"이므로 이건 계약을 깨는 것이다 (D27/D33).
+* text=auto eol=lf
+
+# Windows 배치 파일만 CRLF 여야 한다
+*.bat text eol=crlf
+
+# 골든 파일. 명시적으로 한 번 더 못 박는다
+tests/baseline/*.json text eol=lf
+
+# 바이너리 — 변환하지 않는다
+*.jar  binary
+*.tfm  binary
+*.png  binary
