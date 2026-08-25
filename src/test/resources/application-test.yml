@@ -9,6 +9,12 @@ spring:
     hibernate:
       ddl-auto: validate    # 엔티티 매핑이 실제 스키마와 어긋나면 여기서 죽는다
     open-in-view: false
+    properties:
+      hibernate.generate_statistics: ${TFM_SQL_STATS:false}
+      # 운영과 같은 조건에서 재야 측정이 의미가 있다
+      hibernate.jdbc.batch_size: 50
+      hibernate.order_inserts: true
+      hibernate.order_updates: true
   flyway:
     enabled: true
     locations: classpath:db/migration
@@ -19,3 +25,6 @@ logging:
   level:
     org.hibernate.SQL: WARN
     org.flywaydb: WARN
+    # TFM_SQL_STATS=true 로 켜면 적재 한 번에 나가는 SQL 수가 찍힌다.
+    # 추측 대신 세기 위한 것이다 — 기본은 꺼둔다
+    org.hibernate.stat: ${TFM_SQL_STATS_LOG:WARN}

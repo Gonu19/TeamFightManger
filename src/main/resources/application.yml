@@ -18,6 +18,13 @@ spring:
     open-in-view: false
     properties:
       hibernate.jdbc.time_zone: UTC
+      # 적재는 한 파일에 수천 행을 넣는다. 배치가 없으면 행마다 왕복한다.
+      # MatchRecord·Patch 는 IDENTITY 라 어차피 배치가 안 걸리지만
+      # (Hibernate 가 생성된 키를 즉시 받아야 한다),
+      # 참가자·밴은 자연키라 배치된다 — 그쪽이 행 수의 대부분이다
+      hibernate.jdbc.batch_size: 50
+      hibernate.order_inserts: true
+      hibernate.order_updates: true
 
   flyway:
     enabled: true
