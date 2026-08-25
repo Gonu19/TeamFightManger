@@ -24,6 +24,7 @@ tags: [teamfight-manager, database, data-analysis, spring-boot]
   네 결정은 현행 `V1__init.sql` 에 그대로 살아 있다. 그래서 기록용으로 남긴다.
   **`is_reliable = 20경기` 는 폐기된 값이다. 현행은 `min_sample = 10`.**
 - `structure.md` — 파일 구조와 패키지 경계의 근거
+- [[workflow.md]] — 작업 형식. 서브에이전트 배분과 문서 배분 규칙
 - `src/main/resources/db/migration/V1__init.sql` — DDL 전문. **스키마의 유일한 원본**
 - `src/main/resources/seed/champions.csv` — 챔피언 40종 + 역할군
 - `tests/verify_schema.sql` — 스키마 제약 검증 (읽기 전용, ROLLBACK)
@@ -67,8 +68,9 @@ tags: [teamfight-manager, database, data-analysis, spring-boot]
 설계 완료. 웹 코드 없음.
 
 - **앱이 뜬다.** Spring Boot 4.1.1 부팅 확인, Flyway 가 `tfm` 에 v1 적용, 포트 8088
-- **파서가 동작한다.** 세이브 3개에서 경기 805건 추출, 문서 실측치와 전부 일치.
-  골든 파일 생성 완료 — Java 포팅의 정답지가 준비됐다
+- **파서가 동작한다.** Java · Python 두 구현이 골든 파일에서 바이트 일치. 경기 805건
+- **적재 계층의 토대가 섰다.** 엔티티 15 · 리포지토리 9. Hibernate 7 이 실제 스키마를 검증 통과,
+  Postgres named ENUM 왕복 확인. 테스트 14개 통과(건너뜀 0)
 - 스키마 Windows PG16.15 적용 검증 완료 — 오류 0, 제약 검증 **24/24 통과**
   (테이블 21 · 뷰 3 · ENUM 5 · 생성열 6 · 시드 `draft_step` 14행)
 - `seed/champions.csv` 역할군 40행 완성 — 관측 40종과 정확히 일치
