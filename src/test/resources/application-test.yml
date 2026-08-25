@@ -1,0 +1,21 @@
+# 테스트는 별도 DB 를 쓴다. Testcontainers 를 쓰지 않는 이유는 D23 참고
+# (이 PC 에서 Docker 가 기동되지 않는다).
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/tfm_test
+    username: ${TFM_DB_USER:postgres}
+    password: ${TFM_DB_PASSWORD}
+  jpa:
+    hibernate:
+      ddl-auto: validate    # 엔티티 매핑이 실제 스키마와 어긋나면 여기서 죽는다
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  sql:
+    init:
+      mode: never
+logging:
+  level:
+    org.hibernate.SQL: WARN
+    org.flywaydb: WARN

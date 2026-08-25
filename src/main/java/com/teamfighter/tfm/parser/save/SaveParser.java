@@ -181,6 +181,13 @@ public final class SaveParser {
         return out;
     }
 
+    /**
+     * 현재 게임 내 날짜.
+     *
+     * <p>없으면 던진다. {@code TodayData} 는 모든 세이브에 반드시 있으므로,
+     * 못 찾았다는 것은 "날짜를 모른다" 가 아니라 <b>스트림 구조가 어긋났다</b> 는 뜻이다.
+     * null 로 넘기면 스크림 시점 배정(D8)이 통째로 조용히 실패한다.
+     */
     static ParsedToday readToday(NrbfParser parser) {
         for (NrbfObject t : walk(parser, "TodayData")) {
             Object time = get(t, "Time");
@@ -188,7 +195,9 @@ public final class SaveParser {
                 return new ParsedToday(intOf(time, "Season"), intOf(time, "Day"), intOf(time, "Run"));
             }
         }
-        return null;
+        throw new IllegalStateException(
+                "TodayData 를 찾지 못했다. 세이브 파일 구조가 예상과 다르다 — "
+                        + "이 값 없이는 스크림의 시점을 정할 수 없다 (D18)");
     }
 
     // ------------------------------------------------------------------ 공통

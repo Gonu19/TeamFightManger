@@ -87,9 +87,25 @@ public final class SaveValues {
         return out;
     }
 
+    /**
+     * 정수 멤버를 읽는다.
+     *
+     * <p><b>다른 수치 타입을 잘라내지 않는다.</b> 아무 {@code Number} 나 받아
+     * {@code intValue()} 로 줄이면, 게임이 필드 타입을 바꿨을 때(Int32 → Int64/Single)
+     * 소수부를 버리거나 하위 32비트만 남긴 값이 조용히 통계로 들어간다.
+     * 레퍼런스 구현은 파싱된 값을 그대로 내보내므로 그 순간 결과가 갈린다.
+     */
     public static Integer intOf(Object owner, String name) {
         Object v = get(owner, name);
-        return (v instanceof Number n) ? n.intValue() : null;
+        if (v == null) {
+            return null;
+        }
+        if (v instanceof Integer i) {
+            return i;
+        }
+        throw new IllegalStateException(
+                name + " 이 Int32 가 아니다: " + v.getClass().getSimpleName() + " = " + v
+                        + ". 세이브 파일의 필드 타입이 바뀌었을 수 있다");
     }
 
     public static Boolean boolOf(Object owner, String name) {

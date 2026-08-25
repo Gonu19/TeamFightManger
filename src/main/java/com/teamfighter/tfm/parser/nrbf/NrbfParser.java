@@ -4,7 +4,7 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -28,8 +28,11 @@ public final class NrbfParser {
     };
 
     private final NrbfReader r;
-    private final Map<Integer, Object> objects = new HashMap<>();
-    private final Map<Integer, ClassMeta> classes = new HashMap<>();
+    // LinkedHashMap 이어야 한다. walk() 가 이 맵을 순회해 목록을 만드는데,
+    // 레퍼런스 구현의 dict 는 삽입 순서를 보장한다. HashMap 은 순서가 달라서
+    // 정렬 키가 같은 항목(예: 같은 날짜의 PatchNews 두 건)의 상대 순서가 갈린다.
+    private final Map<Integer, Object> objects = new LinkedHashMap<>();
+    private final Map<Integer, ClassMeta> classes = new LinkedHashMap<>();
     private int rootId;
     private boolean done;
 
@@ -234,10 +237,15 @@ public final class NrbfParser {
         int arrayType = r.readByte();
         int rank = r.readInt32();
 
-        int total = 1;
+        // int 곱셈은 넘치면 조용히 감긴다. 감긴 개수로 읽으면 스트림이 어긋난다.
+        long size = 1;
         for (int i = 0; i < rank; i++) {
-            total *= r.readInt32();
+            size *= r.readInt32();
         }
+        if (size < 0 || size > Integer.MAX_VALUE) {
+            throw new NrbfException("배열 크기가 표현 범위를 넘는다: " + size + " (pos=" + r.position() + ")");
+        }
+        int total = (int) size;
         if (arrayType == 3 || arrayType == 4 || arrayType == 5) {   // *Offset 계열은 하한이 따로 온다
             for (int i = 0; i < rank; i++) {
                 r.readInt32();
