@@ -55,8 +55,9 @@ A:\project\TeamFighter\
 │
 ├─ src/main/resources/
 │   ├─ application.yml                      비밀번호는 환경변수로만
-│   ├─ db/migration/V1__init.sql            ★ 스키마의 유일한 원본
-│   ├─ seed/champions.csv                   ★ 챔피언 40종 + 역할군 (원본 1벌)
+│   ├─ db/migration/                        ★ 스키마·시드의 유일한 원본
+│   │   ├─ V1__init.sql · V2__fixed_team_size.sql
+│   │   └─ V3__seed_champions.sql           챔피언 40종
 │   ├─ templates/ + templates/fragments/
 │   └─ static/css · static/js
 │

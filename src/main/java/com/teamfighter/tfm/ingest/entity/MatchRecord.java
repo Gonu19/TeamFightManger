@@ -128,6 +128,26 @@ public class MatchRecord {
         return patchId;
     }
 
+    public Integer getObservedSeason() {
+        return observedSeason;
+    }
+
+    public Integer getObservedDay() {
+        return observedDay;
+    }
+
+    public OffsetDateTime getObservedAt() {
+        return observedAt;
+    }
+
+    public Integer getSeason() {
+        return season;
+    }
+
+    public Integer getDay() {
+        return day;
+    }
+
     public void setSchedule(Integer season, Integer day, Integer setNo, Integer scheduleId) {
         this.season = season;
         this.day = day;

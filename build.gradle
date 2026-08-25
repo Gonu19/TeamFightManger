@@ -43,4 +43,17 @@ tasks.named('test') {
     useJUnitPlatform()
     // 골든 파일 비교가 CRLF 에 깨지지 않게 (D27)
     systemProperty 'file.encoding', 'UTF-8'
+
+    // 테스트가 실제 Postgres(tfm_test)와 fixtures/*.tfm 에 붙는다.
+    // 둘 다 Gradle 이 입력으로 추적하지 못한다 — DB 스키마가 바뀌거나 픽스처가 바뀌어도
+    // 소스가 그대로면 캐시된 "통과" 를 복원해버린다. 돌지 않은 테스트가 초록색으로 보이는 것이
+    // 이 프로젝트에서 가장 나쁜 실패다(D34). 항상 실제로 돌린다.
+    outputs.upToDateWhen { false }
+    outputs.cacheIf { false }
+
+    testLogging {
+        // Gradle 10 부터 'propName value' 문법이 사라진다. 대입으로 쓴다
+        events = ['passed', 'skipped', 'failed']
+        exceptionFormat = 'short'
+    }
 }

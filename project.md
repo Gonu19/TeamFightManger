@@ -128,7 +128,7 @@ tags: [teamfight-manager, requirements, spring-boot, data-analysis]
 - `banpick.md` — 밴픽 시뮬레이터 설계 (다음 구현)
 - `tests/verify_schema.sql` — 스키마 제약 검증. **24/24 통과 확인됨**. 읽기 전용(ROLLBACK)
 - `db-review.md` — 초기 OCR 전제 스키마 검토. **폐기됨.** 기록용
-- `src/main/resources/seed/champions.csv` — 챔피언 40종 + 역할군. **완성됨**
+- `db/migration/V3__seed_champions.sql` — 챔피언 40종 + 역할군. **시드의 유일한 원본**
 - `tools/nrbf.py` — MS-NRBF 파서 (**동작 확인됨**). Java 포팅의 원본
 - `tools/save_model.py` — 경기·패치·현재날짜 추출. 진영은 챔피언 이름으로 매칭(D20)
 - `tools/make_baseline.py` — 골든 파일 생성기. `--check` 로 대조만 할 수 있다
@@ -149,7 +149,7 @@ tags: [teamfight-manager, requirements, spring-boot, data-analysis]
 - `tools/watch_save.py` — 세이브 쓰기 감지·주기 측정기. 아직 없다
 - 챔피언 이미지 — 없으면 비워둔다. 필수 아님
 
-`src/main/resources/seed/champions.csv` 의 역할군 40행은 **채워졌다.** `savefile.md` 관측 40종과 정확히 일치하고,
+챔피언 40종의 역할군은 **`V3__seed_champions.sql` 에 들어갔다.** `savefile.md` 관측 40종과 정확히 일치하고,
 분포는 전사 10 / 원거리 7 / 마법사 7 / 전투보조 9 / 암살자 7 이다.
 
 ## 확인 방법
@@ -160,7 +160,6 @@ Windows PowerShell 에서 실행한다. WSL 을 쓰지 않는다.
 Get-Service postgresql-x64-16              # 서비스 실행 확인
 $env:TFM_DB_PASSWORD = 'your-password'     # 따옴표 필수. 없으면 즉시 실패한다
 .\gradlew.bat bootRun                      # Flyway 자동 실행 → http://localhost:8088
-.\gradlew.bat bootRun --args='--seed'      # 챔피언 40종 + 역할군 시드
 ```
 
 포트는 8088 이다. 8080 은 로컬 LLM 서버가 쓰고 있어서 비켰다 (`${TFM_PORT}` 로 변경 가능).

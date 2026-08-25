@@ -26,7 +26,7 @@ tags: [teamfight-manager, database, data-analysis, spring-boot]
 - `structure.md` — 파일 구조와 패키지 경계의 근거
 - [[workflow.md]] — 작업 형식. 서브에이전트 배분과 문서 배분 규칙
 - `src/main/resources/db/migration/V1__init.sql` — DDL 전문. **스키마의 유일한 원본**
-- `src/main/resources/seed/champions.csv` — 챔피언 40종 + 역할군
+- `db/migration/V3__seed_champions.sql` — 챔피언 40종 + 역할군 시드
 - `tests/verify_schema.sql` — 스키마 제약 검증 (읽기 전용, ROLLBACK)
 - `tools/nrbf.py` · `save_model.py` · `make_baseline.py` — 파서 레퍼런스 구현 (**동작 확인됨**)
 - `tests/baseline/*.json` — 골든 파일 3슬롯. Java 파서의 정답지
