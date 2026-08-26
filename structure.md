@@ -28,7 +28,7 @@ A:\project\TeamFighter\
 │
 ├─ src/main/java/com/teamfighter/tfm/
 │   ├─ TfmApplication.java
-│   ├─ config/                              설정 로딩, 보안, 데이터소스
+│   ├─ config/                              설정 로딩, 데이터소스 (보안 없음 — D41)
 │   ├─ parser/          ★ Spring 의존 0
 │   │   ├─ nrbf/                            NrbfReader · RecordType · ObjectGraph
 │   │   ├─ save/                            SaveFileParser · GameStat/Scrim/PatchNews 매퍼

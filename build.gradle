@@ -18,7 +18,9 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-web'
     implementation 'org.springframework.boot:spring-boot-starter-thymeleaf'
     implementation 'org.springframework.boot:spring-boot-starter-validation'
-    implementation 'org.springframework.boot:spring-boot-starter-security'
+    // Spring Security 를 쓰지 않는다 (D41). 로컬 java -jar 단일 사용자라 인증할 상대가 없다.
+    // permitAll() 로 열어두는 대신 의존성을 뺐다 — 남겨두면 "보안이 있는데 다 열어놨다" 가
+    // 되어 실제로는 없는 방어선을 있는 것처럼 보이게 한다
 
     // 적재는 JPA, 집계는 JdbcTemplate (D22). starter-data-jpa 가 jdbc 도 끌어온다
     implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
@@ -33,7 +35,6 @@ dependencies {
     runtimeOnly 'org.postgresql:postgresql'
 
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
-    testImplementation 'org.springframework.security:spring-security-test'
     testRuntimeOnly   'org.junit.platform:junit-platform-launcher'
     // Testcontainers 는 쓰지 않는다 (D23: 이 PC 에서 Docker 가 기동되지 않음).
     // 테스트는 로컬 tfm_test DB + 트랜잭션 롤백으로 격리한다.
