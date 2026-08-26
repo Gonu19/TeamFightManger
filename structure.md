@@ -39,10 +39,13 @@ A:\project\TeamFighter\
 │   │   ├─ IngestService · ParticipantMatcher · PatchAssigner
 │   ├─ analysis/        JdbcTemplate. 순수 계산 계층에는 Spring 의존이 없다
 │   │   ├─ AnalysisConfig                   analysis_config 여섯 키 (D44)
+│   │   ├─ ReferencePoint                   추정 시점 · 거리 계산 (D24·D45)
+│   │   ├─ MatchObservation                 집계 입력 단위 (승리 팀 / 패배 팀)
 │   │   ├─ decay/       DecayWeight         이중 감쇠        (D15a·D42)
 │   │   ├─ shrink/      Shrinkage           2단 축소·유효표본 (D15b)
 │   │   ├─ strength/    BradleyTerry        기저 강도        (D14·D43)
-│   │   ├─ counter/ · synergy/ · performance/
+│   │   ├─ counter/     MatchupAggregator   경기 → 쌍 전개 · 누적 (D14)
+│   │   ├─ synergy/ · performance/
 │   │   └─ dao/
 │   ├─ draft/           밴픽 시뮬            (banpick.md)
 │   │   ├─ DraftStateMachine · DraftSessionService · EvidenceGate
