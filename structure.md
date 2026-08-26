@@ -34,7 +34,7 @@ A:\project\TeamFighter\
 │   │   ├─ save/                            SaveFileParser · GameStat/Scrim/PatchNews 매퍼
 │   │   └─ model/                           파서 출력 DTO (DB 무관)
 │   ├─ ingest/          JPA
-│   │   ├─ watcher/                         SaveWatcher · SlotPathResolver
+│   │   ├─ watcher/                         SaveWatcher · SlotPathResolver · StartupCatchUp · TfmProperties
 │   │   ├─ entity/ · repository/
 │   │   ├─ IngestService · ParticipantMatcher · PatchAssigner
 │   ├─ analysis/        JdbcTemplate

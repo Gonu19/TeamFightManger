@@ -105,13 +105,16 @@ class SaveWatcherRobustnessTest {
     }
 
     @Test
-    @DisplayName("OVERFLOW 이벤트를 받으면 폴더를 다시 훑어 놓친 변경을 따라잡는다")
+    @DisplayName("OVERFLOW 이벤트를 받으면 폴더를 다시 훑어 놓친 변경을 따라잡는다 — rescan() 이 그 일을 한다")
     void overflow_triggersRescanOfFolder(@TempDir Path dir) throws IOException {
         // 워처를 start() 하지 않는다. 이건 편의가 아니라 이 테스트가 성립하는 조건이다.
         // start() 한 채로 파일을 만들면 정상 CREATE 이벤트만으로도 ingest() 가 불려서,
-        // handleOverflow() 를 빈 메서드로 바꿔도 테스트가 통과한다 — 즉 잡겠다는 변조를
+        // rescan() 을 빈 메서드로 바꿔도 테스트가 통과한다 — 즉 잡겠다는 변조를
         // 못 잡는 테스트가 된다. WatchService 이벤트가 아예 없는 상태로 만들어야
         // "재훑기가 실제로 일을 했는가" 만 남는다.
+        //
+        // rescan() 은 OVERFLOW 처리와 기동 시 따라잡기(StartupCatchUp)가 공유하는 같은
+        // 메서드다 — 이름만 바뀌었을 뿐 계약은 그대로다.
         ingest = new FakeIngestService();
         watcher = new SaveWatcher(dir, DEBOUNCE_MS, ingest);
 
@@ -121,9 +124,9 @@ class SaveWatcherRobustnessTest {
         // 기준선 — 감시 스레드가 없으니 이 경로로는 아무 일도 일어나지 않아야 한다.
         assertStaysFalseFor(() -> ingest.callCount() > 0, DEBOUNCE_MS * 2);
 
-        watcher.handleOverflow();
+        watcher.rescan();
 
-        // 변조: OVERFLOW 처리를 빈 메서드(no-op)로 두면 유실된 변경이 영원히 적재되지 않는다.
+        // 변조: rescan() 을 빈 메서드(no-op)로 두면 유실된 변경이 영원히 적재되지 않는다.
         // 이제 ingest() 로 가는 길이 이 경로뿐이라 그 무동작이 여기서 드러난다.
         awaitUntil(() -> ingest.countCallsFor(missedSlot) >= 1, DEBOUNCE_MS * 5);
     }
@@ -152,6 +155,43 @@ class SaveWatcherRobustnessTest {
         // 변조: stop() 이 스레드만 죽이고 아직 큐에 남아있던 디바운스 타이머를 취소하지
         // 않으면, 정지 후에도 지연된 ingest() 호출이 한 번 더 발생할 수 있다.
         assertStaysFalseFor(() -> ingest.callCount() > 0, DEBOUNCE_MS * 5);
+    }
+
+    @Test
+    @DisplayName("디바운스를 기다리던 적재를 stop() 이 취소하면 그 사실을 로그로 남긴다")
+    void stop_logsCancelledPendingIngests_ratherThanDroppingThemSilently(@TempDir Path dir)
+            throws IOException, InterruptedException {
+        Logger watcherLogger = (Logger) LoggerFactory.getLogger(SaveWatcher.class);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        watcherLogger.addAppender(appender);
+
+        try {
+            Path slot = dir.resolve("slot_a.tfm");
+            Files.writeString(slot, "v0", StandardCharsets.UTF_8);
+            start(dir);
+
+            write(slot, "v1");
+            Thread.sleep(DEBOUNCE_MS / 2);   // 디바운스 만료 전 — 타이머가 대기 중이다
+
+            watcher.stop();
+
+            // 기동 직후 1.5초 안에 앱이 종료되면 StartupCatchUp 이 건 따라잡기가 통째로
+            // 취소된다. 그때 "따라잡기 시작" 로그만 남고 한 건도 안 들어간 채 끝나는데,
+            // 로그만 보면 성공한 것처럼 보인다.
+            //
+            // 변조: stop() 에서 이 경고를 지우면 취소가 아무 흔적 없이 일어난다 —
+            // 이 단언이 그 침묵을 잡는다.
+            List<ILoggingEvent> warnings = appender.list.stream()
+                    .filter(e -> e.getLevel().isGreaterOrEqual(Level.WARN))
+                    .filter(e -> e.getFormattedMessage().contains("slot_a.tfm"))
+                    .toList();
+            assertThat(warnings)
+                    .as("취소된 적재가 어느 파일이었는지 로그에 남아야 한다")
+                    .isNotEmpty();
+        } finally {
+            watcherLogger.detachAppender(appender);
+        }
     }
 
     @Test

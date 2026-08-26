@@ -29,4 +29,15 @@ public class WatcherConfig {
     public SaveWatcher saveWatcher(TfmProperties properties, IngestService ingestService) {
         return new SaveWatcher(properties, ingestService);
     }
+
+    /**
+     * 기동 시 따라잡기. {@link SaveWatcher} 와 <b>같은 조건</b>이어야 한다 — 워처가 없는데
+     * 따라잡기만 도는 상태는 {@code saveWatcher} 빈 자체가 없어 만들 수도 없지만, 조건을
+     * 따로 걸어두면 나중에 둘 중 하나만 바뀌었을 때 그 상태가 조용히 생길 수 있다.
+     */
+    @ConditionalOnProperty(name = "tfm.watch-enabled", havingValue = "true", matchIfMissing = true)
+    @Bean
+    public StartupCatchUp startupCatchUp(SaveWatcher saveWatcher) {
+        return new StartupCatchUp(saveWatcher);
+    }
 }

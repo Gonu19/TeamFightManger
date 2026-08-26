@@ -57,7 +57,7 @@ public final class SaveWatcher {
     private final Map<Path, ScheduledFuture<?>> pending = new ConcurrentHashMap<>();
 
     /**
-     * 생성자에서 만든다. {@link #handleOverflow()} 는 감시 스레드 없이도 동작해야 하고
+     * 생성자에서 만든다. {@link #rescan()} 은 감시 스레드 없이도 동작해야 하고
      * (그래야 재훑기만 따로 검증된다), 여기서 만들어 두면 그 경로가 {@code start()} 에
      * 의존하지 않는다.
      */
@@ -142,7 +142,7 @@ public final class SaveWatcher {
                         // 이벤트가 유실됐다. 무엇이 유실됐는지는 알 길이 없으니 전부 다시 훑는다.
                         log.warn("감시 이벤트가 유실됐다(OVERFLOW). 폴더를 다시 훑는다: {}", watchDir);
                         try {
-                            handleOverflow();
+                            rescan();
                         } catch (RuntimeException e) {
                             // 재훑기 실패가 감시 자체를 끝내면 안 된다. 폴더가 잠깐 사라졌다
                             // 돌아오는 일(외장 드라이브·백신 격리)이 있고, 그때 워처가 죽으면
@@ -220,15 +220,32 @@ public final class SaveWatcher {
     }
 
     /**
-     * {@code WatchService} 의 {@code OVERFLOW} 처리 — 폴더를 다시 훑어 놓친 변경을 따라잡는다.
+     * 폴더를 다시 훑어 놓친 변경을 따라잡는다.
      *
-     * <p>재훑기도 디바운스를 거친다. 오버플로가 났다는 것은 쓰기가 몰렸다는 뜻이라
-     * 지금 이 순간에도 쓰는 중일 수 있다.
+     * <p>두 곳에서 부른다: (1) {@code watchLoop} 이 {@code OVERFLOW} 를 받았을 때 — 감시 큐가
+     * 넘쳐 무엇이 유실됐는지 알 수 없을 때, (2) {@link StartupCatchUp} 이 기동 직후 한 번 —
+     * 앱이 꺼져 있던 동안, 또는 이번 기동에서 워처가 아직 건드리지 않은 슬롯을 잡기 위해서다.
+     * 게임이 건드린 슬롯만 이벤트가 오므로, 나머지 슬롯은 이 경로가 아니면 영원히 안 잡힌다.
      *
-     * <p>패키지 전용인 이유: 실제 OS 오버플로는 감시 큐가 찰 만큼 이벤트를 쏟아부어야 나고
-     * 그 임계값이 OS·JVM 마다 달라 테스트에서 결정적으로 재현할 수 없다.
+     * <p>재훑기도 디바운스를 거친다. 오버플로든 기동 직후든, 그 순간에도 게임이 쓰는 중일 수 있다.
+     * {@code scheduleIngest} 를 그대로 재사용하므로 워처의 파일 변경 이벤트와 같은
+     * {@link #pending} 맵·같은 단일 스레드 스케줄러를 공유한다 — 같은 파일에 대해 겹쳐 돌지
+     * 않고, 겹치면 디바운스가 합쳐 한 번만 부른다.
+     *
+     * <p>슬롯 하나의 {@code ingest()} 가 실패해도 나머지 슬롯은 그대로 적재된다 — 그 예외 처리는
+     * {@link #runIngest} 가 이미 한다. 여기서 새로 막을 것은 없다.
+     *
+     * @throws IllegalStateException {@link #stop()} 된 워처에서 부르면. 디바운스 스케줄러가
+     *         이미 shutdown 됐으므로 조용히 부르면 "재훑기가 성공한 것처럼" 보이지만 실제로는
+     *         아무 파일도 적재되지 않는다 — {@link #start()} 와 같은 이유로 시끄럽게 막는다
      */
-    void handleOverflow() {
+    void rescan() {
+        if (scheduler.isShutdown()) {
+            throw new IllegalStateException(
+                    "정지된 워처는 다시 훑을 수 없다: " + watchDir
+                            + ". 조용히 넘어가면 파일별 스케줄이 전부 무시되는데 "
+                            + "호출부는 재훑기가 됐다고 믿는다");
+        }
         for (Path slot : SlotPathResolver.resolve(watchDir)) {
             scheduleIngest(slot);
         }
@@ -242,6 +259,14 @@ public final class SaveWatcher {
         stopping = true;
 
         // 대기 중인 적재를 먼저 끊는다. 이걸 안 하면 정지 후에 한 박자 늦은 적재가 한 번 더 돈다.
+        if (!pending.isEmpty()) {
+            // 끊는 것은 맞지만 조용히 끊으면 안 된다. 기동 직후 1.5초 안에 종료되면
+            // "따라잡기 시작" 로그만 남고 한 건도 안 들어간 채 끝나는데, 로그만 보면
+            // 성공한 것처럼 보인다 — 이 프로젝트가 가장 경계하는 실패 모양이다.
+            log.warn("디바운스를 기다리던 적재 {}건을 취소한다. 이번 실행에서는 적재되지 않았다: {}",
+                    pending.size(),
+                    pending.keySet().stream().map(f -> f.getFileName().toString()).toList());
+        }
         pending.values().forEach(future -> future.cancel(false));
         pending.clear();
         scheduler.shutdownNow();

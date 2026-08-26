@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Queue;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.CopyOnWriteArrayList;
 
@@ -24,15 +25,34 @@ final class FakeIngestService implements IngestService {
 
     private final AtomicReference<CountDownLatch[]> blockOnce = new AtomicReference<>();
 
+    /**
+     * 지금 이 순간 {@code ingest()} 안에 들어와 있는 호출 수. 워처와 재훑기(rescan)가
+     * 정말 같은 단일 스레드 스케줄러를 타는지 재는 용도다 — 별도 스레드로 바뀌면
+     * 이 값이 1을 넘는 순간이 생긴다.
+     */
+    private final AtomicInteger concurrentCalls = new AtomicInteger();
+    private final AtomicInteger maxConcurrentCalls = new AtomicInteger();
+
     @Override
     public IngestResult ingest(Path saveFile) {
         calls.add(saveFile);
-        blockIfAsked();
-        RuntimeException toThrow = exceptionsToThrowOnce.poll();
-        if (toThrow != null) {
-            throw toThrow;
+        int inFlight = concurrentCalls.incrementAndGet();
+        maxConcurrentCalls.updateAndGet(prevMax -> Math.max(prevMax, inFlight));
+        try {
+            blockIfAsked();
+            RuntimeException toThrow = exceptionsToThrowOnce.poll();
+            if (toThrow != null) {
+                throw toThrow;
+            }
+            return IngestResult.duplicate(1);
+        } finally {
+            concurrentCalls.decrementAndGet();
         }
-        return IngestResult.duplicate(1);
+    }
+
+    /** 지금까지 관측된 {@code ingest()} 동시 진입 최댓값. */
+    int maxConcurrentCalls() {
+        return maxConcurrentCalls.get();
     }
 
     List<Path> calls() {
