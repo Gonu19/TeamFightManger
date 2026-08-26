@@ -37,10 +37,11 @@ A:\project\TeamFighter\
 │   │   ├─ watcher/                         SaveWatcher · SlotPathResolver · StartupCatchUp · TfmProperties
 │   │   ├─ entity/ · repository/
 │   │   ├─ IngestService · ParticipantMatcher · PatchAssigner
-│   ├─ analysis/        JdbcTemplate
-│   │   ├─ decay/                           이중 감쇠        (D15a)
-│   │   ├─ shrink/                          2단 축소         (D15b)
-│   │   ├─ strength/                        Bradley-Terry    (D14)
+│   ├─ analysis/        JdbcTemplate. 순수 계산 계층에는 Spring 의존이 없다
+│   │   ├─ AnalysisConfig                   analysis_config 여섯 키 (D44)
+│   │   ├─ decay/       DecayWeight         이중 감쇠        (D15a·D42)
+│   │   ├─ shrink/      Shrinkage           2단 축소·유효표본 (D15b)
+│   │   ├─ strength/    BradleyTerry        기저 강도        (D14·D43)
 │   │   ├─ counter/ · synergy/ · performance/
 │   │   └─ dao/
 │   ├─ draft/           밴픽 시뮬            (banpick.md)
@@ -106,7 +107,11 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 ## 아직 만들지 않은 것
 
 빈 클래스 파일을 미리 깔지 않는다. 위 트리는 **목표 구조**이고, 각 파일은 실제로 필요할 때 만든다.
-지금 존재하는 것은 `TfmApplication.java` 와 설정·빌드 파일뿐이다.
+
+지금 있는 것은 `parser/` · `common/` · `ingest/`(워처 포함)와 `analysis/` 의 순수 계산 계층
+(`AnalysisConfig` · `decay/` · `shrink/` · `strength/`)이다.
+`analysis/` 의 나머지(`counter/` · `synergy/` · `performance/` · `dao/`)와
+`draft/` · `web/` 는 아직 없다.
 
 ---
 
