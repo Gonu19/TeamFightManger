@@ -3,6 +3,8 @@ package com.teamfighter.tfm.analysis;
 import com.teamfighter.tfm.analysis.counter.CounterRow;
 import com.teamfighter.tfm.analysis.dao.AggRunRecorder;
 import com.teamfighter.tfm.analysis.dao.CounterWriter;
+import com.teamfighter.tfm.analysis.dao.PerformanceWriter;
+import com.teamfighter.tfm.analysis.performance.PerformanceRow;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -28,7 +30,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 @ActiveProfiles("test")
 @Transactional
-class CounterAggregationServiceTest {
+class AggregationServiceTest {
 
     @Autowired
     private JdbcTemplate jdbc;
@@ -40,7 +42,10 @@ class CounterAggregationServiceTest {
     private AggRunRecorder runs;
 
     @Autowired
-    private CounterAggregationService service;
+    private PerformanceWriter performanceWriter;
+
+    @Autowired
+    private AggregationService service;
 
     private List<Integer> twoChampions() {
         return jdbc.queryForList(
@@ -147,10 +152,77 @@ class CounterAggregationServiceTest {
                 .isTrue();
     }
 
+    private PerformanceRow tierRow(int championId, int bans, int matchCount, int banMatchCount) {
+        return new PerformanceRow(
+                championId, 40, 24, bans, matchCount, banMatchCount, 40, 24, 40, 0.58, null);
+    }
+
+    @Test
+    @DisplayName("티어 행도 업서트다 — 두 번 써도 한 행이다")
+    void writePerformance_isUpsertedNotDuplicated() {
+        List<Integer> champs = twoChampions();
+        long runId = newRun();
+
+        performanceWriter.write(AggScope.GLOBAL, null, null, true, runId,
+                List.of(tierRow(champs.get(0), 3, 100, 80)));
+        performanceWriter.write(AggScope.GLOBAL, null, null, true, runId,
+                List.of(tierRow(champs.get(0), 9, 100, 80)));
+
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*) FROM champion_performance WHERE champion_id = ?",
+                Integer.class, champs.get(0)))
+                .isEqualTo(1);
+        assertThat(jdbc.queryForObject(
+                "SELECT bans FROM champion_performance WHERE champion_id = ?",
+                Integer.class, champs.get(0)))
+                .isEqualTo(9);
+    }
+
+    @Test
+    @DisplayName("밴률의 분모는 공식전 수다 — 픽률과 분모가 다르다 (D50)")
+    void writePerformance_banRateUsesOfficialDenominator() {
+        List<Integer> champs = twoChampions();
+        long runId = newRun();
+
+        // 스크림 포함 스코프: 전체 100경기 중 공식은 80경기. 밴 8회.
+        performanceWriter.write(AggScope.GLOBAL, null, null, true, runId,
+                List.of(tierRow(champs.get(0), 8, 100, 80)));
+
+        // 변조: V4 를 되돌려 ban_rate 를 bans/match_count 로 두면 0.10 이 아니라 0.08 이 된다.
+        //       예외도 NULL 도 아니고 그냥 낮은 숫자라 "밴을 잘 안 당하네" 로 읽힌다.
+        assertThat(jdbc.queryForObject(
+                "SELECT ban_rate FROM champion_performance WHERE champion_id = ?",
+                Double.class, champs.get(0)))
+                .isEqualTo(0.1);
+        assertThat(jdbc.queryForObject(
+                "SELECT pick_rate FROM champion_performance WHERE champion_id = ?",
+                Double.class, champs.get(0)))
+                .isEqualTo(0.4);
+    }
+
+    @Test
+    @DisplayName("승률은 원시 카운트에서, 정렬용 추정은 따로 저장된다 (D15)")
+    void writePerformance_keepsRawAndAdjustedApart() {
+        List<Integer> champs = twoChampions();
+        long runId = newRun();
+
+        performanceWriter.write(AggScope.GLOBAL, null, null, true, runId,
+                List.of(tierRow(champs.get(0), 0, 100, 80)));
+
+        assertThat(jdbc.queryForObject(
+                "SELECT win_rate FROM champion_performance WHERE champion_id = ?",
+                Double.class, champs.get(0)))
+                .isEqualTo(0.6);
+        assertThat(jdbc.queryForObject(
+                "SELECT adjusted_win_rate FROM champion_performance WHERE champion_id = ?",
+                Double.class, champs.get(0)))
+                .isEqualTo(0.58);
+    }
+
     @Test
     @DisplayName("경기가 없어도 집계 한 바퀴가 돈다 — 빈 DB 에서 죽지 않는다")
     void run_survivesEmptyDatabase() {
-        CounterAggregationService.Result result = service.run();
+        AggregationService.Result result = service.run();
 
         assertThat(result.aggRunId()).isPositive();
         assertThat(jdbc.queryForObject(

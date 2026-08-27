@@ -24,17 +24,17 @@ public class AggregationRunner implements ApplicationRunner {
 
     private static final Logger log = LoggerFactory.getLogger(AggregationRunner.class);
 
-    private final CounterAggregationService service;
+    private final AggregationService service;
 
-    public AggregationRunner(CounterAggregationService service) {
+    public AggregationRunner(AggregationService service) {
         this.service = service;
     }
 
     @Override
     public void run(ApplicationArguments args) {
         log.info("기동 시 집계를 돌린다 (tfm.aggregate-on-start=true)");
-        CounterAggregationService.Result result = service.run();
-        log.info("집계 결과 — run={} · 커리어 {}행 · 전체 {}행",
-                result.aggRunId(), result.careerRows(), result.globalRows());
+        AggregationService.Result result = service.run();
+        log.info("집계 결과 — run={} · 카운터 {}행 · 티어 {}행",
+                result.aggRunId(), result.counterRows(), result.performanceRows());
     }
 }

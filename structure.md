@@ -43,16 +43,18 @@ A:\project\TeamFighter\
 │   │   ├─ ReferencePoint                   추정 시점 · 거리 계산 (D24·D45)
 │   │   ├─ MatchObservation                 집계 입력 단위 (승리 팀 / 패배 팀)
 │   │   ├─ AggScope                         GLOBAL · CAREER
-│   │   ├─ CounterAggregationService        집계 한 바퀴 (D47)
+│   │   ├─ AggregationService               집계 한 바퀴 — 카운터+티어 (D47·D50)
 │   │   ├─ AggregationRunner · AnalysisConfiguration   tfm.aggregate-on-start (기본 꺼짐)
 │   │   ├─ decay/       DecayWeight         이중 감쇠        (D15a·D42)
 │   │   ├─ shrink/      Shrinkage           2단 축소·유효표본 (D15b)
 │   │   ├─ strength/    BradleyTerry        기저 강도        (D14·D43)
 │   │   ├─ counter/     MatchupAggregator   경기 → 쌍 전개 · 누적 (D14)
 │   │   │                CounterCalculator   BT 기대승률 · 1단 축소 · 상성 이득
-│   │   ├─ synergy/ · performance/
+│   │   ├─ performance/ ChampionTallyAggregator   챔피언별 출전 누적
+│   │   │                PerformanceCalculator     티어 — 강도 보정 없음 (D50)
+│   │   ├─ synergy/                          아직 없음
 │   │   └─ dao/         MatchObservationDao · AnalysisConfigDao (D46: 행만 꺼낸다)
-│   │                    CounterWriter(업서트) · AggRunRecorder
+│   │                    CounterWriter · PerformanceWriter · AggRunRecorder
 │   ├─ draft/           밴픽 시뮬            (banpick.md)
 │   │   ├─ DraftStateMachine · DraftSessionService · EvidenceGate
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
@@ -67,7 +69,8 @@ A:\project\TeamFighter\
 │   ├─ application.yml                      비밀번호는 환경변수로만
 │   ├─ db/migration/                        ★ 스키마·시드의 유일한 원본
 │   │   ├─ V1__init.sql · V2__fixed_team_size.sql
-│   │   └─ V3__seed_champions.sql           챔피언 40종
+│   │   ├─ V3__seed_champions.sql           챔피언 40종
+│   │   └─ V4__ban_rate_denominator.sql     밴률 분모 분리 (D50)
 │   ├─ templates/ + templates/fragments/
 │   └─ static/css · static/js
 │
@@ -121,10 +124,10 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 전체다 — 순수 계산 계층(`decay/` · `shrink/` · `strength/` · `counter/`)과 조회·쓰기(`dao/`),
 그리고 진입점(`CounterAggregationService`).
 
-`analysis/` 에서 아직 없는 것은 `synergy/`(2·3인 조합 · 역할군 4인)와
-`performance/`(챔피언 티어 · 밴률 · 경기력 z값), 그리고 2단 축소를 실제로 쓰는
-패치별 집계다. 지금 저장하는 것은 1단(전체 누적, `patch_id IS NULL`)뿐이다.
-`draft/` · `web/` 는 통째로 없다.
+`analysis/` 에서 아직 없는 것은 `synergy/`(2·3인 조합 · 역할군 4인)와, 2단 축소를 실제로
+쓰는 패치별 집계다. 지금 저장하는 것은 1단(전체 누적, `patch_id IS NULL`)뿐이다.
+`performance/` 는 티어·픽률·밴률까지 만들지만 **경기력 z값과 티어 등급은 비워 둔다** —
+둘 다 근거가 아직 없다 (D50). `draft/` · `web/` 는 통째로 없다.
 
 ---
 

@@ -30,7 +30,7 @@ class AggregationRunnerTest {
 
     private final ApplicationContextRunner context = new ApplicationContextRunner()
             .withUserConfiguration(AnalysisConfiguration.class)
-            .withBean(CounterAggregationService.class, () -> mock(CounterAggregationService.class));
+            .withBean(AggregationService.class, () -> mock(AggregationService.class));
 
     @Test
     @DisplayName("플래그가 없으면 빈이 없다 — 집계는 기본으로 돌지 않는다")
@@ -57,8 +57,8 @@ class AggregationRunnerTest {
     @Test
     @DisplayName("run() 은 집계 서비스에 위임한다")
     void run_delegatesToService() {
-        CounterAggregationService service = mock(CounterAggregationService.class);
-        when(service.run()).thenReturn(new CounterAggregationService.Result(7L, 100, 20));
+        AggregationService service = mock(AggregationService.class);
+        when(service.run()).thenReturn(new AggregationService.Result(7L, 100, 20));
 
         new AggregationRunner(service).run(new DefaultApplicationArguments());
 
@@ -70,7 +70,7 @@ class AggregationRunnerTest {
     @Test
     @DisplayName("집계가 던지면 삼키지 않는다 — 기동을 막는다")
     void run_doesNotSwallowFailure() {
-        CounterAggregationService service = mock(CounterAggregationService.class);
+        AggregationService service = mock(AggregationService.class);
         doThrow(new IllegalStateException("집계 실패")).when(service).run();
 
         // 변조: try-catch 로 감싸 로그만 남기면 앱이 멀쩡히 뜨고, 화면에는 이전 집계

@@ -70,10 +70,40 @@ public class MatchObservationDao {
             ORDER BY m.match_id
             """;
 
+    /**
+     * 챔피언별 피밴 수. <b>공식전만 센다</b> — 스크림에는 밴이 없다.
+     *
+     * <p>{@code include_scrim} 을 인자로 받지 않는 이유가 그것이다. 스크림을 포함해도
+     * 밴 수는 변하지 않는다. 바뀌는 것은 밴률의 <b>분모</b>뿐이고, 그래서 분모를 따로
+     * 저장한다 (D50).
+     *
+     * <p>{@code team_size = 4} 로 거르는 것은 경기 조회와 같은 조건이어야 하기 때문이다.
+     * 여기만 조건이 빠지면 표에 없는 경기의 밴이 밴률 분자에 들어간다.
+     */
+    private static final String BAN_COUNTS = """
+            SELECT b.champion_id, count(*) AS bans
+            FROM match_ban b
+            JOIN match_record m ON m.match_id = b.match_id
+            WHERE m.slot_id = ?
+              AND m.team_size = 4
+              AND m.match_type = 'OFFICIAL'
+            GROUP BY b.champion_id
+            """;
+
     private final JdbcTemplate jdbc;
 
     public MatchObservationDao(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    public Map<Integer, Integer> banCounts(int slotId) {
+        Map<Integer, Integer> bans = new HashMap<>();
+        jdbc.query(BAN_COUNTS,
+                rs -> {
+                    bans.put(rs.getInt("champion_id"), rs.getInt("bans"));
+                },
+                slotId);
+        return bans;
     }
 
     public List<Integer> slotIds() {
