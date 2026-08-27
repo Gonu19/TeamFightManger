@@ -22,7 +22,7 @@ A:\project\TeamFighter\
 │
 ├─ *.md                                     설계 문서 (루트 유지)
 ├─ fixtures/                                세이브 스냅샷 (라이브 파일 대신)
-├─ tools/                                   측정 스크립트 · counter_report.sql
+├─ tools/                                   측정 스크립트 · *_report.sql · pair_audit.sql
 ├─ tests/
 │   ├─ verify_schema.sql                    스키마 제약 검증 24/24
 │   └─ baseline/*.json                       ★ 언어 무관 골든 파일
@@ -122,7 +122,7 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 
 지금 있는 것은 `parser/` · `common/` · `ingest/`(워처 포함)와 `analysis/` 의 카운터 경로
 전체다 — 순수 계산 계층(`decay/` · `shrink/` · `strength/` · `counter/`)과 조회·쓰기(`dao/`),
-그리고 진입점(`CounterAggregationService`).
+그리고 진입점(`AggregationService`) — 이제 티어(`performance/`)도 같은 바퀴에서 만든다.
 
 `analysis/` 에서 아직 없는 것은 `synergy/`(2·3인 조합 · 역할군 4인)와, 2단 축소를 실제로
 쓰는 패치별 집계다. 지금 저장하는 것은 1단(전체 누적, `patch_id IS NULL`)뿐이다.
