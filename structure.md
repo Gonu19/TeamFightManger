@@ -45,8 +45,9 @@ A:\project\TeamFighter\
 │   │   ├─ shrink/      Shrinkage           2단 축소·유효표본 (D15b)
 │   │   ├─ strength/    BradleyTerry        기저 강도        (D14·D43)
 │   │   ├─ counter/     MatchupAggregator   경기 → 쌍 전개 · 누적 (D14)
+│   │   │                CounterCalculator   BT 기대승률 · 1단 축소 · 상성 이득
 │   │   ├─ synergy/ · performance/
-│   │   └─ dao/
+│   │   └─ dao/         MatchObservationDao · AnalysisConfigDao (D46: 행만 꺼낸다)
 │   ├─ draft/           밴픽 시뮬            (banpick.md)
 │   │   ├─ DraftStateMachine · DraftSessionService · EvidenceGate
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
