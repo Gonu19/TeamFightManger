@@ -12,6 +12,13 @@ import org.springframework.stereotype.Repository;
  * 어떤 설정으로 나온 것인지 알 수 없게 된다. 값이 이상해 보일 때 "설정을 언제 바꿨더라" 를
  * 기억에 의존해 따지는 상황을 만들지 않는다.
  *
+ * <p><b>시각은 {@code now()} 가 아니라 {@code clock_timestamp()} 로 찍는다.</b>
+ * {@code now()} 는 트랜잭션 <b>시작</b> 시각이라 한 트랜잭션 안에서 몇 번을 불러도 같은 값이
+ * 나온다. 집계 한 바퀴가 한 트랜잭션이므로(D47) 기본값 {@code now()} 를 그대로 두면
+ * {@code started_at} 과 {@code finished_at} 이 <b>항상 정확히 같다</b> — 소요 시간을 재려고
+ * 만든 컬럼이 늘 0 을 가리키는데, NULL 이 아니라서 눈으로는 정상으로 보인다.
+ * 실제 집계를 한 번 돌려보고서야 드러났다.
+ *
  * <p>완료 시각은 끝난 뒤에 채운다. <b>실패한 집계의 흔적이 여기 남지는 않는다</b> —
  * 집계 전체가 한 트랜잭션이라 도중에 죽으면 이 행도 함께 롤백된다. 그건 의도한 것이다:
  * 절반만 갱신된 카운터 표가 화면에 뜨는 것보다 아무것도 안 바뀌는 편이 낫고, 실패는
@@ -29,8 +36,8 @@ public class AggRunRecorder {
 
     public long start(AnalysisConfig config, String note) {
         Long runId = jdbc.queryForObject("""
-                INSERT INTO agg_run (min_sample, prior_strength, note)
-                VALUES (?, ?, ?)
+                INSERT INTO agg_run (started_at, min_sample, prior_strength, note)
+                VALUES (clock_timestamp(), ?, ?, ?)
                 RETURNING agg_run_id
                 """, Long.class, config.minSample(), config.priorK0(), note);
         if (runId == null) {
@@ -41,7 +48,7 @@ public class AggRunRecorder {
 
     public void finish(long aggRunId) {
         int updated = jdbc.update(
-                "UPDATE agg_run SET finished_at = now() WHERE agg_run_id = ?", aggRunId);
+                "UPDATE agg_run SET finished_at = clock_timestamp() WHERE agg_run_id = ?", aggRunId);
         if (updated != 1) {
             throw new IllegalStateException(
                     "agg_run " + aggRunId + " 를 닫지 못했다. 갱신된 행: " + updated);

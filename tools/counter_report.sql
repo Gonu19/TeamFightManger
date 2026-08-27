@@ -97,6 +97,20 @@ GROUP BY scope
 ORDER BY scope;
 
 \echo ''
+\echo '=== 6b. D49 미확인 — Werewolf vs Swordman 을 직접 찾는다 ==='
+\echo '    D14 는 raw 정렬 예시로 84.0% (n=25) 를 들었는데 상위 20 에 안 보였다.'
+SELECT c.code AS champion, o.code AS opponent,
+       m.scope, m.include_scrim, m.games,
+       round(m.win_rate * 100, 1)          AS "실제%",
+       round(m.expected_win_rate * 100, 1) AS "기대%",
+       round(m.counter_effect * 100, 1)    AS "이득%p"
+FROM champion_matchup m
+JOIN champion c ON c.champion_id = m.champion_id
+JOIN champion o ON o.champion_id = m.opponent_id
+WHERE c.code = 'Werewolf' AND o.code = 'Swordman'
+ORDER BY m.scope, m.include_scrim;
+
+\echo ''
 \echo '=== 7. 커리어별 상위 5 (CAREER 스코프가 GLOBAL 과 다른가) ==='
 SELECT s.slot_key,
        c.code AS champion,

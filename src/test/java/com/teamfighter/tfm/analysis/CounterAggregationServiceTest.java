@@ -131,6 +131,23 @@ class CounterAggregationServiceTest {
     }
 
     @Test
+    @DisplayName("완료 시각이 시작 시각보다 뒤다 — now() 는 트랜잭션 시작 시각이라 늘 같아진다")
+    void aggRun_finishedAtIsStrictlyAfterStartedAt() {
+        long runId = runs.start(new AnalysisConfig(10, 24, 15, 3, 2, 12), "테스트");
+        runs.finish(runId);
+
+        // 변조: clock_timestamp() 를 now() 로 되돌리면 두 시각이 정확히 같아진다.
+        //       집계 한 바퀴가 한 트랜잭션이라(D47) now() 는 몇 번을 불러도 같은 값이다.
+        //       그러면 소요 시간을 재려고 만든 컬럼이 늘 0 을 가리키는데, NULL 이 아니라서
+        //       눈으로는 정상으로 보인다 — 실제 집계를 돌려보고서야 드러났다.
+        assertThat(jdbc.queryForObject("""
+                SELECT finished_at > started_at FROM agg_run WHERE agg_run_id = ?
+                """, Boolean.class, runId))
+                .as("finished_at 이 started_at 보다 뒤여야 한다")
+                .isTrue();
+    }
+
+    @Test
     @DisplayName("경기가 없어도 집계 한 바퀴가 돈다 — 빈 DB 에서 죽지 않는다")
     void run_survivesEmptyDatabase() {
         CounterAggregationService.Result result = service.run();
