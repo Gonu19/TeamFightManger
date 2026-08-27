@@ -47,6 +47,11 @@ tfm:
   watch-enabled: true
   # 세이브 파일은 읽기만 한다. 어떤 경우에도 쓰지 않는다.
   read-only: true
+  # 기동 시 카운터 집계를 한 번 돌린다. 기본은 꺼짐 — 언제 돌릴지가 아직 결정되지 않았고,
+  # 정해지지 않은 것을 기본값으로 굳히지 않는다. 실제 데이터로 한 번 돌려볼 때만 켠다:
+  #   gradlew.bat bootRun --args="--tfm.aggregate-on-start=true"
+  # TfmProperties 에는 필드가 없다 — @ConditionalOnProperty 가 환경에서 직접 읽는다.
+  aggregate-on-start: false
 
 logging:
   level:

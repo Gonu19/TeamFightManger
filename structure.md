@@ -22,6 +22,7 @@ A:\project\TeamFighter\
 │
 ├─ *.md                                     설계 문서 (루트 유지)
 ├─ fixtures/                                세이브 스냅샷 (라이브 파일 대신)
+├─ tools/                                   측정 스크립트 · counter_report.sql
 ├─ tests/
 │   ├─ verify_schema.sql                    스키마 제약 검증 24/24
 │   └─ baseline/*.json                       ★ 언어 무관 골든 파일
@@ -43,6 +44,7 @@ A:\project\TeamFighter\
 │   │   ├─ MatchObservation                 집계 입력 단위 (승리 팀 / 패배 팀)
 │   │   ├─ AggScope                         GLOBAL · CAREER
 │   │   ├─ CounterAggregationService        집계 한 바퀴 (D47)
+│   │   ├─ AggregationRunner · AnalysisConfiguration   tfm.aggregate-on-start (기본 꺼짐)
 │   │   ├─ decay/       DecayWeight         이중 감쇠        (D15a·D42)
 │   │   ├─ shrink/      Shrinkage           2단 축소·유효표본 (D15b)
 │   │   ├─ strength/    BradleyTerry        기저 강도        (D14·D43)
