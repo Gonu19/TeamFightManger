@@ -116,3 +116,43 @@ JOIN champion c ON c.champion_id = t.champion_id
 WHERE t.scope = 'GLOBAL' AND t.include_scrim
 ORDER BY abs(t.adjusted_win_rate - f.adjusted_win_rate) DESC
 LIMIT 10;
+
+\echo ''
+\echo '=== 9. 관측된 흩어짐 중 얼마가 진짜인가 — 컷라인을 정하기 전에 (D9 와 같은 질문) ==='
+\echo '    사분위 간격이 3.6%p 인데 챔피언당 평균 222경기면 표본 오차만으로 ±3.4%p 가'
+\echo '    흩어진다. 관측 분산에서 표본 노이즈를 빼야 진짜 강도 차이가 남는다.'
+\echo '    진짜 분산이 작으면 백분위 등급은 노이즈에 등급을 매기는 것이 된다.'
+WITH observed AS (
+    SELECT champion_id,
+           games,
+           wins::numeric / games AS raw
+    FROM champion_performance
+    WHERE scope = 'GLOBAL' AND include_scrim AND games > 0
+), decomposed AS (
+    SELECT count(*)                                  AS champions,
+           avg(games)                                AS avg_games,
+           var_samp(raw)                             AS observed_var,
+           avg(raw * (1 - raw) / games)              AS noise_var,
+           avg(raw * (1 - raw))                      AS avg_pq
+    FROM observed
+)
+SELECT champions                                                       AS "챔피언",
+       round(avg_games, 0)                                             AS "평균 경기",
+       round((sqrt(observed_var) * 100)::numeric, 2)                   AS "관측 표준편차%p",
+       round((sqrt(noise_var) * 100)::numeric, 2)                      AS "표본 노이즈%p",
+       CASE WHEN observed_var > noise_var
+            THEN round((sqrt(observed_var - noise_var) * 100)::numeric, 2)
+            ELSE NULL END                                              AS "진짜 강도차%p",
+       CASE WHEN observed_var > noise_var
+            THEN round((avg_pq / (observed_var - noise_var))::numeric, 0)
+            ELSE NULL END                                              AS "통계적 최적 k0",
+       round((noise_var / observed_var * 100)::numeric, 1)             AS "노이즈 비중%"
+FROM decomposed;
+
+\echo ''
+\echo '=== 10. 현재 k0(24)로 충분히 눌렸나 — 최적 k0 와 비교한다 ==='
+\echo '    질의 9 의 "통계적 최적 k0" 가 24 보다 훨씬 크면 지금 추정은 덜 눌린 것이고,'
+\echo '    티어표의 흩어짐이 실제보다 과장돼 있다는 뜻이다 (D10 이 카운터에서 k=74 를'
+\echo '    역산하고도 실무적 절충으로 24 를 쓴 것과 같은 자리).'
+SELECT round(value, 0) AS "현재 k0", 'analysis_config' AS 출처
+FROM analysis_config WHERE key = 'prior_strength_k0';
