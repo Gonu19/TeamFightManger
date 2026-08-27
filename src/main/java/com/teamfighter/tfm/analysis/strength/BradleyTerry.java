@@ -87,7 +87,6 @@ public final class BradleyTerry {
 
         for (int iteration = 0; iteration < MAX_ITERATIONS; iteration++) {
             double[] next = new double[n];
-            double maxRelativeChange = 0;
             for (int i = 0; i < n; i++) {
                 double denominator = PRIOR_GAMES / (strength[i] + PRIOR_STRENGTH);
                 for (int j = 0; j < n; j++) {
@@ -96,6 +95,11 @@ public final class BradleyTerry {
                     }
                 }
                 next[i] = wins[i] / denominator;
+            }
+            normalizeToUnitGeometricMean(next);
+
+            double maxRelativeChange = 0;
+            for (int i = 0; i < n; i++) {
                 maxRelativeChange = Math.max(maxRelativeChange,
                         Math.abs(next[i] - strength[i]) / strength[i]);
             }
@@ -133,6 +137,34 @@ public final class BradleyTerry {
             result[i++] = id;
         }
         return result;
+    }
+
+    /**
+     * 기하평균이 1 이 되게 맞춘다.
+     *
+     * <p><b>이게 없으면 실제 데이터 규모에서 수렴하지 않는다.</b> 우도가 거의 스케일
+     * 불변이라서다 — 강도를 전부 같은 배로 키워도 {@link #expected} 는 그대로이므로
+     * 우도가 거의 안 변한다. 가상 관측이 스케일을 붙잡고 있긴 하지만 1경기어치라
+     * 실제 수천 경기에 눌리고, 반복은 그 거의 평평한 방향으로 한없이 기어간다.
+     * 강도 비율은 이미 맞았는데 절대 크기만 계속 미끄러지는 상태다.
+     *
+     * <p>챔피언 40종·경기 1,200건에서 상대오차 1e-12 에 10,000회 안에 못 닿아 집계가
+     * 통째로 죽었다. 작은 표본(챔피언 2~5종)에서는 반복이 몇 번 만에 끝나 안 드러났다.
+     *
+     * <p>정규화하면 그 평평한 방향이 사라진다. 부작용으로 가상 상대의 뜻이 조금 바뀐다 —
+     * "강도 1 인 상대" 가 아니라 <b>"평균 강도인 상대"</b> 가 된다. 각 챔피언을 평균 쪽으로
+     * 당기는 것이므로 정규화 항으로서는 오히려 자연스럽고, 기대 승률은 비율만 쓰므로
+     * 결과에 영향이 없다.
+     */
+    private static void normalizeToUnitGeometricMean(double[] strength) {
+        double logSum = 0;
+        for (double value : strength) {
+            logSum += Math.log(value);
+        }
+        double geometricMean = Math.exp(logSum / strength.length);
+        for (int i = 0; i < strength.length; i++) {
+            strength[i] /= geometricMean;
+        }
     }
 
     private static Map<Integer, Double> toMap(int[] ids, double[] strength) {
