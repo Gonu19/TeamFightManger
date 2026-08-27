@@ -115,10 +115,14 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 
 빈 클래스 파일을 미리 깔지 않는다. 위 트리는 **목표 구조**이고, 각 파일은 실제로 필요할 때 만든다.
 
-지금 있는 것은 `parser/` · `common/` · `ingest/`(워처 포함)와 `analysis/` 의 순수 계산 계층
-(`AnalysisConfig` · `decay/` · `shrink/` · `strength/`)이다.
-`analysis/` 의 나머지(`counter/` · `synergy/` · `performance/` · `dao/`)와
-`draft/` · `web/` 는 아직 없다.
+지금 있는 것은 `parser/` · `common/` · `ingest/`(워처 포함)와 `analysis/` 의 카운터 경로
+전체다 — 순수 계산 계층(`decay/` · `shrink/` · `strength/` · `counter/`)과 조회·쓰기(`dao/`),
+그리고 진입점(`CounterAggregationService`).
+
+`analysis/` 에서 아직 없는 것은 `synergy/`(2·3인 조합 · 역할군 4인)와
+`performance/`(챔피언 티어 · 밴률 · 경기력 z값), 그리고 2단 축소를 실제로 쓰는
+패치별 집계다. 지금 저장하는 것은 1단(전체 누적, `patch_id IS NULL`)뿐이다.
+`draft/` · `web/` 는 통째로 없다.
 
 ---
 
