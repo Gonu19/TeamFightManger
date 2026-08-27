@@ -127,17 +127,40 @@ class AnalysisDaoTest {
     }
 
     @Test
-    @DisplayName("team_size 가 4 가 아닌 경기는 빠진다 — 인원이 다르면 승률을 섞을 수 없다 (D35)")
-    void loadMatches_excludesNonFourVersusFour() {
+    @DisplayName("DB 가 비4v4 경기를 애초에 거부한다 — 규칙이 문서가 아니라 제약으로 있다 (V2·D35)")
+    void schema_rejectsNonFourVersusFour() {
+        int slot = newSlot();
+
+        // 이 프로젝트에서 D35 는 코드 규약이 아니라 CHECK 제약이다. 집계가 "인원이 다른
+        // 경기를 걸러낸다" 고 주장하기 전에, 그런 경기가 DB 에 들어올 수 있는지부터 봐야 한다.
+        org.assertj.core.api.Assertions
+                .assertThatThrownBy(() -> match(slot, "SCRIM", null, 3, 1))
+                .isInstanceOf(org.springframework.dao.DataIntegrityViolationException.class);
+    }
+
+    @Test
+    @DisplayName("team_size 필터는 DB 제약이 풀려도 남는 두 번째 방어선이다 (D35)")
+    void loadMatches_excludesNonFourVersusFourEvenWithoutTheConstraint() {
         int slot = newSlot();
         List<Integer> champs = someChampionIds(8);
+
+        // 제약을 이 트랜잭션 안에서만 떼어낸다. Postgres 는 DDL 도 롤백하므로 테스트가
+        // 끝나면 제약이 그대로 돌아온다. D35 의 "뒤집힐 조건" 이 실현돼 2·3인 경기를
+        // 다시 적재하게 되더라도, 카운터 집계는 그것을 섞으면 안 된다 — 그때 이 필터가
+        // 유일한 방어선이 된다.
+        jdbc.execute("ALTER TABLE match_record DROP CONSTRAINT match_record_team_size_check");
+
         long threeVersusThree = match(slot, "SCRIM", null, 3, 1);
         for (int i = 0; i < 3; i++) {
             participant(threeVersusThree, "BLUE", i + 1, champs.get(i), 0);
             participant(threeVersusThree, "RED", i + 1, champs.get(i + 4), 0);
         }
+        long fourVersusFour = match(slot, "SCRIM", null, 4, 2);
+        fillFourVersusFour(fourVersusFour, champs);
 
-        assertThat(dao.loadMatches(slot, true)).isEmpty();
+        // 변조: WHERE 절의 team_size = 4 를 지우면 2건이 나온다.
+        assertThat(dao.loadMatches(slot, true)).hasSize(1);
+        assertThat(dao.loadMatches(slot, true).get(0).winners()).hasSize(4);
     }
 
     @Test
