@@ -30,6 +30,16 @@ public record WeightedTally(
                 sumSquaredWeights + weight * weight);
     }
 
+    /** 다른 누적과 합친다. 슬롯을 가로질러 합산할 때 쓴다 (D45). */
+    public WeightedTally plus(WeightedTally other) {
+        return new WeightedTally(
+                games + other.games,
+                wins + other.wins,
+                weightedGames + other.weightedGames,
+                weightedWins + other.weightedWins,
+                sumSquaredWeights + other.sumSquaredWeights);
+    }
+
     /** 유효표본수 {@code (Σw)² / Σw²}. 신뢰구간은 원시 경기 수가 아니라 이 값으로 잡는다. */
     public double ess() {
         return Shrinkage.ess(weightedGames, sumSquaredWeights);

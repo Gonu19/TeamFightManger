@@ -41,6 +41,8 @@ A:\project\TeamFighter\
 │   │   ├─ AnalysisConfig                   analysis_config 여섯 키 (D44)
 │   │   ├─ ReferencePoint                   추정 시점 · 거리 계산 (D24·D45)
 │   │   ├─ MatchObservation                 집계 입력 단위 (승리 팀 / 패배 팀)
+│   │   ├─ AggScope                         GLOBAL · CAREER
+│   │   ├─ CounterAggregationService        집계 한 바퀴 (D47)
 │   │   ├─ decay/       DecayWeight         이중 감쇠        (D15a·D42)
 │   │   ├─ shrink/      Shrinkage           2단 축소·유효표본 (D15b)
 │   │   ├─ strength/    BradleyTerry        기저 강도        (D14·D43)
@@ -48,6 +50,7 @@ A:\project\TeamFighter\
 │   │   │                CounterCalculator   BT 기대승률 · 1단 축소 · 상성 이득
 │   │   ├─ synergy/ · performance/
 │   │   └─ dao/         MatchObservationDao · AnalysisConfigDao (D46: 행만 꺼낸다)
+│   │                    CounterWriter(업서트) · AggRunRecorder
 │   ├─ draft/           밴픽 시뮬            (banpick.md)
 │   │   ├─ DraftStateMachine · DraftSessionService · EvidenceGate
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
