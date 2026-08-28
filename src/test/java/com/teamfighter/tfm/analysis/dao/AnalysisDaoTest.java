@@ -94,15 +94,18 @@ class AnalysisDaoTest {
     }
 
     @Test
-    @DisplayName("analysis_config 여섯 키가 시드된 값 그대로 읽힌다 (D44)")
+    @DisplayName("analysis_config 여섯 키가 마이그레이션이 남긴 값 그대로 읽힌다 (D44)")
     void configDao_readsSeededValues() {
         AnalysisConfig config = configDao.load();
 
         assertThat(config.minSample()).isEqualTo(10);
         assertThat(config.priorK0()).isEqualTo(24.0);
         assertThat(config.priorK1()).isEqualTo(15.0);
+        assertThat(config.synergyMaxSize()).isEqualTo(3);      // 이름이 "여섯 키" 인데 다섯만 봤다
         assertThat(config.selfDecayHalfLife()).isEqualTo(2.0);
-        assertThat(config.metaDecayHalfLife()).isEqualTo(12.0);
+        // V1 이 12 로 시드하고 V5 가 2 로 바꾼다 (D53). 기대값은 마지막 마이그레이션 뒤의
+        // 값이어야 한다 — 시드값을 적어두면 이 테스트가 V1 만 지키고 그 뒤를 놓친다.
+        assertThat(config.metaDecayHalfLife()).isEqualTo(2.0);
     }
 
     @Test
