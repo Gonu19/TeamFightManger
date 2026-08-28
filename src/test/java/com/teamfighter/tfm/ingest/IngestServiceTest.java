@@ -5,8 +5,10 @@ import com.teamfighter.tfm.ingest.entity.MatchRecord;
 import com.teamfighter.tfm.ingest.entity.MatchType;
 import com.teamfighter.tfm.ingest.entity.Patch;
 import com.teamfighter.tfm.ingest.entity.SaveSlot;
+import com.teamfighter.tfm.ingest.entity.Team;
 import com.teamfighter.tfm.ingest.entity.TeamSide;
 import com.teamfighter.tfm.parser.model.ParsedGame;
+import com.teamfighter.tfm.parser.model.ParsedScrim;
 import com.teamfighter.tfm.parser.model.ParsedStat;
 import com.teamfighter.tfm.parser.model.ParsedToday;
 import com.teamfighter.tfm.parser.save.SaveParser;
@@ -16,6 +18,7 @@ import com.teamfighter.tfm.ingest.repository.MatchParticipantRepository;
 import com.teamfighter.tfm.ingest.repository.MatchRecordRepository;
 import com.teamfighter.tfm.ingest.repository.PatchRepository;
 import com.teamfighter.tfm.ingest.repository.SaveSlotRepository;
+import com.teamfighter.tfm.ingest.repository.TeamRepository;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIf;
@@ -75,6 +78,12 @@ class IngestServiceTest {
 
     @Autowired
     private ChampionRepository champions;
+
+    @Autowired
+    private TeamRepository teams;
+
+    @Autowired
+    private SaveLoader loader;
 
     static boolean fixturesExist() {
         return !fixtures().isEmpty();
@@ -332,6 +341,119 @@ class IngestServiceTest {
     }
 
     // ------------------------------------------------------------ 필수 값 누락
+
+    // ------------------------------------------------------------ D54
+
+    @Test
+    @EnabledIf("fixturesExist")
+    @DisplayName("D54 — 공식전에는 양 진영 팀이 붙는다. 팀 행은 세이브의 번호 종류만큼만 생긴다")
+    void ingest_officialMatches_carryBothTeams() throws Exception {
+        Path file = fixture("slot_638683925954242004.tfm");
+        List<ParsedGame> games = SaveParser.read(file).gameStats();
+
+        ingestService.ingest(file);
+
+        SaveSlot slot = slots.findBySlotKey("slot_638683925954242004.tfm").orElseThrow();
+        Map<Integer, Integer> gameTeamIdByTeamId = new HashMap<>();
+        Set<Integer> loadedNumbers = new HashSet<>();
+        for (Team team : teams.findBySlotId(slot.getSlotId())) {
+            gameTeamIdByTeamId.put(team.getTeamId(), team.getGameTeamId());
+            assertThat(loadedNumbers.add(team.getGameTeamId()))
+                    .as("같은 번호로 팀이 두 번 만들어지면 안 된다 (%d)", team.getGameTeamId())
+                    .isTrue();
+            assertThat(team.isPlayer())
+                    .as("0 번만 플레이어 팀이다 (%d)", team.getGameTeamId())
+                    .isEqualTo(team.getGameTeamId() == 0);
+        }
+
+        // 세이브에 실제로 있는 번호만, 전부. 남거나 모자라면 여기서 깨진다.
+        Set<Integer> expectedNumbers = new HashSet<>();
+        Map<Integer, ParsedGame> expected = new HashMap<>();
+        for (ParsedGame g : games) {
+            expected.put(g.id(), g);
+            if (g.bluePick().size() == 4 && g.redPick().size() == 4
+                    && g.blueBan().size() == 3 && g.redBan().size() == 3) {
+                expectedNumbers.add(g.blueTeamId());
+                expectedNumbers.add(g.redTeamId());
+            }
+        }
+        expectedNumbers.remove(null);            // 번호 없는 경기는 팀을 만들지 않는다
+        assertThat(loadedNumbers).isEqualTo(expectedNumbers);
+        assertThat(loadedNumbers).as("플레이어 팀이 있어야 한다").contains(0);
+
+        List<MatchRecord> officialMatches = matches.findBySlotIdAndMatchType(slot.getSlotId(), MatchType.OFFICIAL);
+        assertThat(officialMatches).isNotEmpty();
+        for (MatchRecord match : officialMatches) {
+            ParsedGame game = expected.get(match.getSourceGameId());
+            // 진영을 뒤바꿔 넣어도 "둘 다 NULL 이 아니다" 만으로는 안 잡힌다. 번호까지 되짚는다.
+            assertThat(gameTeamIdByTeamId.get(match.getBlueTeamId()))
+                    .as("경기 %d 의 BLUE 팀 번호", game.id())
+                    .isEqualTo(game.blueTeamId());
+            assertThat(gameTeamIdByTeamId.get(match.getRedTeamId()))
+                    .as("경기 %d 의 RED 팀 번호", game.id())
+                    .isEqualTo(game.redTeamId());
+        }
+    }
+
+    @Test
+    @EnabledIf("fixturesExist")
+    @DisplayName("D54 — 스크림에는 팀을 붙이지 않는다. 세이브에 상대 번호가 없다")
+    void ingest_scrims_haveNoTeams() throws Exception {
+        Path file = fixture("slot_638683925954242004.tfm");
+
+        // 이 테스트가 무엇을 지키는지의 근거. ScrimStat.TeamID 는 전부 플레이어 팀(0)이고
+        // 상대 번호는 어디에도 없다 — 그래서 두 진영 중 어느 쪽도 팀을 정할 수 없다.
+        for (ParsedScrim scrim : SaveParser.read(file).scrimStats()) {
+            assertThat(scrim.teamId())
+                    .as("스크림 %d 의 TeamID 가 플레이어 팀이 아니면 이 결정을 다시 봐야 한다", scrim.id())
+                    .isIn(null, 0);
+        }
+
+        ingestService.ingest(file);
+
+        SaveSlot slot = slots.findBySlotKey("slot_638683925954242004.tfm").orElseThrow();
+        List<MatchRecord> scrims = matches.findBySlotIdAndMatchType(slot.getSlotId(), MatchType.SCRIM);
+        assertThat(scrims).isNotEmpty();
+        assertThat(scrims).allSatisfy(m -> {
+            assertThat(m.getBlueTeamId()).isNull();
+            assertThat(m.getRedTeamId()).isNull();
+        });
+    }
+
+    @Test
+    @EnabledIf("fixturesExist")
+    @DisplayName("D54 — 팀 없이 이미 적재된 경기는 다시 지나갈 때 채워진다 (백필)")
+    void reload_backfillsTeams_onMatchesIngestedBeforeTeamsExisted() throws Exception {
+        Path file = fixture("slot_638683925954242004.tfm");
+        ingestService.ingest(file);
+
+        SaveSlot slot = slots.findBySlotKey("slot_638683925954242004.tfm").orElseThrow();
+        List<MatchRecord> officialMatches = matches.findBySlotIdAndMatchType(slot.getSlotId(), MatchType.OFFICIAL);
+        assertThat(officialMatches).isNotEmpty();
+
+        // 팀 적재 이전의 DB 상태를 그대로 만든다 — 경기는 다 있고 팀만 비어 있다.
+        Map<Long, Integer> blueBefore = new HashMap<>();
+        for (MatchRecord match : officialMatches) {
+            blueBefore.put(match.getMatchId(), match.getBlueTeamId());
+            match.assignTeams(null, null);
+        }
+        matches.saveAll(officialMatches);
+        matches.flush();
+
+        // 해시 검사를 거치지 않고 다시 읽는다 — ReingestRunner 가 하는 일과 같다.
+        loader.load(slot, file);
+
+        for (MatchRecord match : matches.findBySlotIdAndMatchType(slot.getSlotId(), MatchType.OFFICIAL)) {
+            assertThat(match.getBlueTeamId())
+                    .as("경기 %d 의 팀이 백필되지 않았다", match.getSourceGameId())
+                    .isEqualTo(blueBefore.get(match.getMatchId()));
+            assertThat(match.getRedTeamId()).isNotNull();
+        }
+
+        // 백필이 경기를 새로 만들지는 않는다.
+        assertThat(matches.countBySlotIdAndMatchType(slot.getSlotId(), MatchType.OFFICIAL))
+                .isEqualTo(officialMatches.size());
+    }
 
     @Test
     @DisplayName("필수 값(승패·챔피언 이름)이 빠진 경기를 만나면 조용히 넘기지 않고 예외를 던진다")

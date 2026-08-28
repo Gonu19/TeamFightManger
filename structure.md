@@ -1,7 +1,7 @@
 ---
 title: 팀파이트 매니저 티어 분석 - 파일 구조
 created: 2026-08-25
-updated: 2026-08-25
+updated: 2026-08-28
 para:
 project:
 areas: []
@@ -38,6 +38,8 @@ A:\project\TeamFighter\
 │   │   ├─ watcher/                         SaveWatcher · SlotPathResolver · StartupCatchUp · TfmProperties
 │   │   ├─ entity/ · repository/
 │   │   ├─ IngestService · ParticipantMatcher · PatchAssigner
+│   │   ├─ SlotRegistry · TeamRegistry       슬롯은 실패해도 남고, 팀은 같이 사라진다 (D54)
+│   │   ├─ ReingestRunner · IngestConfiguration   tfm.reingest-on-start (기본 꺼짐, 수리용)
 │   ├─ analysis/        JdbcTemplate. 순수 계산 계층에는 Spring 의존이 없다
 │   │   ├─ AnalysisConfig                   analysis_config 여섯 키 (D44)
 │   │   ├─ ReferencePoint                   추정 시점 · 거리 계산 (D24·D45)

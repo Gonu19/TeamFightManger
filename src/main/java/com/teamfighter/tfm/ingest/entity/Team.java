@@ -53,6 +53,11 @@ public class Team {
         return gameTeamId;
     }
 
+    /** 팀 이름. 세이브의 경기 스트림에는 없다 — 지금은 늘 {@code null} 이다 (D54). */
+    public String getName() {
+        return name;
+    }
+
     public boolean isPlayer() {
         return player;
     }

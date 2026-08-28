@@ -18,6 +18,7 @@ import com.teamfighter.tfm.ingest.repository.MatchBanRepository;
 import com.teamfighter.tfm.ingest.repository.MatchParticipantRepository;
 import com.teamfighter.tfm.ingest.repository.MatchRecordRepository;
 import com.teamfighter.tfm.ingest.repository.PatchRepository;
+import com.teamfighter.tfm.ingest.repository.TeamRepository;
 import com.teamfighter.tfm.parser.model.ParsedGame;
 import com.teamfighter.tfm.parser.model.ParsedPatch;
 import com.teamfighter.tfm.parser.model.ParsedSave;
@@ -69,19 +70,22 @@ public class SaveLoader {
     private final MatchRecordRepository matches;
     private final MatchParticipantRepository participants;
     private final MatchBanRepository bans;
+    private final TeamRepository teams;
 
     public SaveLoader(ChampionRepository champions,
                       PatchRepository patches,
                       ChampionPatchEventRepository patchEvents,
                       MatchRecordRepository matches,
                       MatchParticipantRepository participants,
-                      MatchBanRepository bans) {
+                      MatchBanRepository bans,
+                      TeamRepository teams) {
         this.champions = champions;
         this.patches = patches;
         this.patchEvents = patchEvents;
         this.matches = matches;
         this.participants = participants;
         this.bans = bans;
+        this.teams = teams;
     }
 
     // ------------------------------------------------------------------ 본체
@@ -101,11 +105,15 @@ public class SaveLoader {
         int newPatches = savePatches(slot, save.patches(), championByCode);
         PatchAssigner assigner = buildAssigner(slot);
 
-        Counts official = saveGames(slot, save.gameStats(), championByCode, assigner);
+        // 적재 한 번에 하나. 롤백되면 캐시도 같이 버려져야 한다 (TeamRegistry 참고).
+        TeamRegistry teamRegistry = new TeamRegistry(slot.getSlotId(), teams);
+
+        Counts official = saveGames(slot, save.gameStats(), championByCode, assigner, teamRegistry);
         Counts scrim = saveScrims(slot, save.scrimStats(), save.today(), championByCode, assigner);
 
-        log.info("적재 완료 {} — 공식 {}건(제외 {}) · 스크림 {}건(제외 {}) · 패치 {}건",
-                slot.getSlotKey(), official.saved, official.skipped, scrim.saved, scrim.skipped, newPatches);
+        log.info("적재 완료 {} — 공식 {}건(제외 {}) · 스크림 {}건(제외 {}) · 패치 {}건 · 팀 백필 {}건",
+                slot.getSlotKey(), official.saved, official.skipped, scrim.saved, scrim.skipped,
+                newPatches, official.backfilled);
 
         return new IngestService.IngestResult(slot.getSlotId(), official.saved, scrim.saved,
                 official.skipped, scrim.skipped, newPatches, false);
@@ -168,10 +176,11 @@ public class SaveLoader {
     // ------------------------------------------------------------------ 공식 경기
 
     private Counts saveGames(SaveSlot slot, List<ParsedGame> games,
-                             Map<String, Champion> byCode, PatchAssigner assigner) {
-        Set<Integer> existing = new HashSet<>();
+                             Map<String, Champion> byCode, PatchAssigner assigner,
+                             TeamRegistry teamRegistry) {
+        Map<Integer, MatchRecord> existing = new HashMap<>();
         matches.findBySlotIdAndMatchType(slot.getSlotId(), MatchType.OFFICIAL)
-                .forEach(m -> existing.add(m.getSourceGameId()));
+                .forEach(m -> existing.put(m.getSourceGameId(), m));
 
         Counts counts = new Counts();
         for (ParsedGame g : games) {
@@ -179,7 +188,14 @@ public class SaveLoader {
                 counts.skipped++;                                // 픽 4+4 · 밴 3+3 이 아니다 (D35)
                 continue;
             }
-            if (g.id() == null || existing.contains(g.id())) {
+            if (g.id() == null) {
+                continue;
+            }
+            MatchRecord already = existing.get(g.id());
+            if (already != null) {
+                if (backfillTeams(already, g, teamRegistry)) {
+                    counts.backfilled++;
+                }
                 continue;
             }
 
@@ -193,7 +209,8 @@ public class SaveLoader {
                                 + e.getMessage(), e);
             }
             match.setSchedule(g.season(), g.day(), g.setNo(), g.scheduleId());
-            match.setTeams(null, null, g.blueScore(), g.redScore());
+            match.setTeams(teamRegistry.teamIdOf(g.blueTeamId()), teamRegistry.teamIdOf(g.redTeamId()),
+                    g.blueScore(), g.redScore());
             match.setFlags(Boolean.TRUE.equals(g.isOvertime()), Boolean.TRUE.equals(g.isSuddenDeath()));
             match.setTeamSize(TEAM_SIZE);
 
@@ -217,6 +234,31 @@ public class SaveLoader {
             counts.saved++;
         }
         return counts;
+    }
+
+    /**
+     * 이미 적재된 경기에 팀만 뒤늦게 채운다 (D54).
+     *
+     * <p>팀을 적재하기 전에 들어온 경기가 수천 건 있다. 그 경기들은 다시 적재되지 않는다 —
+     * 같은 내용이면 {@code ingest_run} 의 해시 중복에서, 내용이 늘었어도 여기 위쪽
+     * {@code existing} 검사에서 걸린다. 그래서 <b>다시 지나갈 때 채우는</b> 자리가 필요하다.
+     *
+     * <p>이미 팀이 붙은 경기는 건드리지 않는다. 덮어쓰면 재적재가 값을 바꿀 수 있게 되고,
+     * 그러면 "같은 파일을 다시 적재해도 아무것도 안 바뀐다" 는 계약이 깨진다.
+     *
+     * @return 실제로 채웠으면 {@code true}
+     */
+    private static boolean backfillTeams(MatchRecord match, ParsedGame g, TeamRegistry teamRegistry) {
+        if (match.getBlueTeamId() != null || match.getRedTeamId() != null) {
+            return false;
+        }
+        Integer blue = teamRegistry.teamIdOf(g.blueTeamId());
+        Integer red = teamRegistry.teamIdOf(g.redTeamId());
+        if (blue == null && red == null) {
+            return false;                                    // 세이브에도 번호가 없다. 채울 것이 없다
+        }
+        match.assignTeams(blue, red);                        // 같은 트랜잭션의 영속 객체다 — 더티 체킹이 쓴다
+        return true;
     }
 
     /** 고정 형식인지. 픽 4+4 · 밴 3+3 이어야 한다 (D35). */
@@ -249,6 +291,8 @@ public class SaveLoader {
 
             TeamSide winner = winnerOf(s);
             MatchRecord match = new MatchRecord(slot.getSlotId(), MatchType.SCRIM, s.id(), winner);
+            // 스크림에는 팀이 없다. ScrimStat.TeamID 는 관측 전부가 0 — 플레이어 팀 자신이고
+            // 상대 번호가 어디에도 없다. 어느 진영이 플레이어인지도 모른다 (D54).
             match.setTeams(null, null, s.blueScore(), s.redScore());
             match.setTeamSize(TEAM_SIZE);
 
@@ -346,9 +390,10 @@ public class SaveLoader {
         return v == null ? 0 : v;
     }
 
-    /** 적재된 수와 형식이 맞지 않아 건너뛴 수. */
+    /** 적재된 수 · 형식이 맞지 않아 건너뛴 수 · 뒤늦게 팀을 채운 수. */
     private static final class Counts {
         private int saved;
         private int skipped;
+        private int backfilled;
     }
 }

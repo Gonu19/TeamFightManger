@@ -144,6 +144,16 @@ public class MatchRecord {
         return season;
     }
 
+    /** {@code team.team_id}. 스크림은 팀을 식별할 수 없어 늘 {@code null} 이다 (D54). */
+    public Integer getBlueTeamId() {
+        return blueTeamId;
+    }
+
+    /** {@code team.team_id}. 스크림은 팀을 식별할 수 없어 늘 {@code null} 이다 (D54). */
+    public Integer getRedTeamId() {
+        return redTeamId;
+    }
+
     public Integer getDay() {
         return day;
     }
@@ -185,5 +195,17 @@ public class MatchRecord {
 
     public void assignPatch(Integer patchId) {
         this.patchId = patchId;
+    }
+
+    /**
+     * 팀만 채운다. 점수는 건드리지 않는다.
+     *
+     * <p>{@link #setTeams} 와 나눠 둔 이유는 <b>백필</b>이다. 팀 없이 이미 적재된 경기를
+     * 나중에 채울 때 점수까지 같이 넘기면, 파서가 그 값을 못 읽은 경우 이미 맞던 점수를
+     * {@code null} 로 덮는다 — 고치러 와서 멀쩡한 것을 깨는 꼴이다.
+     */
+    public void assignTeams(Integer blueTeamId, Integer redTeamId) {
+        this.blueTeamId = blueTeamId;
+        this.redTeamId = redTeamId;
     }
 }
