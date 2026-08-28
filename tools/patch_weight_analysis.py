@@ -67,8 +67,13 @@ def load_careers():
                 "losers": list(losers),
             })
 
+        raw_changes = {}
+        for seq, patch in enumerate(patches, start=1):
+            raw_changes[seq] = list(patch["changes"])
+
         careers.append({
             "name": os.path.basename(path),
+            "raw_changes": raw_changes,
             "timeline": timeline,
             "change_seqs": change_seqs,
             "games": games,
@@ -413,6 +418,198 @@ def null_split_deltas(careers, k0, k1, seed):
     return deltas
 
 
+# ------------------------------------------------------------------ 측정 7
+#
+# 측정 4 를 다시 만든 것이다. 처음 것에는 결함이 둘 있었다.
+#   1. |승률 변화| 를 쟀다 — 상향/하향은 부호가 있는 효과인데 절댓값이 그걸 뭉갠다
+#   2. 챔피언 전체를 평균했다 — 한 패치가 건드리는 것은 40명 중 6~10명이라
+#      진짜 효과가 있어도 4~6배로 희석된다
+# 여기서는 방향을 살리고, 건드린 챔피언만 본다.
+
+BUFF_WHEN_POSITIVE = ("attack", "magic", "defence", "max_hp", "attack_speed", "move_speed")
+NERF_WHEN_POSITIVE = ("skill_cool",)
+
+
+def patch_direction(change):
+    """+1 상향 · -1 하향 · 0 판단 불가(변경 없음 또는 서로 상충)."""
+    score = 0
+    for stat in BUFF_WHEN_POSITIVE:
+        if change.get(stat, 0):
+            score += 1 if change[stat] > 0 else -1
+    for stat in NERF_WHEN_POSITIVE:
+        if change.get(stat, 0):
+            score += -1 if change[stat] > 0 else 1
+    return 0 if score == 0 else (1 if score > 0 else -1)
+
+
+def window_record(games, seq, champion):
+    played = won = 0
+    for game in games:
+        if game["patch_seq"] != seq:
+            continue
+        if champion in game["winners"]:
+            played += 1
+            won += 1
+        elif champion in game["losers"]:
+            played += 1
+    return played, won
+
+
+def measure_patch_effect_signed(careers, min_games=5):
+    print("=" * 78)
+    print(f"측정 7 — 상향/하향의 방향을 살려서 다시 잰다 (최소 {min_games}경기)")
+    print("=" * 78)
+    print("인접한 두 패치 구간만 비교한다. 패치 하나의 효과를 고립시키기 위해서다.")
+    print("상향은 오르고 하향은 내려야 하므로, 방향을 곱한 값이 양수여야 한다.")
+    print()
+
+    buckets = {"상향": [], "하향": [], "대조(안 건드림)": []}
+    before_levels = {"상향": [], "하향": []}
+
+    for career in careers:
+        seqs = sorted({g["patch_seq"] for g in career["games"]})
+        champions = all_champions(career)
+        for i in range(1, len(seqs)):
+            prev_seq, seq = seqs[i - 1], seqs[i]
+            patch = next((p for p in career["timeline"] if p["seq"] == seq), None)
+            if patch is None:
+                continue
+            directions = {}
+            source = next((p for p in career["timeline"] if p["seq"] == seq), None)
+            for change in career["raw_changes"].get(seq, []):
+                d = patch_direction(change)
+                if d:
+                    directions[change["name"]] = d
+
+            for champion in champions:
+                pb, wb = window_record(career["games"], prev_seq, champion)
+                pa, wa = window_record(career["games"], seq, champion)
+                if pb < min_games or pa < min_games:
+                    continue
+                delta = wa / pa - wb / pb
+                d = directions.get(champion)
+                if d is None:
+                    buckets["대조(안 건드림)"].append(delta)
+                else:
+                    label = "상향" if d > 0 else "하향"
+                    buckets[label].append(delta * d)
+                    before_levels[label].append(wb / pb)
+
+    print(f"  {'구분':<16}{'표본':>5}{'평균 효과':>11}{'표준오차':>10}{'t':>7}")
+    for label, values in buckets.items():
+        if not values:
+            print(f"  {label:<16}{0:>5}")
+            continue
+        n = len(values)
+        mean = sum(values) / n
+        var = sum((v - mean) ** 2 for v in values) / (n - 1) if n > 1 else 0.0
+        se = math.sqrt(var / n) if n > 1 else float("nan")
+        t = mean / se if se else float("nan")
+        print(f"  {label:<16}{n:>5}{mean * 100:>10.2f}%p{se * 100:>9.2f}%p{t:>7.2f}")
+    print()
+    print("  선택 편향 확인 — 게임이 센 챔피언을 골라 하향하는가?")
+    for label, values in before_levels.items():
+        if values:
+            print(f"    {label} 직전 승률 평균 {sum(values) / len(values) * 100:.1f}%"
+                  f" ({len(values)}건)")
+    print("    → 하향 직전 승률이 50% 보다 뚜렷이 높으면, 하향 후 하락은 패치 효과가")
+    print("       아니라 평균 회귀일 수 있다.")
+    print()
+
+
+# ------------------------------------------------------------------ 측정 8
+#
+# 측정 7 에서 상향 그룹이 +11.85%p 올랐다. 그런데 그 그룹의 직전 승률이 36.9% 였다.
+# 적은 표본에서 낮게 관측된 값은 다음 구간에 그냥 올라간다 — 평균 회귀다.
+# 패치 효과인지 평균 회귀인지 가르려면, 안 건드린 챔피언이 같은 직전 승률에서
+# 얼마나 움직이는지를 기준선으로 삼아야 한다.
+
+
+def measure_patch_effect_net_of_regression(careers, min_games=5):
+    print("=" * 78)
+    print("측정 8 — 평균 회귀를 걷어내고 남는 패치 효과")
+    print("=" * 78)
+    print("대조군(안 건드린 챔피언)에서 '직전 승률 → 다음 구간 변화' 의 기울기를 구한다.")
+    print("그게 평균 회귀의 크기다. 건드린 챔피언의 실제 변화에서 그 예측을 빼면")
+    print("남는 것이 패치 자체의 효과다.")
+    print()
+
+    touched = []   # (direction, before_rate, delta)
+    control = []   # (before_rate, delta)
+
+    for career in careers:
+        seqs = sorted({g["patch_seq"] for g in career["games"]})
+        champions = all_champions(career)
+        for i in range(1, len(seqs)):
+            prev_seq, seq = seqs[i - 1], seqs[i]
+            directions = {}
+            for change in career["raw_changes"].get(seq, []):
+                d = patch_direction(change)
+                if d:
+                    directions[change["name"]] = d
+            for champion in champions:
+                pb, wb = window_record(career["games"], prev_seq, champion)
+                pa, wa = window_record(career["games"], seq, champion)
+                if pb < min_games or pa < min_games:
+                    continue
+                before = wb / pb
+                delta = wa / pa - before
+                if champion in directions:
+                    touched.append((directions[champion], before, delta))
+                else:
+                    control.append((before, delta))
+
+    if len(control) < 3 or not touched:
+        print("  표본이 부족하다")
+        print()
+        return
+
+    # 대조군에서 회귀 기울기를 구한다: delta = a + b*(before - 0.5)
+    xs = [b - 0.5 for b, _ in control]
+    ys = [d for _, d in control]
+    n = len(xs)
+    mx = sum(xs) / n
+    my = sum(ys) / n
+    sxx = sum((x - mx) ** 2 for x in xs)
+    sxy = sum((x - mx) * (y - my) for x, y in zip(xs, ys))
+    slope = sxy / sxx if sxx else 0.0
+    intercept = my - slope * mx
+    resid_var = sum((y - (intercept + slope * x)) ** 2 for x, y in zip(xs, ys)) / (n - 2)
+
+    print(f"  대조군 {n}건 — 회귀 기울기 {slope:+.3f}"
+          f" (직전 승률이 50% 보다 10%p 낮으면 다음 구간에 {-slope * 10:+.1f}%p 오른다)")
+    print(f"  잔차 표준편차 {math.sqrt(resid_var) * 100:.2f}%p")
+    print()
+
+    print(f"  {'구분':<10}{'표본':>5}{'실제 변화':>11}{'회귀 예측':>11}{'순효과':>10}{'표준오차':>10}{'t':>7}")
+    for label, want in (("상향", 1), ("하향", -1)):
+        group = [(b, d) for dirn, b, d in touched if dirn == want]
+        if not group:
+            continue
+        residuals = [d - (intercept + slope * (b - 0.5)) for b, d in group]
+        k = len(residuals)
+        observed = sum(d for _, d in group) / k
+        predicted = sum(intercept + slope * (b - 0.5) for b, _ in group) / k
+        mean = sum(residuals) / k
+        var = sum((r - mean) ** 2 for r in residuals) / (k - 1) if k > 1 else 0.0
+        se = math.sqrt(var / k) if k > 1 else float("nan")
+        t = mean / se if se else float("nan")
+        print(f"  {label:<10}{k:>5}{observed * 100:>10.2f}%p{predicted * 100:>10.2f}%p"
+              f"{mean * 100:>9.2f}%p{se * 100:>9.2f}%p{t:>7.2f}")
+
+    signed = [(d - (intercept + slope * (b - 0.5))) * dirn for dirn, b, d in touched]
+    k = len(signed)
+    mean = sum(signed) / k
+    var = sum((v - mean) ** 2 for v in signed) / (k - 1) if k > 1 else 0.0
+    se = math.sqrt(var / k) if k > 1 else float("nan")
+    print(f"  {'방향 통합':<10}{k:>5}{'':>11}{'':>11}{mean * 100:>9.2f}%p{se * 100:>9.2f}%p"
+          f"{mean / se if se else float('nan'):>7.2f}")
+    print()
+    detectable = 2 * se * 100
+    print(f"  검출력 — 이 표본으로는 {detectable:.1f}%p 보다 작은 효과는 잡을 수 없다(t=2 기준).")
+    print()
+
+
 if __name__ == "__main__":
     careers = load_careers()
     measure_time_span(careers)
@@ -421,3 +618,5 @@ if __name__ == "__main__":
     measure_patch_effect(careers)
     measure_synergy_samples(careers)
     measure_two_stage(careers)
+    measure_patch_effect_signed(careers)
+    measure_patch_effect_net_of_regression(careers)
