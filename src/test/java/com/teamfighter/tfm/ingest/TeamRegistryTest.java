@@ -2,7 +2,6 @@ package com.teamfighter.tfm.ingest;
 
 import com.teamfighter.tfm.ingest.entity.Team;
 import com.teamfighter.tfm.ingest.repository.TeamRepository;
-import com.teamfighter.tfm.parser.common.ParsedRoster;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -102,7 +101,7 @@ class TeamRegistryTest {
     }
 
     @Test
-    @DisplayName("팀 이름은 세이브의 경기 스트림에 없다 — 비운 채로 만든다")
+    @DisplayName("이름표를 안 주면 이름 없이 만든다 — 경기 기록(GameStat)에는 이름이 없다")
     void ensure_leavesNameEmpty() {
         TeamRepository teams = mock(TeamRepository.class);
         when(teams.findBySlotIdAndGameTeamId(eq(SLOT), eq(36))).thenReturn(Optional.empty());
@@ -113,8 +112,12 @@ class TeamRegistryTest {
 
     // ------------------------------------------------------------ D55 이름
 
-    private static ParsedRoster roster() {
-        return new ParsedRoster("프로필", "내 팀", "감독", Map.of(36, "Karmine Corp"));
+    private static TeamNaming naming() {
+        return TeamNaming.of(
+                java.util.List.of(new com.teamfighter.tfm.parser.common.ParsedTeamInfo(36, "team.name.pro.team9", false),
+                        new com.teamfighter.tfm.parser.common.ParsedTeamInfo(0, "내 팀", true)),
+                Map.of("team.name.pro.team9", "Afreeca Freecs"),
+                null);
     }
 
     @Test
@@ -124,9 +127,10 @@ class TeamRegistryTest {
         when(teams.findBySlotIdAndGameTeamId(eq(SLOT), any())).thenReturn(Optional.empty());
         when(teams.save(any(Team.class))).thenAnswer(inv -> withId(inv.getArgument(0), 1));
 
-        TeamRegistry registry = new TeamRegistry(SLOT, teams, roster());
+        TeamRegistry registry = new TeamRegistry(SLOT, teams, naming());
 
-        assertThat(registry.ensure(36).getName()).isEqualTo("Karmine Corp");
+        assertThat(registry.ensure(36).getName()).isEqualTo("Afreeca Freecs");
+        assertThat(registry.ensure(36).getNameKey()).isEqualTo("team.name.pro.team9");
         // 0 번은 딕셔너리가 아니라 CommonStore 에서 온다 — 여기서 빠지면 내 팀만 이름이 없다.
         assertThat(registry.ensure(0).getName()).isEqualTo("내 팀");
         assertThat(registry.ensure(99).getName()).isNull();      // 이름표에 없는 번호
@@ -138,14 +142,14 @@ class TeamRegistryTest {
     void ensure_doesNotOverwriteExistingName() {
         TeamRepository teams = mock(TeamRepository.class);
         Team existing = withId(new Team(SLOT, 36), 42);
-        existing.nameIfAbsent("Afreeca Freecs");                 // 예전 적재 때 붙은 이름
+        existing.identifyIfAbsent("KT Rolster Bullets", "team.name.pro.team8");   // 예전 적재 때 붙은 신원
         when(teams.findBySlotIdAndGameTeamId(eq(SLOT), eq(36))).thenReturn(Optional.of(existing));
 
-        Team team = new TeamRegistry(SLOT, teams, roster()).ensure(36);
+        Team team = new TeamRegistry(SLOT, teams, naming()).ensure(36);
 
-        // 변조: nameIfAbsent 를 무조건 대입으로 바꾸면 프로필을 커스터마이즈할 때마다
+        // 변조: identifyIfAbsent 를 무조건 대입으로 바꾸면 프로필을 커스터마이즈할 때마다
         // 과거 커리어의 팀 이름이 통째로 갈아엎힌다.
-        assertThat(team.getName()).isEqualTo("Afreeca Freecs");
+        assertThat(team.getName()).isEqualTo("KT Rolster Bullets");
     }
 
     @Test

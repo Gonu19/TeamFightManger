@@ -18,6 +18,7 @@ import com.teamfighter.tfm.ingest.repository.MatchBanRepository;
 import com.teamfighter.tfm.ingest.repository.MatchParticipantRepository;
 import com.teamfighter.tfm.ingest.repository.MatchRecordRepository;
 import com.teamfighter.tfm.ingest.repository.PatchRepository;
+import com.teamfighter.tfm.ingest.repository.TeamNameSeedRepository;
 import com.teamfighter.tfm.ingest.repository.TeamRepository;
 import com.teamfighter.tfm.parser.model.ParsedGame;
 import com.teamfighter.tfm.parser.model.ParsedPatch;
@@ -27,6 +28,8 @@ import com.teamfighter.tfm.parser.model.ParsedStat;
 import com.teamfighter.tfm.parser.model.ParsedToday;
 import com.teamfighter.tfm.parser.common.CommonDataParser;
 import com.teamfighter.tfm.parser.common.ParsedRoster;
+import com.teamfighter.tfm.parser.common.ParsedTeamInfo;
+import com.teamfighter.tfm.parser.common.TeamInfoParser;
 import com.teamfighter.tfm.parser.save.SaveParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -74,6 +77,7 @@ public class SaveLoader {
     private final MatchParticipantRepository participants;
     private final MatchBanRepository bans;
     private final TeamRepository teams;
+    private final TeamNameSeedRepository teamNameSeeds;
 
     public SaveLoader(ChampionRepository champions,
                       PatchRepository patches,
@@ -81,7 +85,8 @@ public class SaveLoader {
                       MatchRecordRepository matches,
                       MatchParticipantRepository participants,
                       MatchBanRepository bans,
-                      TeamRepository teams) {
+                      TeamRepository teams,
+                      TeamNameSeedRepository teamNameSeeds) {
         this.champions = champions;
         this.patches = patches;
         this.patchEvents = patchEvents;
@@ -89,6 +94,7 @@ public class SaveLoader {
         this.participants = participants;
         this.bans = bans;
         this.teams = teams;
+        this.teamNameSeeds = teamNameSeeds;
     }
 
     // ------------------------------------------------------------------ 본체
@@ -109,7 +115,7 @@ public class SaveLoader {
         PatchAssigner assigner = buildAssigner(slot);
 
         // 적재 한 번에 하나. 롤백되면 캐시도 같이 버려져야 한다 (TeamRegistry 참고).
-        TeamRegistry teamRegistry = new TeamRegistry(slot.getSlotId(), teams, readRoster(saveFile));
+        TeamRegistry teamRegistry = new TeamRegistry(slot.getSlotId(), teams, naming(saveFile));
 
         Counts official = saveGames(slot, save.gameStats(), championByCode, assigner, teamRegistry);
         Counts scrim = saveScrims(slot, save.scrimStats(), save.today(), championByCode, assigner);
@@ -120,6 +126,34 @@ public class SaveLoader {
 
         return new IngestService.IngestResult(slot.getSlotId(), official.saved, scrim.saved,
                 official.skipped, scrim.skipped, newPatches, false);
+    }
+
+    /**
+     * 팀 이름 규칙을 만든다 (D56).
+     *
+     * <p>1순위는 <b>세이브의 {@code TeamInfo}</b> 다 — 커리어 시점의 신원이라 정확하다.
+     * 로컬라이제이션 키는 시드에서 이름으로 바꾸고, {@code common.data} 는 세이브가 팀을
+     * 말해주지 않을 때만 쓰는 폴백이다.
+     */
+    private TeamNaming naming(Path saveFile) {
+        Map<String, String> seed = new HashMap<>();
+        teamNameSeeds.findAll().forEach(s -> seed.put(s.getNameKey(), s.getName()));
+        return TeamNaming.of(readTeamInfos(saveFile), seed, readRoster(saveFile));
+    }
+
+    /**
+     * 세이브에서 팀 신원을 읽는다.
+     *
+     * <p>{@link #readRoster} 와 같은 이유로 실패해도 적재를 멈추지 않는다 — 이름은 표시용이다.
+     * 대신 조용히 넘어가지 않고 WARN 을 남긴다.
+     */
+    private static List<ParsedTeamInfo> readTeamInfos(Path saveFile) {
+        try {
+            return TeamInfoParser.read(saveFile);
+        } catch (IOException | RuntimeException e) {
+            log.warn("세이브에서 팀 신원을 읽지 못했다: {} — {}", saveFile, e.toString());
+            return List.of();
+        }
     }
 
     /**

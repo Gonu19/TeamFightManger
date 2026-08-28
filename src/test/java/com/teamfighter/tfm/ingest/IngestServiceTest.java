@@ -8,8 +8,8 @@ import com.teamfighter.tfm.ingest.entity.SaveSlot;
 import com.teamfighter.tfm.ingest.entity.Team;
 import com.teamfighter.tfm.ingest.entity.TeamSide;
 import com.teamfighter.tfm.parser.model.ParsedGame;
-import com.teamfighter.tfm.parser.common.CommonDataParser;
-import com.teamfighter.tfm.parser.common.ParsedRoster;
+import com.teamfighter.tfm.parser.common.ParsedTeamInfo;
+import com.teamfighter.tfm.parser.common.TeamInfoParser;
 import com.teamfighter.tfm.parser.model.ParsedScrim;
 import com.teamfighter.tfm.parser.model.ParsedStat;
 import com.teamfighter.tfm.parser.model.ParsedToday;
@@ -86,6 +86,9 @@ class IngestServiceTest {
 
     @Autowired
     private SaveLoader loader;
+
+    @Autowired
+    private com.teamfighter.tfm.ingest.repository.TeamNameSeedRepository teamNameSeeds;
 
     static boolean fixturesExist() {
         return !fixtures().isEmpty();
@@ -457,14 +460,18 @@ class IngestServiceTest {
                 .isEqualTo(officialMatches.size());
     }
 
-    // ------------------------------------------------------------ D55
+    // ------------------------------------------------------------ D56
 
     @Test
     @EnabledIf("fixturesExist")
-    @DisplayName("D55 — 팀 이름이 common.data 에서 붙는다. 없는 환경이면 번호만 남고 적재는 돈다")
-    void ingest_namesTeams_fromCommonDataBesideTheSave() throws Exception {
+    @DisplayName("D56 — 팀 이름은 세이브의 TeamInfo 에서 온다. 키도 함께 남는다")
+    void ingest_namesTeams_fromSaveTeamInfo() throws Exception {
         Path file = fixture("slot_638683925954242004.tfm");
-        boolean rosterExists = Files.isRegularFile(FIXTURES.resolve("common.data"));
+        Map<Integer, ParsedTeamInfo> expected = new HashMap<>();
+        for (ParsedTeamInfo info : TeamInfoParser.read(file)) {
+            expected.put(info.id(), info);
+        }
+        assertThat(expected).as("세이브에 TeamInfo 가 있어야 이 테스트가 의미를 가진다").isNotEmpty();
 
         ingestService.ingest(file);
 
@@ -472,21 +479,37 @@ class IngestServiceTest {
         List<Team> loaded = teams.findBySlotId(slot.getSlotId());
         assertThat(loaded).isNotEmpty();
 
-        if (!rosterExists) {
-            // 이름표가 없어도 적재 자체는 성공해야 한다 — 이름은 표시용이고 경기가 본체다.
-            assertThat(loaded).allSatisfy(t -> assertThat(t.getName()).isNull());
-            return;
+        for (Team team : loaded) {
+            ParsedTeamInfo info = expected.get(team.getGameTeamId());
+            assertThat(info).as("적재된 팀 %d 는 세이브에 있어야 한다", team.getGameTeamId()).isNotNull();
+            // 키는 세이브가 말한 그대로여야 한다. 이름은 시드 해석 결과라 없을 수도 있다.
+            assertThat(team.getNameKey())
+                    .as("팀 %d 의 키", team.getGameTeamId())
+                    .isEqualTo(info.localizationKey());
         }
 
-        ParsedRoster roster = CommonDataParser.read(FIXTURES.resolve("common.data"));
-        for (Team team : loaded) {
-            // 이름표에 있는 번호는 이름이 붙고, 없는 번호는 비어 있어야 한다.
-            // "전부 이름이 있다" 로 단언하면 이름표에 없는 번호를 아무 이름으로 채워도 통과한다.
-            assertThat(team.getName())
-                    .as("팀 %d 의 이름", team.getGameTeamId())
-                    .isEqualTo(roster.nameOf(team.getGameTeamId()).orElse(null));
-        }
-        assertThat(loaded).anySatisfy(t -> assertThat(t.getName()).isNotBlank());
+        // 실측 못 박기. 이 커리어에서 66세트를 뛴 35번은 프로1부 8번째 팀이다 (사용자 확인).
+        // "전부 이름이 있다" 로는 시드를 아무렇게나 붙여도 통과한다.
+        Team pro8 = loaded.stream().filter(t -> t.getGameTeamId() == 35).findFirst().orElseThrow();
+        assertThat(pro8.getNameKey()).isEqualTo("team.name.pro.team8");
+        assertThat(pro8.getName()).isEqualTo("KT Rolster Bullets");
+
+        // 플레이어 팀은 커스텀 이름이라 키가 없다.
+        Team player = loaded.stream().filter(Team::isPlayer).findFirst().orElseThrow();
+        assertThat(player.getNameKey()).isNull();
+        assertThat(player.getName()).isEqualTo(expected.get(0).literalName());
+    }
+
+    @Test
+    @EnabledIf("fixturesExist")
+    @DisplayName("D56 — 시드가 52개 그대로 있고 리그 다섯 단계를 덮는다")
+    void seed_coversEveryLeague() {
+        Map<String, Long> byLeague = new HashMap<>();
+        teamNameSeeds.findAll().forEach(x -> byLeague.merge(x.getLeague(), 1L, Long::sum));
+
+        assertThat(byLeague).containsOnlyKeys("amateur", "semi_pro", "pro2", "pro", "worlds");
+        assertThat(byLeague).containsEntry("amateur", 7L).containsEntry("semi_pro", 10L)
+                .containsEntry("pro2", 10L).containsEntry("pro", 10L).containsEntry("worlds", 15L);
     }
 
     @Test

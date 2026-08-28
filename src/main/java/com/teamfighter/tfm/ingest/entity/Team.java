@@ -29,6 +29,10 @@ public class Team {
 
     private String name;
 
+    /** 세이브 {@code TeamInfo.NameKey}. 커스텀 이름이면 {@code null} (D56). */
+    @Column(name = "name_key")
+    private String nameKey;
+
     @Column(name = "is_player", nullable = false)
     private boolean player;
 
@@ -58,21 +62,35 @@ public class Team {
         return name;
     }
 
+    /** 세이브가 말한 로컬라이제이션 키. 표시 이름과 달리 <b>해석되지 않은 사실</b>이다 (D56). */
+    public String getNameKey() {
+        return nameKey;
+    }
+
     /**
-     * 이름을 붙인다. <b>이미 있는 이름은 덮지 않는다</b> — 적재 시점의 이름이 그 커리어의 기록이고,
-     * 나중에 프로필을 다시 커스터마이즈해도 지나간 커리어의 표가 바뀌면 안 된다 (D55).
+     * 신원을 붙인다. <b>이미 있는 값은 덮지 않는다</b> — 적재 시점의 이름이 그 커리어의 기록이고,
+     * 나중에 프로필을 커스터마이즈해도 지나간 커리어의 표가 바뀌면 안 된다 (D55).
      *
-     * @return 실제로 붙였으면 {@code true}
+     * <p>이름과 키를 <b>따로</b> 채운다. 키는 알지만 시드에 이름이 없는 경우가 있어서다 —
+     * 나중에 시드를 채우면 그때 이름만 붙는다.
+     *
+     * @return 둘 중 하나라도 새로 붙었으면 {@code true}
      */
-    public boolean nameIfAbsent(String name) {
-        if (this.name != null && !this.name.isBlank()) {
-            return false;
+    public boolean identifyIfAbsent(String name, String nameKey) {
+        boolean changed = false;
+        if (isBlank(this.name) && !isBlank(name)) {
+            this.name = name;
+            changed = true;
         }
-        if (name == null || name.isBlank()) {
-            return false;
+        if (isBlank(this.nameKey) && !isBlank(nameKey)) {
+            this.nameKey = nameKey;
+            changed = true;
         }
-        this.name = name;
-        return true;
+        return changed;
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
     }
 
     public boolean isPlayer() {
