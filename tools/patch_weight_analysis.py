@@ -610,6 +610,160 @@ def measure_patch_effect_net_of_regression(careers, min_games=5):
     print()
 
 
+# ------------------------------------------------------------------ 측정 9
+#
+# 유저는 현재 패치 기준으로 플레이한다. 앱이 "A 가 좋다" 고 하면 그건 지금 좋다는 뜻이어야
+# 한다. 그런데 지금 구현은 커리어의 모든 경기를 합쳐서 답한다.
+#
+# 측정 1~8 은 분산(패치 구간 추정치가 노이즈인가)을 쟀다. 여기서는 편향을 잰다 —
+# 통합 추정치가 "현재 패치" 에 대해 얼마나 다른 답을 주는가.
+#
+# 핵심은 자기 변경 축이다. 다른 챔피언이 바뀐 것(메타)은 상대 풀을 통한 2차 효과지만,
+# 그 챔피언 자신이 바뀐 것은 옛 데이터를 직접 무효로 만든다.
+
+
+def measure_self_change_axis(careers, k0=24.0):
+    print("=" * 78)
+    print("측정 9 — 자기 변경 축: 지금 바뀐 챔피언의 옛 데이터를 얼마나 쓸 것인가")
+    print("=" * 78)
+    print("기준 시점(마지막 패치)에서 각 챔피언이 마지막으로 바뀐 뒤 몇 패치가 지났는지,")
+    print("그리고 그 챔피언의 경기 중 몇 %가 '바뀌기 전' 인지 센다.")
+    print()
+
+    for career in careers:
+        ref_seq = career["last_seq"]
+        champions = sorted(all_champions(career))
+        rows = []
+        for champion in champions:
+            seqs = career["change_seqs"].get(champion, [])
+            last_change = max(seqs) if seqs else None
+            played = stale = 0
+            for game in career["games"]:
+                if champion in game["winners"] or champion in game["losers"]:
+                    played += 1
+                    if last_change is not None and game["patch_seq"] < last_change:
+                        stale += 1
+            if played:
+                rows.append((champion, last_change, played, stale))
+
+        touched = [r for r in rows if r[3] > 0]
+        print(f"  {career['name']}  (기준 패치 {ref_seq})")
+        print(f"    출전한 챔피언 {len(rows)}명 중 **경기 기간 안에 바뀐** 챔피언 {len(touched)}명")
+        if touched:
+            worst = sorted(touched, key=lambda r: -r[3] / r[2])[:8]
+            print(f"    {'챔피언':<18}{'마지막변경':>10}{'출전':>6}{'변경전':>7}{'낡은비율':>9}")
+            for champion, last_change, played, stale in worst:
+                print(f"    {champion:<18}{('seq' + str(last_change)):>10}{played:>6}"
+                      f"{stale:>7}{stale / played * 100:>8.0f}%")
+        print()
+
+
+def measure_self_half_life_on_touched(careers, k0=24.0):
+    print("=" * 78)
+    print("측정 10 — 자기 반감기를 바꾸면 '바뀐 챔피언' 의 추정이 얼마나 움직이나")
+    print("=" * 78)
+    print("측정 3 은 40명 전체를 평균해서 효과가 희석됐다. 여기서는 실제로 바뀐 챔피언만 본다.")
+    print("하드 컷은 '마지막 변경 이전 경기를 아예 버린다' 는 뜻이다.")
+    print()
+
+    def rates(self_half, hard_cut=False):
+        wg = defaultdict(float)
+        ww = defaultdict(float)
+        for career in careers:
+            ref_seq = career["last_seq"]
+            for game in career["games"]:
+                for won, side in ((True, game["winners"]), (False, game["losers"])):
+                    for champion in side:
+                        sc = abs(change_count_at(career, champion, ref_seq)
+                                 - change_count_at(career, champion, game["patch_seq"]))
+                        if hard_cut:
+                            w = 0.0 if sc > 0 else 1.0
+                        else:
+                            w = 0.5 ** (sc / self_half) if self_half else (0.0 if sc else 1.0)
+                        wg[champion] += w
+                        if won:
+                            ww[champion] += w
+        return ({c: (ww[c] + k0 * 0.5) / (wg[c] + k0) for c in wg}, wg)
+
+    # 경기 기간 안에 실제로 바뀐 챔피언만 추린다
+    changed = set()
+    for career in careers:
+        ref_seq = career["last_seq"]
+        for game in career["games"]:
+            for champion in game["winners"] + game["losers"]:
+                if change_count_at(career, champion, ref_seq) !=                         change_count_at(career, champion, game["patch_seq"]):
+                    changed.add(champion)
+
+    base, base_wg = rates(1e9)
+    print(f"  경기 기간 안에 바뀐 챔피언 {len(changed)}명 (전체 {len(base)}명)")
+    print()
+    print(f"  {'자기반감기':>12}{'바뀐쪽 표본유지':>15}{'평균 이동':>11}{'최대 이동':>11}{'순위 변동':>10}")
+    for label, half, hard in [("2 (현재)", 2.0, False), ("1", 1.0, False),
+                              ("0.5", 0.5, False), ("하드 컷", None, True)]:
+        r, wg = rates(half if half else 1.0, hard_cut=hard)
+        kept = (sum(wg[c] for c in changed)
+                / sum(base_wg[c] for c in changed)) if changed else float("nan")
+        moves = [abs(r[c] - base[c]) for c in changed]
+        avg = sum(moves) / len(moves) if moves else 0.0
+        rank_base = {c: i for i, c in enumerate(sorted(base, key=lambda x: base[x]))}
+        rank_new = {c: i for i, c in enumerate(sorted(r, key=lambda x: r[x]))}
+        moved = max(abs(rank_base[c] - rank_new[c]) for c in base)
+        print(f"  {label:>12}{kept:>14.3f}{avg * 100:>10.2f}%p"
+              f"{max(moves) * 100 if moves else 0:>10.2f}%p{moved:>9}칸")
+    print()
+    print("  '순위 변동' 은 40명 중 한 챔피언이 최대 몇 칸 움직였는지다.")
+    print()
+
+
+def measure_career_divergence(careers):
+    print("=" * 78)
+    print("측정 11 — 커리어마다 패치 역사가 다르다. GLOBAL 은 같은 챔피언을 합쳐도 되나")
+    print("=" * 78)
+    print("패치는 커리어마다 고유 생성된다. 19패치를 거치면 같은 이름의 챔피언이라도")
+    print("커리어별로 스탯이 달라진다. GLOBAL 스코프는 그것을 한 줄로 합친다.")
+    print()
+    totals = {}
+    for career in careers:
+        acc = defaultdict(lambda: defaultdict(int))
+        for seq, changes in career["raw_changes"].items():
+            for change in changes:
+                for stat, value in change.items():
+                    if stat != "name" and value:
+                        acc[change["name"]][stat] += value
+        totals[career["name"]] = acc
+
+    names = sorted(set().union(*[set(a) for a in totals.values()]))
+    print(f"  패치를 한 번이라도 받은 챔피언 {len(names)}명")
+    print()
+    print(f"  {'챔피언':<18}" + "".join(f"{n[5:13]:>12}" for n in totals))
+    shown = 0
+    for name in names:
+        cells = []
+        for career_name in totals:
+            acc = totals[career_name].get(name, {})
+            if not acc:
+                cells.append("-")
+            else:
+                stat, value = max(acc.items(), key=lambda kv: abs(kv[1]))
+                cells.append(f"{stat[:6]}{value:+d}")
+        # 커리어 사이에 부호가 갈리는 챔피언만 보여준다 — 그게 문제의 핵심이다
+        signs = set()
+        for career_name in totals:
+            acc = totals[career_name].get(name, {})
+            for stat, value in acc.items():
+                if stat != "skill_cool" and value:
+                    signs.add(value > 0)
+                elif stat == "skill_cool" and value:
+                    signs.add(value < 0)
+        if len(signs) > 1 and shown < 12:
+            print(f"  {name:<18}" + "".join(f"{c:>12}" for c in cells))
+            shown += 1
+    print()
+    print("  위는 커리어 사이에 상향/하향 방향이 갈린 챔피언이다.")
+    print("  같은 이름인데 한쪽에서는 세지고 다른 쪽에서는 약해졌다는 뜻이다.")
+    print()
+
+
 if __name__ == "__main__":
     careers = load_careers()
     measure_time_span(careers)
@@ -620,3 +774,6 @@ if __name__ == "__main__":
     measure_two_stage(careers)
     measure_patch_effect_signed(careers)
     measure_patch_effect_net_of_regression(careers)
+    measure_self_change_axis(careers)
+    measure_self_half_life_on_touched(careers)
+    measure_career_divergence(careers)
