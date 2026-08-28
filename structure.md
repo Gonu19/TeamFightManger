@@ -21,7 +21,7 @@ A:\project\TeamFighter\
 ├─ .gitignore
 │
 ├─ *.md                                     설계 문서 (루트 유지)
-├─ fixtures/                                세이브 스냅샷 (라이브 파일 대신)
+├─ fixtures/                                세이브 · common.data 스냅샷 (라이브 파일 대신)
 ├─ tools/                                   측정 스크립트 · *_report.sql · pair_audit.sql
 ├─ tests/
 │   ├─ verify_schema.sql                    스키마 제약 검증 24/24
@@ -33,6 +33,7 @@ A:\project\TeamFighter\
 │   ├─ parser/          ★ Spring 의존 0
 │   │   ├─ nrbf/                            NrbfReader · RecordType · ObjectGraph
 │   │   ├─ save/                            SaveFileParser · GameStat/Scrim/PatchNews 매퍼
+│   │   ├─ common/    CommonDataParser      common.data 의 팀 이름표 (D55)
 │   │   └─ model/                           파서 출력 DTO (DB 무관)
 │   ├─ ingest/          JPA
 │   │   ├─ watcher/                         SaveWatcher · SlotPathResolver · StartupCatchUp · TfmProperties

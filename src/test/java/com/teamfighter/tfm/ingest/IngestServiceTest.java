@@ -8,6 +8,8 @@ import com.teamfighter.tfm.ingest.entity.SaveSlot;
 import com.teamfighter.tfm.ingest.entity.Team;
 import com.teamfighter.tfm.ingest.entity.TeamSide;
 import com.teamfighter.tfm.parser.model.ParsedGame;
+import com.teamfighter.tfm.parser.common.CommonDataParser;
+import com.teamfighter.tfm.parser.common.ParsedRoster;
 import com.teamfighter.tfm.parser.model.ParsedScrim;
 import com.teamfighter.tfm.parser.model.ParsedStat;
 import com.teamfighter.tfm.parser.model.ParsedToday;
@@ -453,6 +455,38 @@ class IngestServiceTest {
         // 백필이 경기를 새로 만들지는 않는다.
         assertThat(matches.countBySlotIdAndMatchType(slot.getSlotId(), MatchType.OFFICIAL))
                 .isEqualTo(officialMatches.size());
+    }
+
+    // ------------------------------------------------------------ D55
+
+    @Test
+    @EnabledIf("fixturesExist")
+    @DisplayName("D55 — 팀 이름이 common.data 에서 붙는다. 없는 환경이면 번호만 남고 적재는 돈다")
+    void ingest_namesTeams_fromCommonDataBesideTheSave() throws Exception {
+        Path file = fixture("slot_638683925954242004.tfm");
+        boolean rosterExists = Files.isRegularFile(FIXTURES.resolve("common.data"));
+
+        ingestService.ingest(file);
+
+        SaveSlot slot = slots.findBySlotKey("slot_638683925954242004.tfm").orElseThrow();
+        List<Team> loaded = teams.findBySlotId(slot.getSlotId());
+        assertThat(loaded).isNotEmpty();
+
+        if (!rosterExists) {
+            // 이름표가 없어도 적재 자체는 성공해야 한다 — 이름은 표시용이고 경기가 본체다.
+            assertThat(loaded).allSatisfy(t -> assertThat(t.getName()).isNull());
+            return;
+        }
+
+        ParsedRoster roster = CommonDataParser.read(FIXTURES.resolve("common.data"));
+        for (Team team : loaded) {
+            // 이름표에 있는 번호는 이름이 붙고, 없는 번호는 비어 있어야 한다.
+            // "전부 이름이 있다" 로 단언하면 이름표에 없는 번호를 아무 이름으로 채워도 통과한다.
+            assertThat(team.getName())
+                    .as("팀 %d 의 이름", team.getGameTeamId())
+                    .isEqualTo(roster.nameOf(team.getGameTeamId()).orElse(null));
+        }
+        assertThat(loaded).anySatisfy(t -> assertThat(t.getName()).isNotBlank());
     }
 
     @Test

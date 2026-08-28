@@ -2,6 +2,7 @@ package com.teamfighter.tfm.ingest;
 
 import com.teamfighter.tfm.ingest.entity.Team;
 import com.teamfighter.tfm.ingest.repository.TeamRepository;
+import com.teamfighter.tfm.parser.common.ParsedRoster;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -23,11 +24,14 @@ final class TeamRegistry {
 
     private final Integer slotId;
     private final TeamRepository teams;
+    private final ParsedRoster roster;
     private final Map<Integer, Team> cache = new HashMap<>();
+    private int named;
 
-    TeamRegistry(Integer slotId, TeamRepository teams) {
+    TeamRegistry(Integer slotId, TeamRepository teams, ParsedRoster roster) {
         this.slotId = slotId;
         this.teams = teams;
+        this.roster = roster;
     }
 
     /**
@@ -44,9 +48,20 @@ final class TeamRegistry {
         if (gameTeamId == null) {
             return null;
         }
-        return cache.computeIfAbsent(gameTeamId, id ->
-                teams.findBySlotIdAndGameTeamId(slotId, id)
-                        .orElseGet(() -> teams.save(new Team(slotId, id))));
+        return cache.computeIfAbsent(gameTeamId, id -> {
+            Team team = teams.findBySlotIdAndGameTeamId(slotId, id)
+                    .orElseGet(() -> teams.save(new Team(slotId, id)));
+            // 이름이 비어 있을 때만 붙인다. 이미 붙은 이름은 그 커리어 적재 시점의 기록이다 (D55).
+            if (roster != null && team.nameIfAbsent(roster.nameOf(id).orElse(null))) {
+                named++;
+            }
+            return team;
+        });
+    }
+
+    /** 이번 적재에서 이름을 새로 붙인 팀 수. */
+    int namedCount() {
+        return named;
     }
 
     /** {@link #ensure(Integer)} 의 결과에서 식별자만 꺼낸다. 팀이 없으면 {@code null}. */

@@ -53,9 +53,26 @@ public class Team {
         return gameTeamId;
     }
 
-    /** 팀 이름. 세이브의 경기 스트림에는 없다 — 지금은 늘 {@code null} 이다 (D54). */
+    /** 팀 이름. 세이브가 아니라 {@code common.data} 에서 온다 (D55). 없으면 {@code null}. */
     public String getName() {
         return name;
+    }
+
+    /**
+     * 이름을 붙인다. <b>이미 있는 이름은 덮지 않는다</b> — 적재 시점의 이름이 그 커리어의 기록이고,
+     * 나중에 프로필을 다시 커스터마이즈해도 지나간 커리어의 표가 바뀌면 안 된다 (D55).
+     *
+     * @return 실제로 붙였으면 {@code true}
+     */
+    public boolean nameIfAbsent(String name) {
+        if (this.name != null && !this.name.isBlank()) {
+            return false;
+        }
+        if (name == null || name.isBlank()) {
+            return false;
+        }
+        this.name = name;
+        return true;
     }
 
     public boolean isPlayer() {

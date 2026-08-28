@@ -25,6 +25,8 @@ import com.teamfighter.tfm.parser.model.ParsedSave;
 import com.teamfighter.tfm.parser.model.ParsedScrim;
 import com.teamfighter.tfm.parser.model.ParsedStat;
 import com.teamfighter.tfm.parser.model.ParsedToday;
+import com.teamfighter.tfm.parser.common.CommonDataParser;
+import com.teamfighter.tfm.parser.common.ParsedRoster;
 import com.teamfighter.tfm.parser.save.SaveParser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -32,6 +34,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.OffsetDateTime;
 import java.util.ArrayList;
@@ -106,17 +109,47 @@ public class SaveLoader {
         PatchAssigner assigner = buildAssigner(slot);
 
         // 적재 한 번에 하나. 롤백되면 캐시도 같이 버려져야 한다 (TeamRegistry 참고).
-        TeamRegistry teamRegistry = new TeamRegistry(slot.getSlotId(), teams);
+        TeamRegistry teamRegistry = new TeamRegistry(slot.getSlotId(), teams, readRoster(saveFile));
 
         Counts official = saveGames(slot, save.gameStats(), championByCode, assigner, teamRegistry);
         Counts scrim = saveScrims(slot, save.scrimStats(), save.today(), championByCode, assigner);
 
-        log.info("적재 완료 {} — 공식 {}건(제외 {}) · 스크림 {}건(제외 {}) · 패치 {}건 · 팀 백필 {}건",
+        log.info("적재 완료 {} — 공식 {}건(제외 {}) · 스크림 {}건(제외 {}) · 패치 {}건 · 팀 백필 {}건 · 팀 이름 {}건",
                 slot.getSlotKey(), official.saved, official.skipped, scrim.saved, scrim.skipped,
-                newPatches, official.backfilled);
+                newPatches, official.backfilled, teamRegistry.namedCount());
 
         return new IngestService.IngestResult(slot.getSlotId(), official.saved, scrim.saved,
                 official.skipped, scrim.skipped, newPatches, false);
+    }
+
+    /**
+     * 세이브 파일 옆의 {@code common.data} 에서 팀 이름표를 읽는다 (D55).
+     *
+     * <p><b>없거나 깨져도 적재를 멈추지 않는다.</b> 이름은 표시용이고 경기가 본체다 —
+     * 게임이 그 파일 형식을 바꿨다고 공식 경기 수백 건을 못 넣게 되는 쪽이 훨씬 나쁘다.
+     * 대신 <b>조용히 넘어가지 않는다</b>: 경로와 원인을 WARN 으로 남기고, 결과는 화면에
+     * 이름 없는 팀으로 그대로 드러난다. 삼키는 것과 다른 점이 그것이다.
+     *
+     * @return 이름표. 파일이 없거나 읽지 못하면 {@code null}
+     */
+    private static ParsedRoster readRoster(Path saveFile) {
+        Path parent = saveFile.getParent();
+        if (parent == null) {
+            return null;
+        }
+        Path file = CommonDataParser.pathIn(parent);
+        if (!Files.isRegularFile(file)) {
+            log.warn("팀 이름표가 없다: {} — 팀이 번호로만 보인다", file);
+            return null;
+        }
+        try {
+            ParsedRoster roster = CommonDataParser.read(file);
+            log.debug("팀 이름표 {}개 (프로필 {})", roster.size(), roster.profileName());
+            return roster;
+        } catch (IOException | RuntimeException e) {
+            log.warn("팀 이름표를 읽지 못했다: {} — {}. 팀이 번호로만 보인다", file, e.toString());
+            return null;
+        }
     }
 
     // ------------------------------------------------------------------ 패치
