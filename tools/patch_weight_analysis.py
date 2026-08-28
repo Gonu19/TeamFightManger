@@ -764,6 +764,70 @@ def measure_career_divergence(careers):
     print()
 
 
+# ------------------------------------------------------------------ 측정 12
+#
+# 한 챔피언이 하향되면 그에게 카운터당하던 챔피언들의 승률도 따라 움직인다. 효과가
+# 바뀐 챔피언에 갇히지 않는다 — D15 가 메타 축을 둔 이유가 그것이다.
+# 그러니 자기 변경 축이 아니라 **모든 챔피언에게 똑같이 걸리는 메타 축**을 조정해야 한다.
+#
+# 그리고 기준 스코프는 현재 플레이하는 슬롯 하나다. 커리어마다 밸런스가 다르므로
+# (측정 11) 합치면 안 된다. 그래서 커리어별로 따로 잰다.
+
+
+def measure_meta_axis_per_career(careers, k0=24.0, min_games=10):
+    print("=" * 78)
+    print("측정 12 — 메타 반감기만 따로. 커리어별(= 실제 기준 스코프)로 본다")
+    print("=" * 78)
+    print("자기 변경 축은 끄고 메타 축만 움직인다. 모든 챔피언에게 똑같이 걸리므로")
+    print("나비효과(안 바뀐 챔피언의 승률 변화)까지 담는다.")
+    print()
+
+    for career in careers:
+        ref_seq = career["last_seq"]
+        seqs = sorted({g["patch_seq"] for g in career["games"]})
+        print(f"  {career['name']}  경기 {len(career['games'])}건 · "
+              f"패치 구간 {seqs} · 기준 seq{ref_seq}")
+
+        def rates(meta_half):
+            wg = defaultdict(float)
+            ww = defaultdict(float)
+            w2 = defaultdict(float)
+            for game in career["games"]:
+                elapsed = abs(ref_seq - game["patch_seq"])
+                w = 1.0 if meta_half is None else 0.5 ** (elapsed / meta_half)
+                for won, side in ((True, game["winners"]), (False, game["losers"])):
+                    for champion in side:
+                        wg[champion] += w
+                        w2[champion] += w * w
+                        if won:
+                            ww[champion] += w
+            adjusted = {c: (ww[c] + k0 * 0.5) / (wg[c] + k0) for c in wg}
+            ess = {c: (wg[c] ** 2 / w2[c] if w2[c] else 0.0) for c in wg}
+            return adjusted, wg, ess
+
+        base, base_wg, base_ess = rates(None)
+        eligible = [c for c in base_ess if base_ess[c] >= min_games]
+        print(f"    {'메타반감기':>10}{'표본유지':>9}{'ess>=10':>9}"
+              f"{'평균 이동':>11}{'최대 이동':>11}{'순위 변동':>10}")
+        for label, half in [("없음", None), ("12 (현재)", 12.0), ("6", 6.0),
+                            ("3", 3.0), ("2", 2.0), ("1", 1.0)]:
+            r, wg, ess = rates(half)
+            kept = sum(wg.values()) / sum(base_wg.values())
+            survivors = sum(1 for c in ess if ess[c] >= min_games)
+            moves = [abs(r[c] - base[c]) for c in eligible]
+            avg = sum(moves) / len(moves) if moves else 0.0
+            rb = {c: i for i, c in enumerate(sorted(base, key=lambda x: base[x]))}
+            rn = {c: i for i, c in enumerate(sorted(r, key=lambda x: r[x]))}
+            moved = max(abs(rb[c] - rn[c]) for c in base)
+            print(f"    {label:>10}{kept:>9.3f}{survivors:>9}"
+                  f"{avg * 100:>10.2f}%p{max(moves) * 100 if moves else 0:>10.2f}%p"
+                  f"{moved:>9}칸")
+        print()
+    print("  'ess>=10' 은 유효표본이 표본 기준선(D9)을 넘는 챔피언 수다. 40명 중 몇 명이")
+    print("  화면에 뜰 자격을 유지하는지를 뜻한다 — 감쇠의 진짜 비용은 이쪽이다.")
+    print()
+
+
 if __name__ == "__main__":
     careers = load_careers()
     measure_time_span(careers)
@@ -777,3 +841,4 @@ if __name__ == "__main__":
     measure_self_change_axis(careers)
     measure_self_half_life_on_touched(careers)
     measure_career_divergence(careers)
+    measure_meta_axis_per_career(careers)

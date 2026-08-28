@@ -40,6 +40,9 @@ public final class ChampionTallyAggregator {
     /**
      * 여러 슬롯의 누적을 합친다 — {@code GLOBAL} 스코프 (D45).
      *
+     * <p><b>지금은 아무도 부르지 않는다 (D53).</b> {@code MatchupAggregate.merge} 와 같은
+     * 이유다. 부르는 곳은 단위 테스트뿐이다.
+     *
      * <p>감쇠는 이미 슬롯별로 끝난 상태로 들어온다. 카운터의
      * {@code MatchupAggregate.merge} 와 같은 이유다.
      */

@@ -70,7 +70,8 @@ A:\project\TeamFighter\
 │   ├─ db/migration/                        ★ 스키마·시드의 유일한 원본
 │   │   ├─ V1__init.sql · V2__fixed_team_size.sql
 │   │   ├─ V3__seed_champions.sql           챔피언 40종
-│   │   └─ V4__ban_rate_denominator.sql     밴률 분모 분리 (D50)
+│   │   ├─ V4__ban_rate_denominator.sql     밴률 분모 분리 (D50)
+│   │   └─ V5__current_patch_basis.sql      메타 반감기 2 · GLOBAL 중단 (D53)
 │   ├─ templates/ + templates/fragments/
 │   └─ static/css · static/js
 │

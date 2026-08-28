@@ -16,7 +16,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -28,9 +27,11 @@ import java.util.Map;
  * 것이다. 화면은 티어와 카운터를 나란히 놓는데(D21) 그 둘이 다른 경기 집합에서 나왔다면
  * 어긋난 것을 아무도 알아채지 못한다.
  *
- * <p>스코프마다 답이 다르다. {@code CAREER} 는 그 커리어 안의 값이고, {@code GLOBAL} 은
- * 슬롯을 합친 값이다 — 합칠 때 감쇠는 <b>슬롯별로 각자의 기준 시점</b>으로 이미 끝나 있다
- * (D45). 기저 강도도 스코프마다 따로 잡는다 (D47).
+ * <p><b>{@code CAREER} 만 생산한다 (D53).</b> 패치는 커리어마다 고유 생성되므로 19패치를
+ * 거치면 같은 이름의 챔피언이라도 커리어별로 스탯이 반대 방향으로 가 있다 — 실측 예:
+ * {@code Dancer} 가 한 커리어에서 {@code max_hp +1224}, 다른 커리어에서 {@code -292} 다.
+ * {@code GLOBAL} 로 합치면 표본은 3배지만 합쳐진 대상이 같은 챔피언이 아니다.
+ * 유저는 한 슬롯을 플레이하고, 그 슬롯 안에서는 밸런스가 일관된다.
  *
  * <p>스크림 포함 여부도 두 벌 다 계산한다. 그래서 슬롯마다 경기를 <b>공식만·전체 두 벌로
  * 한 번씩만</b> 읽고 두 변형이 나눠 쓴다. 밴률의 분모(공식전 수)가 스크림 포함 스코프에서도
@@ -81,12 +82,6 @@ public class AggregationService {
         int counterRows = 0;
         int performanceRows = 0;
         for (boolean includeScrim : new boolean[] { true, false }) {
-            List<MatchupAggregate> perSlotMatchups = new ArrayList<>(slots.size());
-            List<Map<Integer, ChampionTally>> perSlotTallies = new ArrayList<>(slots.size());
-            List<Map<Integer, Integer>> perSlotBans = new ArrayList<>(slots.size());
-            int globalMatchCount = 0;
-            int globalBanMatchCount = 0;
-
             for (SlotData slot : slots) {
                 List<MatchObservation> matches = slot.matches(includeScrim);
                 log.debug("슬롯 {} — 경기 {}건(공식 {}건) · 기준 패치 {} · 스크림포함 {}",
@@ -95,33 +90,17 @@ public class AggregationService {
 
                 MatchupAggregate matchups =
                         MatchupAggregator.aggregate(matches, slot.reference(), config);
-                perSlotMatchups.add(matchups);
                 counterRows += counterWriter.write(
                         AggScope.CAREER, slot.slotId(), null, includeScrim, runId,
                         CounterCalculator.calculate(matchups, config));
 
                 Map<Integer, ChampionTally> tallies =
                         ChampionTallyAggregator.aggregate(matches, slot.reference(), config);
-                perSlotTallies.add(tallies);
-                perSlotBans.add(slot.bans());
                 performanceRows += performanceWriter.write(
                         AggScope.CAREER, slot.slotId(), null, includeScrim, runId,
                         PerformanceCalculator.calculate(
                                 tallies, slot.bans(), matches.size(), slot.officialCount(), config));
-
-                globalMatchCount += matches.size();
-                globalBanMatchCount += slot.officialCount();
             }
-
-            counterRows += counterWriter.write(
-                    AggScope.GLOBAL, null, null, includeScrim, runId,
-                    CounterCalculator.calculate(MatchupAggregate.merge(perSlotMatchups), config));
-            performanceRows += performanceWriter.write(
-                    AggScope.GLOBAL, null, null, includeScrim, runId,
-                    PerformanceCalculator.calculate(
-                            ChampionTallyAggregator.merge(perSlotTallies),
-                            ChampionTallyAggregator.mergeBans(perSlotBans),
-                            globalMatchCount, globalBanMatchCount, config));
         }
 
         runs.finish(runId);
