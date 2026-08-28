@@ -42,8 +42,8 @@ A:\project\TeamFighter\
 │   │   ├─ AnalysisConfig                   analysis_config 여섯 키 (D44)
 │   │   ├─ ReferencePoint                   추정 시점 · 거리 계산 (D24·D45)
 │   │   ├─ MatchObservation                 집계 입력 단위 (승리 팀 / 패배 팀)
-│   │   ├─ AggScope                         GLOBAL · CAREER
-│   │   ├─ AggregationService               집계 한 바퀴 — 카운터+티어 (D47·D50)
+│   │   ├─ AggScope                         CAREER 만 생산한다 (D53)
+│   │   ├─ AggregationService               집계 한 바퀴 — 카운터+티어 (D47·D50·D53)
 │   │   ├─ AggregationRunner · AnalysisConfiguration   tfm.aggregate-on-start (기본 꺼짐)
 │   │   ├─ decay/       DecayWeight         이중 감쇠        (D15a·D42)
 │   │   ├─ shrink/      Shrinkage           2단 축소·유효표본 (D15b)
