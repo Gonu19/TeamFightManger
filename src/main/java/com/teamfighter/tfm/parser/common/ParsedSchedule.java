@@ -44,6 +44,19 @@ public record ParsedSchedule(
         double progress,
         boolean isEvent) {
 
+    /**
+     * 이긴 팀. 무승부면 {@code null}.
+     *
+     * <p>세트 승수({@code BlueScore}/{@code RedScore})로 정한다. 세트 목록이 없어도
+     * 알 수 있다 — 게임이 지난 시즌의 세트 기록은 버리지만 스코어는 남긴다(D6).
+     */
+    public Integer winnerTeamId() {
+        if (blueScore == redScore) {
+            return null;
+        }
+        return blueScore > redScore ? blueTeamId : redTeamId;
+    }
+
     /** 끝난 매치인가. 기사는 끝난 매치에 대해서만 쓴다. */
     public boolean isPlayed() {
         return progress >= 1.0;

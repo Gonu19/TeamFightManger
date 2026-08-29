@@ -160,7 +160,12 @@ public record MatchBrief(
         return v == null ? 0 : v;
     }
 
-    /** 이긴 팀. 무승부면 {@code null} — 이벤트전에서 나올 수 있다. */
+    /**
+     * 이긴 팀. 무승부면 {@code null} — 이벤트전에서 나올 수 있다.
+     *
+     * <p>{@code ParsedSchedule} 과 같은 규칙이다. brief 는 스케줄에서 스코어를
+     * 그대로 받았으므로 같은 답이 나온다.
+     */
     public Integer winnerTeamId() {
         if (blueScore == redScore) {
             return null;

@@ -85,7 +85,9 @@ public record Notability(double score, int paragraphs, int commentCount, List<St
             double nearness = 1.0 - Math.min(1.0, (double) gap / (context.leagueSize() - 1));
             earned += W_STANDINGS * nearness;
             if (nearness >= 0.7) {
-                reasons.add("순위 싸움 (" + context.blueRank() + "위 대 " + context.redRank() + "위)");
+                reasons.add(context.blueRank().equals(context.redRank())
+                        ? "순위 싸움 (공동 " + context.blueRank() + "위)"
+                        : "순위 싸움 (" + context.blueRank() + "위 대 " + context.redRank() + "위)");
             }
         }
 
