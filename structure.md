@@ -21,6 +21,7 @@ A:\project\TeamFighter\
 ├─ .gitignore
 │
 ├─ *.md                                     설계 문서 (루트 유지)
+│   └─ architecture.md                      계층 경계 · 화면 지도 · 외부 의존
 ├─ fixtures/                                세이브 · common.data 스냅샷 (라이브 파일 대신)
 ├─ tools/                                   측정 스크립트 · *_report.sql · pair_audit.sql
 ├─ tests/
