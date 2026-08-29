@@ -77,6 +77,7 @@ public class SaveLoader {
     private final MatchBanRepository bans;
     private final TeamRepository teams;
     private final TeamNameSeedRepository teamNameSeeds;
+    private final AthleteLoader athleteLoader;
 
     public SaveLoader(ChampionRepository champions,
                       PatchRepository patches,
@@ -85,7 +86,8 @@ public class SaveLoader {
                       MatchParticipantRepository participants,
                       MatchBanRepository bans,
                       TeamRepository teams,
-                      TeamNameSeedRepository teamNameSeeds) {
+                      TeamNameSeedRepository teamNameSeeds,
+                      AthleteLoader athleteLoader) {
         this.champions = champions;
         this.patches = patches;
         this.patchEvents = patchEvents;
@@ -94,6 +96,7 @@ public class SaveLoader {
         this.bans = bans;
         this.teams = teams;
         this.teamNameSeeds = teamNameSeeds;
+        this.athleteLoader = athleteLoader;
     }
 
     // ------------------------------------------------------------------ 본체
@@ -120,11 +123,17 @@ public class SaveLoader {
         Counts scrim = saveScrims(slot, save.scrimStats(), save.today(), championByCode, assigner);
 
         // 경기를 다 넣은 뒤에 이름을 붙인다. 팀 행은 경기에서 생기므로 순서가 이래야 한다.
-        int named = nameTeams(slot, naming(saveFile));
+        Map<Integer, Integer> teamIdByGameId = new HashMap<>();
+        int named = nameTeams(slot, naming(saveFile), teamIdByGameId);
 
-        log.info("적재 완료 {} — 공식 {}건(제외 {}) · 스크림 {}건(제외 {}) · 패치 {}건 · 팀 백필 {}건 · 팀 이름 {}건",
+        // 선수는 팀 뒤다 — 소속 팀의 team_id 가 있어야 한다. 여기서 팀을 새로 만들지는
+        // 않는다(teamIdByGameId::get). 경기에 한 번도 안 나온 팀은 행이 없어야 한다 (D54).
+        int athletes = athleteLoader.load(slot, saveFile, teamIdByGameId::get);
+
+        log.info("적재 완료 {} — 공식 {}건(제외 {}) · 스크림 {}건(제외 {}) · 패치 {}건"
+                        + " · 팀 백필 {}건 · 팀 이름 {}건 · 선수 {}명",
                 slot.getSlotKey(), official.saved, official.skipped, scrim.saved, scrim.skipped,
-                newPatches, official.backfilled, named);
+                newPatches, official.backfilled, named, athletes);
 
         return new IngestService.IngestResult(slot.getSlotId(), official.saved, scrim.saved,
                 official.skipped, scrim.skipped, newPatches, false);
@@ -141,11 +150,16 @@ public class SaveLoader {
      * <p>슬롯의 팀 전체를 훑으므로 새로 만든 행과 예전 행을 똑같이 다룬다. 비어 있는
      * 자리만 채우니 몇 번을 돌려도 같다 — 두 번째 실행은 0건을 찍는다.
      *
+     * <p>같은 순회에서 {@code 게임 팀 번호 → team_id} 도 채운다. 선수 적재가 그 표를 쓰는데,
+     * 조회를 한 번 더 하면 두 곳이 서로 다른 시점의 팀 목록을 볼 수 있다.
+     *
+     * @param teamIdByGameId 채워 넣을 표
      * @return 이번에 신원(이름 또는 키)이 새로 붙은 팀 수
      */
-    private int nameTeams(SaveSlot slot, TeamNaming naming) {
+    private int nameTeams(SaveSlot slot, TeamNaming naming, Map<Integer, Integer> teamIdByGameId) {
         int named = 0;
         for (Team team : teams.findBySlotId(slot.getSlotId())) {
+            teamIdByGameId.put(team.getGameTeamId(), team.getTeamId());
             TeamNaming.Name name = naming.nameOf(team.getGameTeamId()).orElse(null);
             if (name != null && team.identifyIfAbsent(name.display(), name.nameKey())) {
                 named++;                         // 영속 객체다 — 더티 체킹이 쓴다

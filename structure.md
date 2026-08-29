@@ -34,6 +34,7 @@ A:\project\TeamFighter\
 │   │   ├─ nrbf/                            NrbfReader · RecordType · ObjectGraph
 │   │   ├─ save/                            SaveFileParser · GameStat/Scrim/PatchNews 매퍼
 │   │   ├─ common/    TeamInfoParser        세이브의 팀 신원 — 1순위 (D56)
+│   │   │             AthleteParser         세이브의 선수 · 이름은 인덱스로 (D58)
 │   │   │             CommonDataParser      common.data 이름표 — 폴백 (D55)
 │   │   └─ model/                           파서 출력 DTO (DB 무관)
 │   ├─ ingest/          JPA
@@ -42,6 +43,7 @@ A:\project\TeamFighter\
 │   │   ├─ IngestService · ParticipantMatcher · PatchAssigner
 │   │   ├─ SlotRegistry · TeamRegistry       슬롯은 실패해도 남고, 팀은 같이 사라진다 (D54)
 │   │   ├─ TeamNaming                     이름 출처 우선순위 — 순수 함수 (D56)
+│   │   ├─ AthleteLoader                  선수 적재 — 스냅샷 갱신 (D58)
 │   │   ├─ ReingestRunner · IngestConfiguration   tfm.reingest-on-start (기본 꺼짐, 수리용)
 │   ├─ analysis/        JdbcTemplate. 순수 계산 계층에는 Spring 의존이 없다
 │   │   ├─ AnalysisConfig                   analysis_config 여섯 키 (D44)
@@ -77,7 +79,8 @@ A:\project\TeamFighter\
 │   │   ├─ V3__seed_champions.sql           챔피언 40종
 │   │   ├─ V4__ban_rate_denominator.sql     밴률 분모 분리 (D50)
 │   │   ├─ V5__current_patch_basis.sql      메타 반감기 2 · GLOBAL 중단 (D53)
-│   │   └─ V6__team_identity.sql          team.name_key · 팀 이름 시드 52 (D56)
+│   │   ├─ V6__team_identity.sql          team.name_key · 팀 이름 시드 52 (D56)
+│   │   └─ V7__athlete.sql                athlete · 선수 이름 풀 551 (D58)
 │   ├─ templates/ + templates/fragments/
 │   └─ static/css · static/js
 │

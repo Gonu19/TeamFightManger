@@ -5,9 +5,12 @@ import com.teamfighter.tfm.ingest.entity.MatchRecord;
 import com.teamfighter.tfm.ingest.entity.MatchType;
 import com.teamfighter.tfm.ingest.entity.Patch;
 import com.teamfighter.tfm.ingest.entity.SaveSlot;
+import com.teamfighter.tfm.ingest.entity.Athlete;
 import com.teamfighter.tfm.ingest.entity.Team;
 import com.teamfighter.tfm.ingest.entity.TeamSide;
 import com.teamfighter.tfm.parser.model.ParsedGame;
+import com.teamfighter.tfm.parser.common.AthleteParser;
+import com.teamfighter.tfm.parser.common.ParsedAthlete;
 import com.teamfighter.tfm.parser.common.ParsedTeamInfo;
 import com.teamfighter.tfm.parser.common.TeamInfoParser;
 import com.teamfighter.tfm.parser.model.ParsedScrim;
@@ -89,6 +92,12 @@ class IngestServiceTest {
 
     @Autowired
     private com.teamfighter.tfm.ingest.repository.TeamNameSeedRepository teamNameSeeds;
+
+    @Autowired
+    private com.teamfighter.tfm.ingest.repository.AthleteRepository athletes;
+
+    @Autowired
+    private com.teamfighter.tfm.ingest.repository.AthleteNameSeedRepository athleteNameSeeds;
 
     @jakarta.persistence.PersistenceContext
     private jakarta.persistence.EntityManager em;
@@ -544,6 +553,73 @@ class IngestServiceTest {
         assertThat(byLeague).containsOnlyKeys("amateur", "semi_pro", "pro2", "pro", "worlds");
         assertThat(byLeague).containsEntry("amateur", 7L).containsEntry("semi_pro", 10L)
                 .containsEntry("pro2", 10L).containsEntry("pro", 10L).containsEntry("worlds", 15L);
+    }
+
+    // ------------------------------------------------------------ D58
+
+    @Test
+    @EnabledIf("fixturesExist")
+    @DisplayName("D58 — 선수가 이름과 함께 적재된다. 경기의 athlete_id 와 이어진다")
+    void ingest_loadsAthletes_withResolvedNames() throws Exception {
+        Path file = fixture("slot_638683925954242004.tfm");
+        List<ParsedAthlete> parsed = AthleteParser.read(file);
+        assertThat(parsed).as("세이브에 선수가 있어야 이 테스트가 의미를 가진다").isNotEmpty();
+
+        ingestService.ingest(file);
+
+        SaveSlot slot = slots.findBySlotKey("slot_638683925954242004.tfm").orElseThrow();
+        List<Athlete> loaded = athletes.findByIdSlotId(slot.getSlotId());
+        assertThat(loaded).hasSize(parsed.size());
+
+        Map<Integer, String> pool = new HashMap<>();
+        athleteNameSeeds.findAll().forEach(x -> pool.put(x.getIdx(), x.getName()));
+        for (Athlete a : loaded) {
+            // 이름은 인덱스로 푼 값이어야 한다. "이름이 비어 있지 않다" 로는
+            // 아무 문자열이나 넣어도 통과한다.
+            assertThat(a.getName())
+                    .as("선수 %d 의 이름", a.getId().getGameAthleteId())
+                    .isEqualTo(a.getNameIndex() == null ? null : pool.get(a.getNameIndex()));
+        }
+        assertThat(loaded).anySatisfy(a -> assertThat(a.getName()).isNotBlank());
+
+        // 경기의 참가자와 실제로 이어지는지. 안 이어지면 기사에 이름을 붙일 수 없다.
+        Set<Integer> loadedIds = new HashSet<>();
+        loaded.forEach(a -> loadedIds.add(a.getId().getGameAthleteId()));
+        Set<Integer> inMatches = new HashSet<>();
+        for (MatchParticipant p : participants.findAll()) {
+            if (p.getAthleteId() != null) {
+                inMatches.add(p.getAthleteId());
+            }
+        }
+        assertThat(inMatches).as("공식전 참가자에 athlete_id 가 있어야 한다").isNotEmpty();
+        assertThat(loadedIds).containsAll(inMatches);
+    }
+
+    @Test
+    @EnabledIf("fixturesExist")
+    @DisplayName("D58 — 소속 없는 선수도 적재된다. 경기에 안 나온 팀을 새로 만들지는 않는다")
+    void ingest_keepsFreeAgents_andDoesNotInventTeams() throws Exception {
+        Path file = fixture("slot_638683925954242004.tfm");
+        ingestService.ingest(file);
+
+        SaveSlot slot = slots.findBySlotKey("slot_638683925954242004.tfm").orElseThrow();
+        List<Athlete> loaded = athletes.findByIdSlotId(slot.getSlotId());
+
+        // 실측 443명 중 215명만 소속이 있다. FK 를 NOT NULL 로 두면 228명이 사라진다.
+        assertThat(loaded).anySatisfy(a -> assertThat(a.getTeamId()).isNull());
+        assertThat(loaded).anySatisfy(a -> assertThat(a.getTeamId()).isNotNull());
+
+        // 변조: 선수 소속으로 팀을 ensure 하면 경기에 없던 팀 행이 생긴다 (D54 를 깬다).
+        Set<Integer> teamsFromMatches = new HashSet<>();
+        for (MatchRecord m : matches.findBySlotIdAndMatchType(slot.getSlotId(), MatchType.OFFICIAL)) {
+            teamsFromMatches.add(m.getBlueTeamId());
+            teamsFromMatches.add(m.getRedTeamId());
+        }
+        for (Team team : teams.findBySlotId(slot.getSlotId())) {
+            assertThat(teamsFromMatches)
+                    .as("팀 %d 는 경기에 나온 적이 없는데 행이 생겼다", team.getGameTeamId())
+                    .contains(team.getTeamId());
+        }
     }
 
     @Test

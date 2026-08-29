@@ -74,6 +74,11 @@ public class MatchParticipant implements Persistable<ParticipantId> {
         return true;
     }
 
+    /** {@code Athlete.ID}. 슬롯 안에서만 유효하고 {@code athlete} 표와 이어진다 (D58). */
+    public Integer getAthleteId() {
+        return athleteId;
+    }
+
     public Integer getChampionId() {
         return championId;
     }
