@@ -84,6 +84,29 @@ class MatchBriefRealSaveTest {
         assertThat(swapped).isEqualTo(122);
     }
 
+    @Test
+    @EnabledIf("fixtureExists")
+    @DisplayName("실물에서 주목도가 퍼진다 — 한 점에 몰리면 분량을 못 가른다")
+    void notability_spreadsOverRealMatches() throws Exception {
+        List<ParsedSchedule> schedules = MatchScheduleParser.read(FIXTURE);
+        Map<ParsedSchedule.MatchKey, List<ParsedGame>> setsByMatch = groupSets(FIXTURE);
+        NotabilityContext context = NotabilityContext.unknown(0);   // 플레이어 팀만 안다
+
+        List<Notability> scored = schedules.stream()
+                .filter(ParsedSchedule::isPlayed)
+                .map(s -> Notability.of(
+                        MatchBrief.of(s, setsByMatch.getOrDefault(s.matchKey(), List.of())),
+                        context))
+                .toList();
+
+        assertThat(scored).isNotEmpty();
+        // 아는 것이 "플레이어 팀" 과 "접전" 둘뿐인데도 분량이 갈려야 한다.
+        assertThat(scored.stream().map(Notability::paragraphs).distinct().count())
+                .isGreaterThanOrEqualTo(3L);
+        assertThat(scored.stream().mapToDouble(Notability::score).max().orElseThrow())
+                .isGreaterThan(scored.stream().mapToDouble(Notability::score).min().orElseThrow() + 0.3);
+    }
+
     private static Map<ParsedSchedule.MatchKey, List<ParsedGame>> groupSets(Path save)
             throws Exception {
         ParsedSave parsed = SaveParser.read(save);
