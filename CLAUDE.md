@@ -14,7 +14,7 @@
 ## 핵심 문서 맵핑
 - `structure.md`: 파일 및 컴포넌트 위치
 - `architecture.md`: 시스템 경계 및 아키텍처 의존성
-- `decisions/`: 의사결정 근거 (D1~D62)
+- `decisions/`: 의사결정 근거 (D1~D63)
 - `decisions/OPEN.md`: 미결 과제
 - `savefile.md`: 세이브 파일 구조 명세
 - `workflow.md`: 에이전트 역할 및 프롬프트 규칙
