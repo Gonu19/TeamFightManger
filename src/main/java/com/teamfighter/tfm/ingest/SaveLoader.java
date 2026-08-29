@@ -11,6 +11,7 @@ import com.teamfighter.tfm.ingest.entity.ParticipantId;
 import com.teamfighter.tfm.ingest.entity.Patch;
 import com.teamfighter.tfm.ingest.entity.PatchEventId;
 import com.teamfighter.tfm.ingest.entity.SaveSlot;
+import com.teamfighter.tfm.ingest.entity.Team;
 import com.teamfighter.tfm.ingest.entity.TeamSide;
 import com.teamfighter.tfm.ingest.repository.ChampionPatchEventRepository;
 import com.teamfighter.tfm.ingest.repository.ChampionRepository;
@@ -115,17 +116,44 @@ public class SaveLoader {
         PatchAssigner assigner = buildAssigner(slot);
 
         // 적재 한 번에 하나. 롤백되면 캐시도 같이 버려져야 한다 (TeamRegistry 참고).
-        TeamRegistry teamRegistry = new TeamRegistry(slot.getSlotId(), teams, naming(saveFile));
+        TeamRegistry teamRegistry = new TeamRegistry(slot.getSlotId(), teams);
 
         Counts official = saveGames(slot, save.gameStats(), championByCode, assigner, teamRegistry);
         Counts scrim = saveScrims(slot, save.scrimStats(), save.today(), championByCode, assigner);
 
+        // 경기를 다 넣은 뒤에 이름을 붙인다. 팀 행은 경기에서 생기므로 순서가 이래야 한다.
+        int named = nameTeams(slot, naming(saveFile));
+
         log.info("적재 완료 {} — 공식 {}건(제외 {}) · 스크림 {}건(제외 {}) · 패치 {}건 · 팀 백필 {}건 · 팀 이름 {}건",
                 slot.getSlotKey(), official.saved, official.skipped, scrim.saved, scrim.skipped,
-                newPatches, official.backfilled, teamRegistry.namedCount());
+                newPatches, official.backfilled, named);
 
         return new IngestService.IngestResult(slot.getSlotId(), official.saved, scrim.saved,
                 official.skipped, scrim.skipped, newPatches, false);
+    }
+
+    /**
+     * 이 슬롯의 팀 전체에 이름을 붙인다 (D56).
+     *
+     * <p><b>독립된 단계인 이유.</b> 처음에는 {@link TeamRegistry#ensure} 안에서 붙였는데,
+     * 그 메서드는 <b>경기를 새로 넣거나 팀 번호를 백필할 때만</b> 불린다. 번호가 이미 다
+     * 채워진 재적재에서는 백필이 첫 줄에서 빠져나가므로 이름도 통째로 건너뛰어졌다 —
+     * 실측으로 확인했다(팀 56행 전부 이름 NULL). <b>이미 끝난 일에 새 일을 매달면 안 된다.</b>
+     *
+     * <p>슬롯의 팀 전체를 훑으므로 새로 만든 행과 예전 행을 똑같이 다룬다. 비어 있는
+     * 자리만 채우니 몇 번을 돌려도 같다 — 두 번째 실행은 0건을 찍는다.
+     *
+     * @return 이번에 신원(이름 또는 키)이 새로 붙은 팀 수
+     */
+    private int nameTeams(SaveSlot slot, TeamNaming naming) {
+        int named = 0;
+        for (Team team : teams.findBySlotId(slot.getSlotId())) {
+            TeamNaming.Name name = naming.nameOf(team.getGameTeamId()).orElse(null);
+            if (name != null && team.identifyIfAbsent(name.display(), name.nameKey())) {
+                named++;                         // 영속 객체다 — 더티 체킹이 쓴다
+            }
+        }
+        return named;
     }
 
     /**

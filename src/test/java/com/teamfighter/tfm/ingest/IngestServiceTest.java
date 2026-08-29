@@ -90,6 +90,9 @@ class IngestServiceTest {
     @Autowired
     private com.teamfighter.tfm.ingest.repository.TeamNameSeedRepository teamNameSeeds;
 
+    @jakarta.persistence.PersistenceContext
+    private jakarta.persistence.EntityManager em;
+
     static boolean fixturesExist() {
         return !fixtures().isEmpty();
     }
@@ -498,6 +501,37 @@ class IngestServiceTest {
         Team player = loaded.stream().filter(Team::isPlayer).findFirst().orElseThrow();
         assertThat(player.getNameKey()).isNull();
         assertThat(player.getName()).isEqualTo(expected.get(0).literalName());
+    }
+
+    @Test
+    @EnabledIf("fixturesExist")
+    @DisplayName("D56 — 새 경기가 0건이어도 이름은 붙는다 (실측으로 당한 회귀)")
+    void reload_namesTeams_evenWhenNothingIsNew() throws Exception {
+        Path file = fixture("slot_638683925954242004.tfm");
+        ingestService.ingest(file);
+
+        SaveSlot slot = slots.findBySlotKey("slot_638683925954242004.tfm").orElseThrow();
+        long teamCount = teams.findBySlotId(slot.getSlotId()).size();
+        assertThat(teamCount).isPositive();
+
+        // 이름 적재 이전의 DB 상태를 만든다. 경기도 팀 번호도 이미 다 있고 이름만 비었다 —
+        // 재적재가 새로 넣을 것이 하나도 없는 상태다.
+        em.createNativeQuery("UPDATE team SET name = NULL, name_key = NULL WHERE slot_id = :s")
+                .setParameter("s", slot.getSlotId())
+                .executeUpdate();
+        em.clear();
+
+        loader.load(slot, file);
+        em.flush();
+
+        // 이 단언이 실제 회귀를 잡는다. 이름 붙이기를 TeamRegistry.ensure 안에 두면
+        // 여기서 ensure 가 한 번도 안 불려(새 경기 0건 · 팀 번호 백필도 0건) 전부 NULL 로 남는다.
+        List<Team> loaded = teams.findBySlotId(slot.getSlotId());
+        assertThat(loaded).hasSize((int) teamCount);
+        assertThat(loaded).anySatisfy(t -> assertThat(t.getName()).isNotBlank());
+        Team pro8 = loaded.stream().filter(t -> t.getGameTeamId() == 35).findFirst().orElseThrow();
+        assertThat(pro8.getName()).isEqualTo("KT Rolster Bullets");
+        assertThat(pro8.getNameKey()).isEqualTo("team.name.pro.team8");
     }
 
     @Test

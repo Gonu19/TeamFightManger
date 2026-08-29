@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.springframework.test.util.ReflectionTestUtils;
 
-import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -38,7 +37,7 @@ class TeamRegistryTest {
         when(teams.findBySlotIdAndGameTeamId(eq(SLOT), eq(36))).thenReturn(Optional.empty());
         when(teams.save(any(Team.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100));
 
-        Team team = new TeamRegistry(SLOT, teams, null).ensure(36);
+        Team team = new TeamRegistry(SLOT, teams).ensure(36);
 
         ArgumentCaptor<Team> saved = ArgumentCaptor.forClass(Team.class);
         verify(teams).save(saved.capture());
@@ -54,7 +53,7 @@ class TeamRegistryTest {
         when(teams.findBySlotIdAndGameTeamId(eq(SLOT), any())).thenReturn(Optional.empty());
         when(teams.save(any(Team.class))).thenAnswer(inv -> withId(inv.getArgument(0), 1));
 
-        TeamRegistry registry = new TeamRegistry(SLOT, teams, null);
+        TeamRegistry registry = new TeamRegistry(SLOT, teams);
 
         assertThat(registry.ensure(0).isPlayer()).isTrue();
         assertThat(registry.ensure(36).isPlayer()).isFalse();
@@ -67,7 +66,7 @@ class TeamRegistryTest {
         when(teams.findBySlotIdAndGameTeamId(eq(SLOT), eq(36))).thenReturn(Optional.empty());
         when(teams.save(any(Team.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100));
 
-        TeamRegistry registry = new TeamRegistry(SLOT, teams, null);
+        TeamRegistry registry = new TeamRegistry(SLOT, teams);
         Team first = registry.ensure(36);
         Team second = registry.ensure(36);
 
@@ -83,7 +82,7 @@ class TeamRegistryTest {
         Team existing = withId(new Team(SLOT, 36), 42);
         when(teams.findBySlotIdAndGameTeamId(eq(SLOT), eq(36))).thenReturn(Optional.of(existing));
 
-        Team team = new TeamRegistry(SLOT, teams, null).ensure(36);
+        Team team = new TeamRegistry(SLOT, teams).ensure(36);
 
         assertThat(team.getTeamId()).isEqualTo(42);
         verify(teams, never()).save(any(Team.class));
@@ -94,76 +93,10 @@ class TeamRegistryTest {
     void ensure_returnsNull_whenNumberIsMissing() {
         TeamRepository teams = mock(TeamRepository.class);
 
-        assertThat(new TeamRegistry(SLOT, teams, null).ensure(null)).isNull();
+        assertThat(new TeamRegistry(SLOT, teams).ensure(null)).isNull();
 
         verify(teams, never()).findBySlotIdAndGameTeamId(any(), any());
         verify(teams, never()).save(any(Team.class));
-    }
-
-    @Test
-    @DisplayName("이름표를 안 주면 이름 없이 만든다 — 경기 기록(GameStat)에는 이름이 없다")
-    void ensure_leavesNameEmpty() {
-        TeamRepository teams = mock(TeamRepository.class);
-        when(teams.findBySlotIdAndGameTeamId(eq(SLOT), eq(36))).thenReturn(Optional.empty());
-        when(teams.save(any(Team.class))).thenAnswer(inv -> withId(inv.getArgument(0), 100));
-
-        assertThat(new TeamRegistry(SLOT, teams, null).ensure(36).getName()).isNull();
-    }
-
-    // ------------------------------------------------------------ D55 이름
-
-    private static TeamNaming naming() {
-        return TeamNaming.of(
-                java.util.List.of(new com.teamfighter.tfm.parser.common.ParsedTeamInfo(36, "team.name.pro.team9", false),
-                        new com.teamfighter.tfm.parser.common.ParsedTeamInfo(0, "내 팀", true)),
-                Map.of("team.name.pro.team9", "Afreeca Freecs"),
-                null);
-    }
-
-    @Test
-    @DisplayName("이름표가 있으면 이름을 붙인다. 0 번은 플레이어 팀 이름을 받는다")
-    void ensure_namesTeamsFromRoster() {
-        TeamRepository teams = mock(TeamRepository.class);
-        when(teams.findBySlotIdAndGameTeamId(eq(SLOT), any())).thenReturn(Optional.empty());
-        when(teams.save(any(Team.class))).thenAnswer(inv -> withId(inv.getArgument(0), 1));
-
-        TeamRegistry registry = new TeamRegistry(SLOT, teams, naming());
-
-        assertThat(registry.ensure(36).getName()).isEqualTo("Afreeca Freecs");
-        assertThat(registry.ensure(36).getNameKey()).isEqualTo("team.name.pro.team9");
-        // 0 번은 딕셔너리가 아니라 CommonStore 에서 온다 — 여기서 빠지면 내 팀만 이름이 없다.
-        assertThat(registry.ensure(0).getName()).isEqualTo("내 팀");
-        assertThat(registry.ensure(99).getName()).isNull();      // 이름표에 없는 번호
-        assertThat(registry.namedCount()).isEqualTo(2);
-    }
-
-    @Test
-    @DisplayName("이미 이름이 있으면 덮지 않는다 — 지나간 커리어의 표가 바뀌면 안 된다")
-    void ensure_doesNotOverwriteExistingName() {
-        TeamRepository teams = mock(TeamRepository.class);
-        Team existing = withId(new Team(SLOT, 36), 42);
-        existing.identifyIfAbsent("KT Rolster Bullets", "team.name.pro.team8");   // 예전 적재 때 붙은 신원
-        when(teams.findBySlotIdAndGameTeamId(eq(SLOT), eq(36))).thenReturn(Optional.of(existing));
-
-        Team team = new TeamRegistry(SLOT, teams, naming()).ensure(36);
-
-        // 변조: identifyIfAbsent 를 무조건 대입으로 바꾸면 프로필을 커스터마이즈할 때마다
-        // 과거 커리어의 팀 이름이 통째로 갈아엎힌다.
-        assertThat(team.getName()).isEqualTo("KT Rolster Bullets");
-    }
-
-    @Test
-    @DisplayName("이름표가 없어도 적재는 돈다 — 번호로만 보일 뿐이다")
-    void ensure_worksWithoutRoster() {
-        TeamRepository teams = mock(TeamRepository.class);
-        when(teams.findBySlotIdAndGameTeamId(eq(SLOT), eq(36))).thenReturn(Optional.empty());
-        when(teams.save(any(Team.class))).thenAnswer(inv -> withId(inv.getArgument(0), 1));
-
-        TeamRegistry registry = new TeamRegistry(SLOT, teams, null);
-
-        assertThat(registry.ensure(36).getGameTeamId()).isEqualTo(36);
-        assertThat(registry.ensure(36).getName()).isNull();
-        assertThat(registry.namedCount()).isZero();
     }
 
     /** {@code team_id} 는 DB 가 만든다. 목에는 그 자리가 없어 여기서 채운다. */

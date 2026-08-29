@@ -15,6 +15,11 @@ import java.util.Map;
  * 외래키 위반으로 죽거나, 더 나쁘게는 재사용된 번호에 붙는다.
  * 수명을 트랜잭션에 맞추는 가장 확실한 방법은 트랜잭션 안에서 만드는 것이다.
  *
+ * <p><b>이름은 여기서 붙이지 않는다</b> (D56). 이름 붙이기를 이 클래스에 매달았더니
+ * {@code ensure()} 가 불리지 않는 경로 — 팀 번호가 이미 다 채워진 재적재 — 에서 통째로
+ * 건너뛰어졌다. <b>이미 끝난 일에 새 일을 매달면 그 일도 같이 안 돈다.</b>
+ * 이름은 {@code SaveLoader} 가 슬롯의 팀 전체를 훑는 독립된 단계에서 붙인다.
+ *
  * <p>{@link SlotRegistry} 와 이름은 닮았지만 트랜잭션 성격은 정반대다. 슬롯은 적재가
  * 실패해도 <b>남아야</b> 하고(실패 기록이 참조한다), 팀은 적재가 실패하면
  * <b>같이 사라져야</b> 한다 — 팀은 그 경기들 없이는 아무 의미가 없다.
@@ -23,14 +28,11 @@ final class TeamRegistry {
 
     private final Integer slotId;
     private final TeamRepository teams;
-    private final TeamNaming naming;
     private final Map<Integer, Team> cache = new HashMap<>();
-    private int named;
 
-    TeamRegistry(Integer slotId, TeamRepository teams, TeamNaming naming) {
+    TeamRegistry(Integer slotId, TeamRepository teams) {
         this.slotId = slotId;
         this.teams = teams;
-        this.naming = naming == null ? TeamNaming.empty() : naming;
     }
 
     /**
@@ -47,21 +49,9 @@ final class TeamRegistry {
         if (gameTeamId == null) {
             return null;
         }
-        return cache.computeIfAbsent(gameTeamId, id -> {
-            Team team = teams.findBySlotIdAndGameTeamId(slotId, id)
-                    .orElseGet(() -> teams.save(new Team(slotId, id)));
-            // 비어 있을 때만 붙인다. 이미 붙은 값은 그 커리어 적재 시점의 기록이다 (D55).
-            TeamNaming.Name n = naming.nameOf(id).orElse(null);
-            if (n != null && team.identifyIfAbsent(n.display(), n.nameKey())) {
-                named++;
-            }
-            return team;
-        });
-    }
-
-    /** 이번 적재에서 신원(이름 또는 키)을 새로 붙인 팀 수. */
-    int namedCount() {
-        return named;
+        return cache.computeIfAbsent(gameTeamId, id ->
+                teams.findBySlotIdAndGameTeamId(slotId, id)
+                        .orElseGet(() -> teams.save(new Team(slotId, id))));
     }
 
     /** {@link #ensure(Integer)} 의 결과에서 식별자만 꺼낸다. 팀이 없으면 {@code null}. */
