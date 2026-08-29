@@ -96,7 +96,7 @@ tags: [teamfight-manager, requirements, spring-boot, data-analysis]
 
 **공통**
 
-- [ ] 로그인하지 않아도 통계를 볼 수 있고, 슬롯 등록·적재는 로그인해야 한다
+- [x] ~~로그인하지 않아도 통계를 볼 수 있고, 슬롯 등록·적재는 로그인해야 한다~~ — **폐기 (D41·D59).** 로컬 `java -jar` 단일 사용자라 인증할 상대가 없다. 슬롯 등록·적재도 워처가 자동으로 한다
 - [ ] `.\gradlew.bat test` 가 전부 통과한다 (Windows 로컬 Postgres `tfm_test` 대상, 트랜잭션 롤백 격리)
 - [ ] `tests/verify_schema.sql` 이 24/24 통과한다 — 스키마를 고칠 때마다 다시 돌린다
 - [ ] **Java 파서가 `tests/baseline/*.json` 골든 파일을 그대로 통과한다** — Python 레퍼런스와 결과가 일치한다
@@ -205,7 +205,7 @@ E:\SteamLibrary\steamapps\common\Teamfight Manager\            # 게임 설치 �
 - **Thymeleaf + HTMX** — 서버 렌더링. 별도 SPA를 두지 않는다
 - **PostgreSQL 16** (Windows 네이티브 설치) + **Flyway** — DDL 이 Postgres 전용 기능을 쓴다 (`GENERATED ALWAYS AS ... STORED`, `UNIQUE NULLS NOT DISTINCT`(PG15+), ENUM 타입). H2·SQLite 로 바꾸면 다시 짜야 한다. **이 PC 에서 Docker 가 기동되지 않아 Docker Compose 를 쓰지 않는다. WSL 도 쓰지 않는다 — 개발·실행 전부 Windows 네이티브다 (D27)**
 - **Spring Data JPA**(적재) + **JdbcTemplate**(집계) — 집계 쿼리가 가중합·2단 축소·백분위라 JPA로 풀지 않는다
-- `SseEmitter` (실시간 갱신), Spring Security(최소 설정)
+- `SseEmitter` (실시간 갱신). ~~Spring Security(최소 설정)~~ — **의존성에서 뺐다 (D41).** `permitAll()` 로 열어두면 실제로는 없는 방어선이 있는 것처럼 보인다
 - JUnit 5. **Testcontainers 는 쓰지 않는다** (Docker 불가). 테스트는 로컬 Postgres 의 별도 DB(`tfm_test`)에 붙고, 각 테스트는 트랜잭션 롤백으로 격리한다
 - 스키마는 `db/migration/V1__init.sql` 기준. 바꾸면 `V2__*.sql` 을 추가하고 `decision.md` 에 이유를 남긴다.
   **`V1__init.sql` 을 직접 수정하지 않는다** — Flyway 체크섬이 깨진다
