@@ -1,4 +1,4 @@
--- 챔피언 티어 집계 결과를 눈으로 확인한다 (decision.md D21 · D50).
+-- 챔피언 티어 집계 결과를 눈으로 확인한다 (decisions/D21 · D50).
 --
 -- 집계를 한 번 돌린 뒤에 실행한다:
 --   gradlew.bat bootRun --args="--tfm.aggregate-on-start=true"
@@ -8,7 +8,7 @@
 --   & 'C:\Program Files\PostgreSQL\16\bin\psql.exe' -U postgres -d tfm -f tools/tier_report.sql
 --
 -- 질의 3·4 가 이 리포트의 목적이다. 티어 등급 컷라인이 아직 미결인데, 근거 없이 정하지
--- 않으려면 분포를 먼저 봐야 한다 (decision.md "아직 안 정한 것").
+-- 않으려면 분포를 먼저 봐야 한다 (decisions/OPEN.md).
 --
 -- 이 파일은 읽기 전용이다. 아무것도 쓰지 않는다.
 

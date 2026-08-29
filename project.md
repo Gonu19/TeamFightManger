@@ -11,23 +11,20 @@ tags: [teamfight-manager, requirements, spring-boot, data-analysis]
 
 # 팀파이트 매니저 티어 분석 웹
 
-> 요구사항 문서입니다. **자유롭게 읽으세요.** 수정만 사용자 전용입니다(에이전트 편집은 설정으로 차단돼 있습니다).
-> **★ 는 필수.** 나머지는 비워두면 팀장이 필요할 때 물어봅니다.
-
-## ★ 무엇을 만드나
+## 무엇을 만드나
 
 팀파이트 매니저 세이브 파일을 감시해서 경기 기록을 자동으로 DB에 쌓고, **게임이 시즌마다 버리는 데이터를 누적**해서 챔피언 티어표·카운터 상성·조합 시너지를 웹에서 볼 수 있게 한다. 사용자는 게임을 평소처럼 플레이하기만 하면 되고, 저장이 일어날 때마다 웹이 갱신된다.
 
-세이브 파일 구조는 `savefile.md`, 왜 이렇게 정했는지는 `decision.md` 참고.
-**결정을 뒤집고 싶으면 `decision.md` 의 해당 항목에 있는 "뒤집힐 조건"을 먼저 읽으세요.** 대부분의 결정은 실제 세이브 파일을 측정해서 나온 것이고, 근거 수치가 같이 적혀 있습니다.
+세이브 파일 구조는 `savefile.md`, 왜 이렇게 정했는지는 `decisions/` 참고.
+**결정을 뒤집고 싶으면 `decisions/` 의 해당 항목에 있는 "뒤집힐 조건"을 먼저 읽으세요.** 대부분의 결정은 실제 세이브 파일을 측정해서 나온 것이고, 근거 수치가 같이 적혀 있습니다.
 
-## ★ 다음 구현 — 밴픽 시뮬레이터
+## 다음 구현 — 밴픽 시뮬레이터
 
 1차(수집·집계·티어/카운터/시너지 화면)가 끝나면 바로 붙인다. 설계는 `banpick.md`.
 표본이 부족한 문제는 기능을 미루는 대신 **추천을 거부하는 규칙**으로 푼다.
 드래프트는 팀당 밴 3 · 픽 4 의 14스텝 고정이고, 순서는 `draft_step` 테이블이 원본이다.
 
-## ★ 안 하는 것
+## 안 하는 것
 
 - **OCR·스크린샷 수집** — 세이브 파일에 원본 데이터가 전부 있다
 - **모드(Mod) 제작** — 1편에는 공식 SDK가 없고, 모드로 얻을 데이터가 이미 세이브에 있다
@@ -38,7 +35,7 @@ tags: [teamfight-manager, requirements, spring-boot, data-analysis]
 - **클라우드 배포** — 워처가 세이브 파일을 봐야 해서 어차피 로컬 실행이다. `java -jar` 로 끝낸다
 - 소셜 로그인, 권한 등급, 다국어, 모바일 앱, 실시간 게임 오버레이
 
-## ★ 완료 기준
+## 완료 기준
 
 **직접 해보면 O/X가 갈리게** 쓰세요. "잘 된다"는 판정할 수 없습니다.
 아래가 전부 통과하면 끝난 것으로 봅니다.
@@ -96,7 +93,7 @@ tags: [teamfight-manager, requirements, spring-boot, data-analysis]
 
 **공통**
 
-- [ ] 로그인하지 않아도 통계를 볼 수 있고, 슬롯 등록·적재는 로그인해야 한다
+- [x] ~~로그인하지 않아도 통계를 볼 수 있고, 슬롯 등록·적재는 로그인해야 한다~~ — **폐기 (D41·D59).** 로컬 `java -jar` 단일 사용자라 인증할 상대가 없다. 슬롯 등록·적재도 워처가 자동으로 한다
 - [ ] `.\gradlew.bat test` 가 전부 통과한다 (Windows 로컬 Postgres `tfm_test` 대상, 트랜잭션 롤백 격리)
 - [ ] `tests/verify_schema.sql` 이 24/24 통과한다 — 스키마를 고칠 때마다 다시 돌린다
 - [ ] **Java 파서가 `tests/baseline/*.json` 골든 파일을 그대로 통과한다** — Python 레퍼런스와 결과가 일치한다
@@ -123,7 +120,7 @@ tags: [teamfight-manager, requirements, spring-boot, data-analysis]
 - `src/main/resources/db/migration/V1__init.sql` — DDL 전문. **스키마의 유일한 원본.**
   Windows PG16.15 적용 검증 완료, 제약 검증 24/24 (D23 2차)
 - `structure.md` — 파일 구조와 패키지 경계의 근거
-- `decision.md` — 설계 결정과 근거. 측정값 포함
+- `decisions/` — 설계 결정과 근거. 측정값 포함
 - `savefile.md` — 세이브 파일 구조 레퍼런스
 - `banpick.md` — 밴픽 시뮬레이터 설계 (다음 구현)
 - `tests/verify_schema.sql` — 스키마 제약 검증. **24/24 통과 확인됨**. 읽기 전용(ROLLBACK)
@@ -205,9 +202,9 @@ E:\SteamLibrary\steamapps\common\Teamfight Manager\            # 게임 설치 �
 - **Thymeleaf + HTMX** — 서버 렌더링. 별도 SPA를 두지 않는다
 - **PostgreSQL 16** (Windows 네이티브 설치) + **Flyway** — DDL 이 Postgres 전용 기능을 쓴다 (`GENERATED ALWAYS AS ... STORED`, `UNIQUE NULLS NOT DISTINCT`(PG15+), ENUM 타입). H2·SQLite 로 바꾸면 다시 짜야 한다. **이 PC 에서 Docker 가 기동되지 않아 Docker Compose 를 쓰지 않는다. WSL 도 쓰지 않는다 — 개발·실행 전부 Windows 네이티브다 (D27)**
 - **Spring Data JPA**(적재) + **JdbcTemplate**(집계) — 집계 쿼리가 가중합·2단 축소·백분위라 JPA로 풀지 않는다
-- `SseEmitter` (실시간 갱신), Spring Security(최소 설정)
+- `SseEmitter` (실시간 갱신). ~~Spring Security(최소 설정)~~ — **의존성에서 뺐다 (D41).** `permitAll()` 로 열어두면 실제로는 없는 방어선이 있는 것처럼 보인다
 - JUnit 5. **Testcontainers 는 쓰지 않는다** (Docker 불가). 테스트는 로컬 Postgres 의 별도 DB(`tfm_test`)에 붙고, 각 테스트는 트랜잭션 롤백으로 격리한다
-- 스키마는 `db/migration/V1__init.sql` 기준. 바꾸면 `V2__*.sql` 을 추가하고 `decision.md` 에 이유를 남긴다.
+- 스키마는 `db/migration/V1__init.sql` 기준. 바꾸면 `V2__*.sql` 을 추가하고 `decisions/` 에 이유를 남긴다.
   **`V1__init.sql` 을 직접 수정하지 않는다** — Flyway 체크섬이 깨진다
 
 **지켜야 하는 것**
@@ -303,7 +300,7 @@ E:\SteamLibrary\steamapps\common\Teamfight Manager\            # 게임 설치 �
 
 - Java 파서 출력과 Python 레퍼런스 대조
 - 골든 파일 회귀 확인
-- 구현이 `decision.md` 의 결정과 어긋나지 않는지 대조
+- 구현이 `decisions/` 의 결정과 어긋나지 않는지 대조
 - 저장소 전체 훑기 (죽은 코드, 규칙 위반)
 
 `agy` 에 넘기지 않는 것: 설계 판단, 구현, 최종 결정.

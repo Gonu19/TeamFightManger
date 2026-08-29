@@ -16,7 +16,7 @@ tags: [teamfight-manager, database, data-analysis, spring-boot]
 ## 문서
 
 - [[project.md]] — 바이브 코딩용 요구사항. 범위·완료 기준·제약
-- [[decision.md]] — 설계 결정과 근거. 측정값과 과정 포함
+- decisions/README.md — 설계 결정과 근거. 측정값과 과정 포함
 - [[savefile.md]] — 세이브 파일 구조 레퍼런스 (리버싱 결과)
 - [[banpick.md]] — 밴픽 시뮬레이터 설계. **다음 구현**
 - [[db-review.md]] — 초기 OCR 전제 스키마 검토. **폐기됨** (OCR·라인 5종 전제).

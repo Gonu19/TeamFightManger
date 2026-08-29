@@ -3,7 +3,7 @@
 `nrbf.py` 가 만든 객체 그래프에서 도메인 값을 뽑는다.
 Java 의 `parser/save/` 가 이 결과와 일치해야 한다.
 
-지키는 규칙 (savefile.md / decision.md):
+지키는 규칙 (savefile.md / decisions/):
   * 진영은 챔피언 이름으로 매칭한다. ChampStat 인덱스 순서를 쓰지 않는다 (D20)
   * 현재 날짜는 TodayData 에서 읽는다. max(GameStat.Day) 로 추정하지 않는다 (D18)
   * 밴 배열 길이를 상수로 가정하지 않는다. 커리어 초반 데이터에 2밴이 있다 (D26)
