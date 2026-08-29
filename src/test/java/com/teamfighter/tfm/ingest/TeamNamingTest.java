@@ -1,6 +1,5 @@
 package com.teamfighter.tfm.ingest;
 
-import com.teamfighter.tfm.parser.common.ParsedRoster;
 import com.teamfighter.tfm.parser.common.ParsedTeamInfo;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -29,7 +28,7 @@ class TeamNamingTest {
     @Test
     @DisplayName("UseKey 면 NameKey 가 이름 그 자체다 — 키로 취급하면 내 팀 이름이 사라진다")
     void literalName_whenUseKey() {
-        TeamNaming naming = TeamNaming.of(List.of(PLAYER), SEED, null);
+        TeamNaming naming = TeamNaming.of(List.of(PLAYER), SEED);
 
         TeamNaming.Name name = naming.nameOf(0).orElseThrow();
         assertThat(name.display()).isEqualTo("Ember scale");
@@ -39,7 +38,7 @@ class TeamNamingTest {
     @Test
     @DisplayName("UseKey 가 아니면 시드로 해석하고, 키도 함께 남긴다")
     void resolvesLocalizationKey_andKeepsTheKey() {
-        TeamNaming naming = TeamNaming.of(List.of(PRO8), SEED, null);
+        TeamNaming naming = TeamNaming.of(List.of(PRO8), SEED);
 
         TeamNaming.Name name = naming.nameOf(35).orElseThrow();
         assertThat(name.display()).isEqualTo("KT Rolster Bullets");
@@ -50,7 +49,7 @@ class TeamNamingTest {
     @Test
     @DisplayName("시드에 없는 키는 이름을 비우고 키만 남긴다 — 키를 이름 자리에 넣지 않는다")
     void unknownKey_keepsKeyButLeavesNameEmpty() {
-        TeamNaming naming = TeamNaming.of(List.of(PRO8), Map.of(), null);
+        TeamNaming naming = TeamNaming.of(List.of(PRO8), Map.of());
 
         TeamNaming.Name name = naming.nameOf(35).orElseThrow();
         // 변조: display 에 키를 그대로 넣으면 화면에 team.name.pro.team8 이 팀 이름처럼 뜬다.
@@ -59,34 +58,21 @@ class TeamNamingTest {
     }
 
     @Test
-    @DisplayName("세이브가 팀을 말하면 common.data 는 보지 않는다 — 프로필은 지금 값이라 어긋난다")
-    void saveWins_overCommonData() {
-        ParsedRoster profile = new ParsedRoster("지금 프로필", "내 팀", "감독", Map.of(35, "dd"));
+    @DisplayName("세이브가 모르는 번호는 이름을 붙이지 않는다 — 추측하지 않는다")
+    void unknownTeamId_getsNoName() {
+        TeamNaming naming = TeamNaming.of(List.of(PRO8), SEED);
 
-        TeamNaming naming = TeamNaming.of(List.of(PRO8), SEED, profile);
-
-        // 실측 근거: 이 커리어에서 66세트를 뛴 35번은 team.name.pro.team8 인데,
-        // 사용자가 방금 커스터마이즈한 지금 프로필에서는 같은 번호가 'dd' 다.
-        assertThat(naming.nameOf(35).orElseThrow().display()).isEqualTo("KT Rolster Bullets");
-    }
-
-    @Test
-    @DisplayName("세이브가 그 번호를 모를 때만 common.data 를 본다")
-    void fallsBackToCommonData_whenSaveHasNoSuchTeam() {
-        ParsedRoster profile = new ParsedRoster("프로필", "내 팀", "감독", Map.of(41, "Gen.G"));
-
-        TeamNaming naming = TeamNaming.of(List.of(PRO8), SEED, profile);
-
-        TeamNaming.Name name = naming.nameOf(41).orElseThrow();
-        assertThat(name.display()).isEqualTo("Gen.G");
-        assertThat(name.nameKey()).isNull();
+        // common.data 를 폴백으로 두었다가 뺐다 (D57). 그 딕셔너리의 키가 game_team_id 와
+        // 맞는다는 근거가 없다 — 실측은 반대를 가리킨다(키 1 = OKSavingsBank BRION,
+        // 세이브의 1번 = team.name.amateur.team1). 틀린 이름은 없는 이름보다 나쁘다.
+        assertThat(naming.nameOf(41)).isEmpty();
     }
 
     @Test
     @DisplayName("아무 출처에도 없으면 비어 있다 — 번호만으로 적재된다")
     void empty_whenNothingKnows() {
-        assertThat(TeamNaming.of(List.of(PRO8), SEED, null).nameOf(99)).isEmpty();
-        assertThat(TeamNaming.of(List.of(PRO8), SEED, null).nameOf(null)).isEmpty();
+        assertThat(TeamNaming.of(List.of(PRO8), SEED).nameOf(99)).isEmpty();
+        assertThat(TeamNaming.of(List.of(PRO8), SEED).nameOf(null)).isEmpty();
         assertThat(TeamNaming.empty().nameOf(35)).isEmpty();
     }
 }

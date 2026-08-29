@@ -1,6 +1,5 @@
 package com.teamfighter.tfm.ingest;
 
-import com.teamfighter.tfm.parser.common.ParsedRoster;
 import com.teamfighter.tfm.parser.common.ParsedTeamInfo;
 
 import java.util.HashMap;
@@ -38,16 +37,14 @@ final class TeamNaming {
         }
     }
 
-    private static final TeamNaming EMPTY = new TeamNaming(Map.of(), Map.of(), null);
+    private static final TeamNaming EMPTY = new TeamNaming(Map.of(), Map.of());
 
     private final Map<Integer, ParsedTeamInfo> byId;
     private final Map<String, String> seed;
-    private final ParsedRoster fallback;
 
-    private TeamNaming(Map<Integer, ParsedTeamInfo> byId, Map<String, String> seed, ParsedRoster fallback) {
+    private TeamNaming(Map<Integer, ParsedTeamInfo> byId, Map<String, String> seed) {
         this.byId = byId;
         this.seed = seed;
-        this.fallback = fallback;
     }
 
     /** 아무것도 모르는 이름표. 이름 없이 번호만 적재된다. */
@@ -56,11 +53,10 @@ final class TeamNaming {
     }
 
     /**
-     * @param teamInfos 세이브에서 읽은 팀 목록. 비어 있으면 폴백만 쓴다
+     * @param teamInfos 세이브에서 읽은 팀 목록. 비어 있으면 아무 이름도 못 붙인다
      * @param seed      {@code 로컬라이제이션 키 → 표시 이름}
-     * @param fallback  {@code common.data} 이름표. 없으면 {@code null}
      */
-    static TeamNaming of(List<ParsedTeamInfo> teamInfos, Map<String, String> seed, ParsedRoster fallback) {
+    static TeamNaming of(List<ParsedTeamInfo> teamInfos, Map<String, String> seed) {
         Map<Integer, ParsedTeamInfo> byId = new HashMap<>();
         if (teamInfos != null) {
             for (ParsedTeamInfo info : teamInfos) {
@@ -69,7 +65,7 @@ final class TeamNaming {
                 }
             }
         }
-        return new TeamNaming(byId, seed == null ? Map.of() : seed, fallback);
+        return new TeamNaming(byId, seed == null ? Map.of() : seed);
     }
 
     /** 번호로 이름을 찾는다. 아무 출처에도 없으면 비어 있다. */
@@ -89,10 +85,8 @@ final class TeamNaming {
                 return Optional.of(new Name(blankToNull(seed.get(key)), key));
             }
         }
-        // 세이브가 이 번호를 모른다 — 구 세이브이거나 형식이 바뀐 것이다. 그때만 프로필을 본다.
-        return fallback == null
-                ? Optional.empty()
-                : fallback.nameOf(gameTeamId).map(n -> new Name(n, null));
+        // 세이브가 이 번호를 모른다. 추측하지 않는다 — 번호만으로 적재된다.
+        return Optional.empty();
     }
 
     private static String blankToNull(String s) {

@@ -27,8 +27,6 @@ import com.teamfighter.tfm.parser.model.ParsedSave;
 import com.teamfighter.tfm.parser.model.ParsedScrim;
 import com.teamfighter.tfm.parser.model.ParsedStat;
 import com.teamfighter.tfm.parser.model.ParsedToday;
-import com.teamfighter.tfm.parser.common.CommonDataParser;
-import com.teamfighter.tfm.parser.common.ParsedRoster;
 import com.teamfighter.tfm.parser.common.ParsedTeamInfo;
 import com.teamfighter.tfm.parser.common.TeamInfoParser;
 import com.teamfighter.tfm.parser.save.SaveParser;
@@ -159,14 +157,13 @@ public class SaveLoader {
     /**
      * 팀 이름 규칙을 만든다 (D56).
      *
-     * <p>1순위는 <b>세이브의 {@code TeamInfo}</b> 다 — 커리어 시점의 신원이라 정확하다.
-     * 로컬라이제이션 키는 시드에서 이름으로 바꾸고, {@code common.data} 는 세이브가 팀을
-     * 말해주지 않을 때만 쓰는 폴백이다.
+     * <p>출처는 <b>세이브의 {@code TeamInfo}</b> 하나뿐이다 — 커리어 시점의 신원이라 정확하다.
+     * 로컬라이제이션 키는 시드에서 이름으로 바꾼다. {@code common.data} 는 쓰지 않는다 (D57).
      */
     private TeamNaming naming(Path saveFile) {
         Map<String, String> seed = new HashMap<>();
         teamNameSeeds.findAll().forEach(s -> seed.put(s.getNameKey(), s.getName()));
-        return TeamNaming.of(readTeamInfos(saveFile), seed, readRoster(saveFile));
+        return TeamNaming.of(readTeamInfos(saveFile), seed);
     }
 
     /**
@@ -181,36 +178,6 @@ public class SaveLoader {
         } catch (IOException | RuntimeException e) {
             log.warn("세이브에서 팀 신원을 읽지 못했다: {} — {}", saveFile, e.toString());
             return List.of();
-        }
-    }
-
-    /**
-     * 세이브 파일 옆의 {@code common.data} 에서 팀 이름표를 읽는다 (D55).
-     *
-     * <p><b>없거나 깨져도 적재를 멈추지 않는다.</b> 이름은 표시용이고 경기가 본체다 —
-     * 게임이 그 파일 형식을 바꿨다고 공식 경기 수백 건을 못 넣게 되는 쪽이 훨씬 나쁘다.
-     * 대신 <b>조용히 넘어가지 않는다</b>: 경로와 원인을 WARN 으로 남기고, 결과는 화면에
-     * 이름 없는 팀으로 그대로 드러난다. 삼키는 것과 다른 점이 그것이다.
-     *
-     * @return 이름표. 파일이 없거나 읽지 못하면 {@code null}
-     */
-    private static ParsedRoster readRoster(Path saveFile) {
-        Path parent = saveFile.getParent();
-        if (parent == null) {
-            return null;
-        }
-        Path file = CommonDataParser.pathIn(parent);
-        if (!Files.isRegularFile(file)) {
-            log.warn("팀 이름표가 없다: {} — 팀이 번호로만 보인다", file);
-            return null;
-        }
-        try {
-            ParsedRoster roster = CommonDataParser.read(file);
-            log.debug("팀 이름표 {}개 (프로필 {})", roster.size(), roster.profileName());
-            return roster;
-        } catch (IOException | RuntimeException e) {
-            log.warn("팀 이름표를 읽지 못했다: {} — {}. 팀이 번호로만 보인다", file, e.toString());
-            return null;
         }
     }
 
