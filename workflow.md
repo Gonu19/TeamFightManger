@@ -39,21 +39,21 @@ D22 가 이미 짚었다 — **보일러플레이트에 에너지를 다 쓰고 
 
 ## 문서 배분 — 이게 핵심이다
 
-`decision.md` 는 900줄이 넘는다. **통째로 주면 에이전트마다 그걸 다시 읽느라 컨텍스트를 태운다.**
-역할별로 필요한 결정만 지정한다. 에이전트에게는 "`## D20` 을 grep 해서 읽어라" 로 준다.
+결정은 파일 하나당 하나다. 에이전트에게 **파일 경로를 그대로 열거해서** 준다.
+역할별로 필요한 결정만 지정한다. 에이전트에게는 "`decisions/D20_*.md` 를 읽어라" 로 준다 (이제 grep이 필요 없다).
 
 | 역할 | 문서 | 결정 |
 |---|---|---|
-| 파서 | `savefile.md` | D18 현재날짜 · D20 이름매칭 · D26 드래프트 · D34 골든파일의 한계 |
-| 스키마·DB | `V1__init.sql` | D7 · D9 · D14 · D15 · D22 · D23 · D24 · D26 · D28 |
-| 적재 | `savefile.md` | D8 스크림 시점 · D17 저장주기 · D20 · D28 백업파일 |
-| 집계 | — | D9 표본 · D10 정렬 · D14 카운터 · D15 축소·감쇠 · D19 경기력 |
-| 밴픽 | `banpick.md` | D13 · D24 패치축 · D26 순서 · D32 게임AI |
-| 화면 | `project.md`「디자인 요구」 | D21 화면구성 · D9 · D10 |
+| 파서 | `savefile.md` | `decisions/D18_*.md` 현재날짜 · `decisions/D20_*.md` 이름매칭 · `decisions/D26_*.md` 드래프트 · `decisions/D34_*.md` 골든파일의 한계 |
+| 스키마·DB | `V1__init.sql` | `decisions/D07_*.md` · `decisions/D09_*.md` · `decisions/D14_*.md` · `decisions/D15_*.md` · `decisions/D22_*.md` · `decisions/D23_*.md` · `decisions/D24_*.md` · `decisions/D26_*.md` · `decisions/D28_*.md` |
+| 적재 | `savefile.md` | `decisions/D08_*.md` 스크림 시점 · `decisions/D17_*.md` 저장주기 · `decisions/D20_*.md` · `decisions/D28_*.md` 백업파일 |
+| 집계 | — | `decisions/D09_*.md` 표본 · `decisions/D10_*.md` 정렬 · `decisions/D14_*.md` 카운터 · `decisions/D15_*.md` 축소·감쇠 · `decisions/D19_*.md` 경기력 |
+| 밴픽 | `banpick.md` | `decisions/D13_*.md` · `decisions/D24_*.md` 패치축 · `decisions/D26_*.md` 순서 · `decisions/D32_*.md` 게임AI |
+| 화면 | `project.md`「디자인 요구」 | `decisions/D21_*.md` 화면구성 · `decisions/D09_*.md` · `decisions/D10_*.md` |
 
 ## 프롬프트에 반드시 넣는 것
 
-1. **읽을 파일을 열거한다.** "저장소를 훑어라" 는 컨텍스트를 태운다
+1. **읽을 파일을 열거한다.** "저장소를 훑어라" 는 컨텍스트를 태운다. (의사결정 문서가 분할된 덕분에 이제 이 원칙을 실제로 지킬 수 있게 되었다)
 2. **읽기 전용이면 명시한다.** "파일을 수정하지 마라"
 3. **이미 아는 것을 알려준다.** 중복 보고를 막는다
 4. **환경을 알려준다.** Spring Boot 4 / Hibernate 7 — Boot 3 자료는 안 맞는다

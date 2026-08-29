@@ -67,3 +67,6 @@ venv/
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# 집계 오류 로그
+agg-error.log

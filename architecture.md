@@ -18,7 +18,7 @@ tags: [teamfight-manager, architecture, design]
 | 문서 | 답하는 질문 |
 |---|---|
 | `structure.md` | 파일이 **어디** 있나 |
-| `decision.md` | **왜** 그렇게 정했나 (D1~D58) |
+| `decisions/` | **왜** 그렇게 정했나 (D1~D60) |
 | **`architecture.md`** | **경계가 어디**고, 무엇이 무엇에 기대나. 그리고 화면 지도 |
 
 그래서 이 문서는 결정을 다시 설명하지 않고 **번호로 가리킨다.**

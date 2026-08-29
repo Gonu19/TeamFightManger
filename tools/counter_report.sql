@@ -1,4 +1,4 @@
--- 카운터 집계 결과를 눈으로 확인한다 (decision.md D14 · D42).
+-- 카운터 집계 결과를 눈으로 확인한다 (decisions/D14_*.md · D42).
 --
 -- 집계를 한 번 돌린 뒤에 실행한다:
 --   gradlew.bat bootRun --args="--tfm.aggregate-on-start=true"
