@@ -34,6 +34,7 @@ import json
 import math
 import os
 import random
+import re
 from collections import defaultdict
 
 METRICS = ("dealing", "tanking", "healing", "kill", "death", "assist")
@@ -41,6 +42,10 @@ METRICS = ("dealing", "tanking", "healing", "kill", "death", "assist")
 BASELINE = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "tests", "baseline", "slot_*.json")
+
+SEED_SQL = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    "src", "main", "resources", "db", "migration", "V3__seed_champions.sql")
 
 TEAM_SIZE = 4
 BASE_GRID = [4.0, 16.0, 64.0]
@@ -54,6 +59,24 @@ MODELS = [
     ("P3", "+ 상대 (카운터)", ("team", "foe")),
     ("P4", "+ 동료 + 상대", ("team", "mate", "foe")),
 ]
+
+
+def load_roles():
+    """챔피언 → 역할군. **원본은 `V3__seed_champions.sql` 하나뿐이다**(D05).
+
+    여기에 표를 복제하면 원본이 둘이 된다. 시드가 바뀌면 이 스크립트가 조용히
+    옛 매핑으로 재게 되므로, 파일에서 읽는다.
+    """
+    text = io.open(SEED_SQL, encoding="utf-8").read()
+    roles = {}
+    for m in re.finditer(r"\('([A-Za-z]+)',\s*'[^']*',\s*'([A-Z]+)'\)", text):
+        roles[m.group(1)] = m.group(2)
+    if len(roles) != 40:
+        raise SystemExit(f"역할군 시드가 40종이 아니다: {len(roles)}종. 시드를 확인하라")
+    return roles
+
+
+ROLES = None
 
 
 # --------------------------------------------------------------- 자료 만들기
@@ -166,6 +189,12 @@ def build(rows_z, blocks, index=None):
         if "foe" in blocks:
             for c in r["foes"]:
                 add(("f", r["champ"], c))
+        if "mrole" in blocks:
+            for b in r["mates"]:
+                add(("mr", ROLES[r["champ"]], ROLES[b]))
+        if "frole" in blocks:
+            for c in r["foes"]:
+                add(("fr", ROLES[r["champ"]], ROLES[c]))
         out.append((terms, z))
     return out, index
 
@@ -279,6 +308,8 @@ def main():
                     help="경기 수를 앞에서 N 건으로 자른다 (한 시즌 분량 확인용)")
     args = ap.parse_args()
 
+    global ROLES
+    ROLES = load_roles()
     rows = load_rows(args.metric, args.scrims)
     # 경기 식별자를 붙인다 (연속한 8행이 한 경기다)
     for i, r in enumerate(rows):
