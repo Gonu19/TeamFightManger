@@ -144,6 +144,34 @@ class NotabilityTest {
     }
 
     @Test
+    @DisplayName("세트 기록이 없어도 스코어로 접전을 판단한다 — 지난 시즌 매치가 그렇다 (D6)")
+    void closeness_usesScoreNotSetList() {
+        // 게임이 세트 기록을 버린 매치. 스코어만 남아 있다.
+        ParsedSchedule oldMatch = new ParsedSchedule(0, 1, "league.amateur", 2021, 27, 1,
+                OTHER_A, OTHER_B, 2, 1, 58, 47, 2, 1.0, false);
+        ParsedSchedule oldSweep = new ParsedSchedule(0, 1, "league.amateur", 2021, 27, 1,
+                OTHER_A, OTHER_B, 2, 0, 58, 30, 2, 1.0, false);
+
+        double close = Notability.of(MatchBrief.of(oldMatch, List.of()), ctx()).score();
+        double sweep = Notability.of(MatchBrief.of(oldSweep, List.of()), ctx()).score();
+
+        assertThat(close).isGreaterThan(sweep);
+    }
+
+    @Test
+    @DisplayName("어중간한 결과를 접전이라고 적지 않는다 — 세트가 없으면 '0세트 접전' 이 된다")
+    void closeness_doesNotClaimCloseOnMiddlingScores() {
+        // 5판 3선승에서 3 - 1 은 접전이 아니다. 그리고 세트 기록이 없다.
+        ParsedSchedule bo5 = new ParsedSchedule(0, 1, "league.amateur", 2021, 27, 1,
+                OTHER_A, OTHER_B, 3, 1, 58, 47, 3, 1.0, false);
+
+        Notability n = Notability.of(MatchBrief.of(bo5, List.of()), ctx());
+
+        assertThat(String.join(" ", n.reasons())).doesNotContain("접전");
+        assertThat(String.join(" ", n.reasons())).doesNotContain("0세트");
+    }
+
+    @Test
     @DisplayName("분량은 점수에서 나오고 단조롭다 — 점수가 높은데 더 짧아지지 않는다")
     void length_isMonotonicInScore() {
         Notability low = Notability.of(match(OTHER_A, OTHER_B, 2, 0), ctx());

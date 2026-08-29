@@ -33,6 +33,12 @@ public record Notability(double score, int paragraphs, int commentCount, List<St
     /** 라이벌. */
     private static final double W_RIVALRY = 0.10;
 
+    /**
+     * 접전이라고 <b>말할</b> 최소 점수. 가중치보다 높게 둔다 —
+     * 어중간한 값에서 이유를 달면 "3 - 1" 도 접전이라고 적히고, 그것이 곧 창작이다.
+     */
+    private static final double CLOSE_REASON_FLOOR = 0.7;
+
     private static final int MIN_PARAGRAPHS = 2;
     private static final int MAX_PARAGRAPHS = 6;
     private static final int MIN_COMMENTS = 3;
@@ -68,8 +74,8 @@ public record Notability(double score, int paragraphs, int commentCount, List<St
         available += W_CLOSE;
         double closeness = closeness(brief);
         earned += W_CLOSE * closeness;
-        if (closeness >= 0.5) {
-            reasons.add(brief.setCount() + "세트 접전");
+        if (closeness > CLOSE_REASON_FLOOR) {
+            reasons.add(brief.blueScore() + " - " + brief.redScore() + " 접전");
         }
 
         // --- 순위 싸움인가 ---
@@ -112,13 +118,11 @@ public record Notability(double score, int paragraphs, int commentCount, List<St
     /**
      * 얼마나 접전이었나. 0 = 스윕, 1 = 마지막 세트까지 간 풀세트.
      *
-     * <p>이벤트전처럼 세트가 없으면 판단할 것이 없어 중립값 0.5 를 준다 —
-     * 0 을 주면 "재미없는 경기" 로 단정하는 것이 된다.
+     * <p><b>세트 목록이 아니라 스코어로 잰다.</b> 지난 시즌 매치는 게임이 세트 기록을
+     * 버려서(D6) 세트가 비어 있는데 스코어는 남아 있다. 세트 수로 재면 그런 매치가
+     * 전부 "판단 불가" 가 되는데, 우리는 3 - 1 이었다는 것을 알고 있다.
      */
     private static double closeness(MatchBrief brief) {
-        if (brief.setCount() == 0) {
-            return 0.5;
-        }
         int loserSets = Math.min(brief.blueScore(), brief.redScore());
         int maxLoserSets = Math.max(1, brief.needWin() - 1);
         return clamp((double) loserSets / maxLoserSets);
