@@ -35,8 +35,22 @@ public final class BriefRenderer {
      * 빈 칸으로 두면 기사가 그 자리를 지어낸다.
      */
     public static String render(MatchBrief brief, NameBook names) {
+        return render(brief, names, List.of());
+    }
+
+    /**
+     * 맥락 태그를 함께 적는다.
+     *
+     * <p>태그는 {@code SeasonBook} 이 <b>계산한 사실</b>이다 — "블루 3연패 중", "공동 1위끼리".
+     * 형용사가 아니므로 이 층(사실)에 들어와도 경계가 깨지지 않는다. 형용은 기사가 짓는다.
+     *
+     * <p><b>머리글 바로 아래에 둔다.</b> 맨 뒤에 붙이면 모델이 세트 기록을 다 읽은 뒤에야
+     * 만나서 첫 문장에 못 쓴다 — 이 태그의 목적이 바로 첫 문장이다.
+     */
+    public static String render(MatchBrief brief, NameBook names, List<String> contextTags) {
         Objects.requireNonNull(brief, "brief");
         Objects.requireNonNull(names, "names");
+        Objects.requireNonNull(contextTags, "contextTags");
 
         String blue = team(brief.blueTeamId(), names);
         String red = team(brief.redTeamId(), names);
@@ -52,6 +66,10 @@ public final class BriefRenderer {
             out.append(SEP).append("이벤트전");
         }
         out.append('\n');
+
+        for (String tag : contextTags) {                                        // 머리글 바로 아래 — 첫 문장에 쓰이라고 여기 둔다
+            out.append("[맥락] ").append(tag).append('\n');
+        }
 
         out.append(blue).append(' ')
                 .append(brief.blueScore()).append(" - ").append(brief.redScore())

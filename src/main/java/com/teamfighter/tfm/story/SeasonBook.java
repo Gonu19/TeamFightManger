@@ -3,6 +3,7 @@ package com.teamfighter.tfm.story;
 import com.teamfighter.tfm.parser.common.ParsedSchedule;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -35,6 +36,14 @@ public final class SeasonBook {
      * 업셋 판정이 이상하면 여기부터 본다.
      */
     private static final int MIN_MATCHES_FOR_STRENGTH = 5;
+
+    /**
+     * 프롬프트에 넘길 맥락 태그의 최대 개수.
+     *
+     * <p>둘이다. 셋을 넘기면 기사가 태그를 차례로 소개하기 시작한다 — 세트를 나열하던
+     * 실패와 같은 모양이고, 그때 첫 문장의 힘이 오히려 죽는다.
+     */
+    private static final int MAX_TAGS = 2;
 
     private final List<ParsedSchedule> schedules;
 
@@ -83,6 +92,120 @@ public final class SeasonBook {
     }
 
     /** 같은 시즌·같은 대회에서 이 매치보다 <b>먼저</b> 치러진 경기의 팀별 승수. */
+    /**
+     * 이 매치의 <b>맥락 태그</b>. 기사 첫 문장이 밋밋해지지 않게 하는 장치다.
+     *
+     * <h2>왜 순위표를 통째로 안 주는가</h2>
+     *
+     * 순위표를 프롬프트에 다 넣으면 토큰만 쓰고, 모델이 "아 이게 1위 결정전이구나" 를
+     * 스스로 알아채지 못한다. 그래서 <b>판정을 우리가 하고 결론만 준다.</b>
+     *
+     * <h2>태그는 사실이지 형용이 아니다</h2>
+     *
+     * "꼴찌들의 단두대 매치" 같은 말은 여기서 만들지 않는다. 그건 해석이고, 넘기면
+     * 기사가 그 표현을 그대로 베껴 쓰면서 우리가 지은 말이 사실처럼 굳는다 —
+     * D66 ② 가 주목도의 <b>이유</b>를 프롬프트에서 뺀 것과 같은 이유다.
+     * 여기서는 "승자가 단독 1위", "블루 3연패 중" 처럼 <b>계산된 사실</b>만 준다.
+     * 그 사실을 받아 "단두대 매치" 라고 부르는 것은 창작층의 몫이다.
+     *
+     * <h2>최대 두 개만 준다</h2>
+     *
+     * 다 붙이면 기사가 태그를 나열한다 — 세트를 나열하던 것과 같은 실패다.
+     * 우선순위는 아래 순서다: 1위 다툼 → 연패/연승 → 라이벌 → 최하위 다툼.
+     *
+     * <p>브래킷(토너먼트)에서는 순위 태그를 만들지 않는다. 거기서 승수는 순위가 아니라
+     * 몇 라운드까지 올라왔나이기 때문이다 — {@link #isBracket} 이 적어 둔 그대로다.
+     */
+    public List<String> tagsFor(ParsedSchedule match, NameBook names) {
+        Objects.requireNonNull(match, "match");
+        Objects.requireNonNull(names, "names");
+
+        List<String> tags = new ArrayList<>();
+        Map<Integer, Integer> wins = winsBefore(match);                         // 1. 이 매치 <b>전</b>까지의 승수
+        boolean bracket = isBracket(match);
+
+        String blue = label(match.blueTeamId(), names);
+        String red = label(match.redTeamId(), names);
+
+        if (!wins.isEmpty() && !bracket) {                                      // 2. 순위 다툼 — 리그일 때만
+            Integer blueRank = rank(wins, match.blueTeamId());
+            Integer redRank = rank(wins, match.redTeamId());
+            int teams = wins.size();
+
+            if (blueRank != null && redRank != null) {
+                if (blueRank == 1 && redRank == 1) {                            // 2-1. 공동 1위끼리 — 승자가 단독 1위
+                    tags.add("공동 1위끼리 맞붙는다. 이기는 쪽이 단독 1위가 된다"
+                            + " (" + blue + " " + wins.get(match.blueTeamId()) + "승 · "
+                            + red + " " + wins.get(match.redTeamId()) + "승)");
+                } else if (blueRank <= 2 && redRank <= 2) {                     // 2-2. 1위 대 2위
+                    tags.add("선두 다툼이다. " + blue + " " + blueRank + "위 · "
+                            + red + " " + redRank + "위");
+                } else if (blueRank == teams && redRank == teams) {             // 2-3. 공동 최하위
+                    tags.add("공동 최하위끼리 맞붙는다 (" + teams + "팀 중)");
+                } else if (blueRank >= teams - 1 && redRank >= teams - 1) {     // 2-4. 하위권 맞대결
+                    tags.add("하위권 맞대결이다. " + blue + " " + blueRank + "위 · "
+                            + red + " " + redRank + "위 (" + teams + "팀 중)");
+                }
+            }
+        }
+
+        for (Integer team : List.of(match.blueTeamId(), match.redTeamId())) {   // 3. 연패·연승
+            int streak = streakBefore(match, team);
+            String who = label(team, names);
+            if (streak <= -3) {
+                tags.add(who + " " + (-streak) + "연패 중이다");
+            } else if (streak >= 3) {
+                tags.add(who + " " + streak + "연승 중이다");
+            }
+        }
+
+        if (metInPastBracket(match)) {                                          // 4. 라이벌 (이미 있던 판정을 재사용)
+            tags.add("두 팀은 앞선 토너먼트에서도 만났다");
+        }
+
+        return tags.size() <= MAX_TAGS ? List.copyOf(tags) : List.copyOf(tags.subList(0, MAX_TAGS));
+    }
+
+    /**
+     * 이 매치 <b>직전</b>까지의 연승·연패. 양수면 연승, 음수면 연패, 0이면 둘 다 아니다.
+     *
+     * <p><b>대회 안에서만 센다.</b> 시즌 전체로 세면 다른 대회의 경기가 섞여서
+     * "3연패 중" 이 어느 기준인지 기사도 독자도 알 수 없게 된다. 순위를 대회 단위로
+     * 보는 것과 같은 기준이다.
+     *
+     * <p>무승부는 연속을 <b>끊는다</b>. 이기지도 지지도 않았으므로 연승도 연패도 아니다.
+     */
+    private int streakBefore(ParsedSchedule match, Integer teamId) {
+        List<ParsedSchedule> earlier = new ArrayList<>(earlierInSameCompetition(match));
+        earlier.removeIf(other -> !Objects.equals(other.blueTeamId(), teamId)   // 1. 그 팀의 경기만
+                && !Objects.equals(other.redTeamId(), teamId));
+        earlier.sort(Comparator.comparing(                                      // 2. 최근 경기가 앞에 오게
+                (ParsedSchedule other) -> other.day() == null ? 0 : other.day()).reversed());
+
+        int streak = 0;
+        for (ParsedSchedule other : earlier) {                                  // 3. 최근부터 거슬러 오르며
+            Integer winner = other.winnerTeamId();
+            if (winner == null) {                                               // 3-1. 무승부는 끊는다
+                break;
+            }
+            boolean won = Objects.equals(winner, teamId);
+            if (streak == 0) {                                                  // 3-2. 첫 경기가 방향을 정한다
+                streak = won ? 1 : -1;
+            } else if (won == (streak > 0)) {                                   // 3-3. 같은 방향이면 이어간다
+                streak += won ? 1 : -1;
+            } else {                                                            // 3-4. 방향이 바뀌면 끝
+                break;
+            }
+        }
+        return streak;
+    }
+
+    /** 태그에 쓸 팀 이름. 모르면 번호를 적는다 (D57). */
+    private static String label(Integer teamId, NameBook names) {
+        String name = teamId == null ? null : names.teamName(teamId);
+        return name != null ? name : "팀 " + teamId;
+    }
+
     private Map<Integer, Integer> winsBefore(ParsedSchedule match) {
         Map<Integer, Integer> wins = new java.util.LinkedHashMap<>();
         for (ParsedSchedule other : earlierInSameCompetition(match)) {

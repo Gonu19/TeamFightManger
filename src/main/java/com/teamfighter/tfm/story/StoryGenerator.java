@@ -133,8 +133,9 @@ public class StoryGenerator {
         SeasonBook book = new SeasonBook(schedules);                            // 4. 순위·업셋·라이벌의 재료. 전체 일정을 넘겨도 미래는 안 본다
         NotabilityContext context = book.contextFor(match, null);               // 5. 그 매치 시점의 맥락. null 은 "플레이어 팀을 모른다" 는 뜻
         MatchBrief brief = MatchBrief.of(match, setsByMatch.get(match.matchKey()));  // 6. 사실만 모은다. 두 등식이 안 맞으면 여기서 던진다
+        List<String> tags = book.tagsFor(match, reference);                     // 7. 맥락 태그 (순위·연패·라이벌). 최대 2개
 
-        long articleId = writer.write(reference, brief, context);               // 7. 여기부터는 ArticleWriter 의 일이다 (호출 → 대조 → 저장)
+        long articleId = writer.write(reference, brief, context, tags);         // 8. 여기부터는 ArticleWriter 의 일이다 (호출 → 대조 → 저장)
         log.info("슬롯 {}: 시즌 {} {}일 매치로 기사 {} 를 썼다",
                 reference.slotId(), match.season(), match.day(), articleId);
         return Optional.of(articleId);

@@ -191,4 +191,99 @@ class SeasonBookTest {
         assertThat(new SeasonBook(List.of(target)).contextFor(target, null).playerTeamId())
                 .isNull();
     }
+
+    /** 팀 이름을 아는 이름표. 태그 문구에 이름이 들어가는지 함께 본다. */
+    private static final NameBook NAMES = new NameBook() {
+        @Override public String teamName(Integer teamId) {
+            return switch (teamId) { case A -> "에이팀"; case B -> "비팀"; case C -> "씨팀"; default -> null; };
+        }
+        @Override public String competitionName(String key) { return "프로 리그"; }
+    };
+
+    @Test
+    @DisplayName("3연패 중이면 태그가 붙는다 — 대회 안에서만 센다")
+    void tag_losingStreak() {
+        ParsedSchedule target = match(2025, 9, LEAGUE, A, B, 2, 0);
+        List<ParsedSchedule> season = List.of(
+                match(2025, 1, LEAGUE, A, C, 0, 2),      // A 패
+                match(2025, 3, LEAGUE, C, A, 2, 0),      // A 패
+                match(2025, 5, LEAGUE, A, C, 0, 2),      // A 패 → 3연패
+                target);
+
+        List<String> tags = new SeasonBook(season).tagsFor(target, NAMES);
+
+        assertThat(tags).anyMatch(t -> t.contains("에이팀") && t.contains("3연패"));
+    }
+
+    @Test
+    @DisplayName("연패가 끊기면 태그가 없다 — 최근 경기부터 거슬러 센다")
+    void tag_streakBrokenByAWin() {
+        ParsedSchedule target = match(2025, 9, LEAGUE, A, B, 2, 0);
+        List<ParsedSchedule> season = List.of(
+                match(2025, 1, LEAGUE, A, C, 0, 2),
+                match(2025, 3, LEAGUE, A, C, 0, 2),
+                match(2025, 5, LEAGUE, A, C, 0, 2),
+                match(2025, 7, LEAGUE, A, C, 2, 0),      // 직전 경기에서 이겼다 → 연패 아님
+                target);
+
+        assertThat(new SeasonBook(season).tagsFor(target, NAMES))
+                .noneMatch(t -> t.contains("연패"));
+    }
+
+    @Test
+    @DisplayName("공동 1위끼리면 승자가 단독 1위라고 알려준다")
+    void tag_topOfTheTable() {
+        ParsedSchedule target = match(2025, 9, LEAGUE, A, B, 2, 0);
+        List<ParsedSchedule> season = List.of(
+                match(2025, 1, LEAGUE, A, C, 2, 0),      // A 1승
+                match(2025, 3, LEAGUE, B, C, 2, 0),      // B 1승 → 둘 다 1위
+                target);
+
+        assertThat(new SeasonBook(season).tagsFor(target, NAMES))
+                .anyMatch(t -> t.contains("단독 1위"));
+    }
+
+    @Test
+    @DisplayName("태그는 두 개를 넘지 않는다 — 넘기면 기사가 태그를 나열한다")
+    void tag_atMostTwo() {
+        ParsedSchedule target = match(2025, 20, LEAGUE, A, B, 2, 0);
+        List<ParsedSchedule> season = new ArrayList<>();
+        // A 도 B 도 3연패를 만들고, 둘 다 같은 순위가 되게 한다
+        for (int day = 1; day <= 5; day += 2) {
+            season.add(match(2025, day, LEAGUE, A, C, 0, 2));
+            season.add(match(2025, day + 1, LEAGUE, B, C, 0, 2));
+        }
+        season.add(target);
+
+        assertThat(new SeasonBook(season).tagsFor(target, NAMES)).hasSizeLessThanOrEqualTo(2);
+    }
+
+    @Test
+    @DisplayName("태그에 형용사를 넣지 않는다 — 해석은 기사가 짓는다 (D66 ②)")
+    void tag_containsNoAdjectives() {
+        ParsedSchedule target = match(2025, 9, LEAGUE, A, B, 2, 0);
+        List<ParsedSchedule> season = List.of(
+                match(2025, 1, LEAGUE, A, C, 0, 2),
+                match(2025, 3, LEAGUE, C, A, 2, 0),
+                match(2025, 5, LEAGUE, A, C, 0, 2),
+                target);
+
+        // 우리가 지은 표현이 사실처럼 굳는 것을 막는다
+        assertThat(new SeasonBook(season).tagsFor(target, NAMES))
+                .noneMatch(t -> t.contains("단두대") || t.contains("치열") || t.contains("명승부"));
+    }
+
+    @Test
+    @DisplayName("이름을 모르면 번호로 적는다 (D57)")
+    void tag_unknownTeamUsesNumber() {
+        ParsedSchedule target = match(2025, 9, LEAGUE, A, B, 2, 0);
+        List<ParsedSchedule> season = List.of(
+                match(2025, 1, LEAGUE, A, C, 0, 2),
+                match(2025, 3, LEAGUE, C, A, 2, 0),
+                match(2025, 5, LEAGUE, A, C, 0, 2),
+                target);
+
+        assertThat(new SeasonBook(season).tagsFor(target, NameBook.ids()))
+                .anyMatch(t -> t.contains("팀 " + A));
+    }
 }

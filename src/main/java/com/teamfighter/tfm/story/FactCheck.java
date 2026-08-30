@@ -87,6 +87,23 @@ public final class FactCheck {
                                       Set<String> allChampions, Set<String> allTeamNames,
                                       Set<String> allAthleteNames,
                                       String article) {
+        return run(brief, names, allChampions, allTeamNames, allAthleteNames, List.of(), article);
+    }
+
+    /**
+     * 맥락 태그까지 아는 대조.
+     *
+     * <p>태그에 든 숫자("3연패", "7승")를 <b>아는 숫자</b>로 넣는다. 안 넣으면 기사가 그
+     * 숫자를 옮겨 적었을 때 "brief 에 없는 숫자" 로 잡힌다 — 우리가 준 사실을 우리가
+     * 모른다고 하는 셈이고, 그런 지적이 쌓이면 목록이 잡음이 된다.
+     *
+     * @param contextTags {@code SeasonBook.tagsFor} 가 준 문자열 그대로
+     */
+    public static FactCheckResult run(MatchBrief brief, NameBook names,
+                                      Set<String> allChampions, Set<String> allTeamNames,
+                                      Set<String> allAthleteNames,
+                                      List<String> contextTags,
+                                      String article) {
         Objects.requireNonNull(brief, "brief");
         Objects.requireNonNull(names, "names");
         Objects.requireNonNull(allChampions, "allChampions");
@@ -99,7 +116,13 @@ public final class FactCheck {
         List<FactCheckResult.Finding> unverified = new ArrayList<>();
 
         Set<String> scorelines = scorelines(brief);
-        Set<Integer> knownNumbers = knownNumbers(brief);
+        Set<Integer> knownNumbers = new LinkedHashSet<>(knownNumbers(brief));
+        for (String tag : contextTags) {                                        // 태그에 쓴 숫자도 우리가 준 사실이다
+            Matcher inTag = NUMBER.matcher(tag);
+            while (inTag.find()) {
+                knownNumbers.add(Integer.parseInt(inTag.group()));
+            }
+        }
 
         // --- 1. 스코어 꼴 ---
         Set<Integer> inScorelines = new HashSet<>();
