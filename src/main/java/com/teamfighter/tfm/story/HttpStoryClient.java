@@ -237,6 +237,9 @@ public class HttpStoryClient implements StoryClient {
         root.put("model", properties.model());
         root.put("max_tokens", request.maxTokens());
         root.put("temperature", request.temperature());
+        if (!properties.reasoningEffort().isEmpty()) {                          // 추론 모델의 생각 길이. 빈 값이면 안 보낸다
+            root.put("reasoning_effort", properties.reasoningEffort());
+        }
         ArrayNode messages = root.putArray("messages");
         messages.addObject().put("role", "system").put("content", request.system());
         messages.addObject().put("role", "user").put("content", request.user());
@@ -260,10 +263,21 @@ public class HttpStoryClient implements StoryClient {
         } catch (tools.jackson.core.JacksonException e) {
             throw new StoryFailedException("응답이 JSON 이 아니다: " + snippet(responseBody), e);
         }
-        JsonNode content = root.path("choices").path(0).path("message").path("content");
+        JsonNode message = root.path("choices").path(0).path("message");
+        JsonNode content = message.path("content");
         if (!content.isTextual() || content.asText().isBlank()) {
+            // 추론 모델은 답하기 전에 생각을 먼저 쓴다(reasoning 필드). 그 생각도 출력
+            // 토큰을 쓰기 때문에 상한이 빠듯하면 생각만 하다 끝나고 content 가 빈다 —
+            // 실물에서 댓글 호출이 그렇게 죽었다. 원인을 메시지에 적어야 사람이 고칠 수 있다.
+            boolean thoughtButDidNotAnswer = message.path("reasoning").isTextual()
+                    && !message.path("reasoning").asText().isBlank();
             throw new StoryFailedException(
-                    "응답에 본문이 없다: " + snippet(responseBody));
+                    thoughtButDidNotAnswer
+                            ? "모델이 생각만 하고 답을 안 썼다 — 출력 상한이 모자라거나"
+                                    + " reasoning_effort 가 높다 (지금 "
+                                    + properties.reasoningEffort() + "). 상한을 올린다: "
+                                    + snippet(responseBody)
+                            : "응답에 본문이 없다: " + snippet(responseBody));
         }
         return content.asText().strip();
     }

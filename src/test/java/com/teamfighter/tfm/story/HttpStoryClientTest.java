@@ -28,7 +28,7 @@ class HttpStoryClientTest {
             new StoryRequest("너는 기자다", "이 경기를 써라", 500, 0.4);
 
     private static StoryProperties props(boolean enabled, String apiKey) {
-        return new StoryProperties(enabled, "https://example.test/v1", "test-model", apiKey, 5);
+        return new StoryProperties(enabled, "https://example.test/v1", "test-model", apiKey, 5, "low");
     }
 
     /** 보낸 요청을 붙잡아 두는 가짜 전송. */

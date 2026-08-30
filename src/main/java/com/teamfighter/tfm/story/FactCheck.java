@@ -40,7 +40,18 @@ public final class FactCheck {
     private static final Pattern SCORE =
             Pattern.compile("(\\d{1,3})\\s*(?:[-‐‑‒–—―−:]|대)\\s*(\\d{1,3})");
 
-    private static final Pattern NUMBER = Pattern.compile("\\d+");
+    /**
+     * 기사에 나온 숫자.
+     *
+     * <p><b>천 단위 구분을 하나로 읽는다.</b> 모델이 딜량을 {@code 19 461} 이나
+     * {@code 19,461} 로 쓰는데, {@code \d+} 로 자르면 {@code 19} 와 {@code 461} 두 개가 되고
+     * 둘 다 brief 에 없는 숫자가 된다. 실물 기사에서 지적 23건이 이렇게 나왔다.
+     *
+     * <p>{@code 3자리 묶음이 이어질 때만} 붙인다 — "2025 시즌 39일" 의 39는 두 자리라
+     * 2025 와 안 붙는다.
+     */
+    private static final Pattern NUMBER =
+            Pattern.compile("\\d{1,3}(?:[ ,]\\d{3})+|\\d+");
 
     /**
      * 문장 경계. 마침표·물음표·느낌표·줄바꿈에서 자른다.
@@ -120,7 +131,7 @@ public final class FactCheck {
         for (String tag : contextTags) {                                        // 태그에 쓴 숫자도 우리가 준 사실이다
             Matcher inTag = NUMBER.matcher(tag);
             while (inTag.find()) {
-                knownNumbers.add(Integer.parseInt(inTag.group()));
+                knownNumbers.add(parseNumber(inTag.group()));
             }
         }
 
@@ -192,7 +203,7 @@ public final class FactCheck {
         Matcher number = NUMBER.matcher(article);
         Set<String> seen = new LinkedHashSet<>();
         while (number.find()) {
-            int value = Integer.parseInt(number.group());
+            int value = parseNumber(number.group());                            // 19 461 → 19461
             if (knownNumbers.contains(value) || inScorelines.contains(value)) {
                 continue;
             }
@@ -230,6 +241,22 @@ public final class FactCheck {
     }
 
     /** brief 가 아는 정수 전부. 여기 있으면 "모르는 숫자" 목록에도 올리지 않는다. */
+    /**
+     * {@code "19 461"} · {@code "19,461"} → {@code 19461}.
+     *
+     * <p>너무 큰 수는 {@link Integer#MAX_VALUE} 로 자른다. 기사에 20자리 숫자가 나올 일은
+     * 없지만, 나왔을 때 {@code NumberFormatException} 으로 대조 전체가 죽는 것보다는
+     * "모르는 숫자" 하나로 남기는 편이 낫다.
+     */
+    private static int parseNumber(String raw) {
+        String digits = raw.replace(" ", "").replace(",", "");
+        try {
+            return Integer.parseInt(digits);
+        } catch (NumberFormatException e) {
+            return Integer.MAX_VALUE;
+        }
+    }
+
     private static Set<Integer> knownNumbers(MatchBrief brief) {
         Set<Integer> out = new HashSet<>();
         for (Integer v : List.of(brief.blueScore(), brief.redScore(),
@@ -246,6 +273,16 @@ public final class FactCheck {
             out.add(s.setNo());
             out.add(s.blueKill());
             out.add(s.redKill());
+            // 선수 기록도 우리가 준 사실이다. 이걸 빼면 기사가 "6킬 3데스" 를 인용할 때마다
+            // "brief 에 없는 숫자" 가 쌓인다 — 실물에서 지적 23건 중 거의 전부가 이것이었다.
+            for (MatchBrief.PlayerLine line : s.players()) {
+                out.add(line.kill());
+                out.add(line.death());
+                out.add(line.assist());
+                out.add(line.dealing());
+                out.add(line.tanking());
+                out.add(line.healing());
+            }
         });
         return out;
     }

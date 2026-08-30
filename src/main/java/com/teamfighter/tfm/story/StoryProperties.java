@@ -16,7 +16,12 @@ public record StoryProperties(
         String baseUrl,
         String model,
         String apiKey,
-        int timeoutSeconds) {
+        int timeoutSeconds,
+        String reasoningEffort) {
+
+    // 생성자를 하나만 둔다. @ConfigurationProperties 는 record 의 <b>정규 생성자</b>로
+    // 값을 바인딩하는데, 편의 생성자를 하나 더 두면 어느 것으로 바인딩할지 정하지 못해
+    // "No default constructor found" 로 컨텍스트가 통째로 안 뜬다. 실제로 그렇게 깼다.
 
     public StoryProperties {
         baseUrl = baseUrl == null || baseUrl.isBlank()
@@ -24,6 +29,11 @@ public record StoryProperties(
         model = model == null || model.isBlank() ? "openai/gpt-oss-120b" : model.strip();
         apiKey = apiKey == null ? "" : apiKey.strip();
         timeoutSeconds = timeoutSeconds <= 0 ? 60 : timeoutSeconds;
+        // gpt-oss 같은 추론 모델은 답하기 전에 생각을 먼저 쓴다. 그 생각도 출력 토큰을
+        // 쓰기 때문에, 상한이 빠듯하면 생각만 하다 끝나고 content 가 빈 채로 돌아온다 —
+        // 실물에서 실제로 그랬다. low 로 두면 생각을 짧게 하고 답에 토큰을 남긴다.
+        // 이 값을 모르는 서버를 만나면 빈 문자열로 두어 아예 안 보낼 수 있다.
+        reasoningEffort = reasoningEffort == null ? "low" : reasoningEffort.strip();
     }
 
     /** 켜져 있고 키가 있는가. */

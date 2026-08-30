@@ -309,4 +309,40 @@ class FactCheckTest {
         assertThat(check("").contradictions()).isEmpty();
         assertThat(check("").unverified()).isEmpty();
     }
+
+    @Test
+    @DisplayName("선수 기록 숫자는 미확인이 아니다 — 우리가 준 사실이다")
+    void playerStatsAreKnownNumbers() {
+        // 실물에서 지적 23건이 거의 전부 이것이었다. 기사가 "6킬 3데스" 를 인용할 때마다
+        // brief 에 없는 숫자로 잡혔다 — 선수 줄을 넣고 knownNumbers 를 안 고쳤기 때문이다.
+        String article = "Faker 가 MagicKnight 로 7킬 2데스 3어시, 딜 12000 을 기록했다.";
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES_WITH_ATHLETES, CHAMPIONS, Set.of(), ATHLETES, article);
+
+        assertThat(result.unverified())
+                .as("선수 기록 숫자가 미확인으로 올라왔다: %s", result.unverified())
+                .isEmpty();
+    }
+
+    @Test
+    @DisplayName("천 단위를 띄어 쓴 숫자도 하나로 읽는다 — 모델이 19 461 로 쓴다")
+    void thousandsSeparatorIsOneNumber() {
+        String article = "Faker 의 딜은 12 000 이었다.";
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES_WITH_ATHLETES, CHAMPIONS, Set.of(), ATHLETES, article);
+
+        // 12 와 000 두 개로 쪼개졌다면 미확인이 쌓인다
+        assertThat(result.unverified()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("쉼표를 쓴 천 단위도 같다")
+    void commaSeparatorIsOneNumber() {
+        String article = "Faker 의 딜은 12,000 이었다.";
+
+        assertThat(FactCheck.run(briefWithPlayers(), NAMES_WITH_ATHLETES,
+                CHAMPIONS, Set.of(), ATHLETES, article).unverified()).isEmpty();
+    }
 }
