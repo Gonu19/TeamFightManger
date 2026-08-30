@@ -219,6 +219,32 @@ class StoryControllerTest {
     }
 
     @Test
+    @DisplayName("주석이 본문으로 새지 않는다 — 주석 안에 닫는 기호를 쓰면 그 뒤가 화면에 찍힌다")
+    void templateCommentsDoNotLeakIntoTheBody() throws Exception {
+        int slotId = newSlot();
+        int blue = team(slotId, 33, "Seorabal Gaming");
+        int red = team(slotId, 34, "OZ Gaming");
+        long id = article(slotId, blue, red, 2, 30, "완봉으로 끝난 승부", List.of());
+
+        for (String url : List.of("/story?slot=" + slotId, "/story/" + id)) {
+            String html = mvc().perform(get(url)).andReturn().getResponse().getContentAsString();
+
+            // 온전한 주석을 다 걷어낸다. 주석이 제대로 닫혀 있으면 설명 문구도 같이 사라진다.
+            // 하나라도 조기 종료됐다면 그 뒤 설명이 본문으로 남아 아래 검사에 걸린다.
+            String withoutComments = html.replaceAll("(?s)<!--.*?-->", "");
+
+            org.assertj.core.api.Assertions.assertThat(withoutComments)
+                    .as("주석 밖으로 새어 나온 설명이 있다: " + url)
+                    .doesNotContain("Thymeleaf")
+                    .doesNotContain("th:")
+                    .doesNotContain("자리표시자")
+                    // 렌더링이 끝난 응답에 ${ 가 남아 있을 이유가 없다.
+                    // 실제로 샌 문구가 이것이었다 — 위 세 낱말로는 안 잡혔다
+                    .doesNotContain("${");
+        }
+    }
+
+    @Test
     @DisplayName("없는 기사는 404 다 — 빈 화면 200 이 아니다")
     void missingArticleIsNotFound() throws Exception {
         mvc().perform(get("/story/999999999")).andExpect(status().isNotFound());
