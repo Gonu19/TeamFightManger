@@ -1,6 +1,7 @@
 > **답하는 질문:** 지금 무엇이 돌고, 무엇을 하는 중이고, 무엇이 막혀 있나
 > **읽을 때:** 세션 시작 직후. 이 파일과 `decisions/README.md` 라우팅 표면 방향이 잡힌다
-> **크기:** 2KB 이하로 유지한다. 넘으면 내용이 다른 문서로 갈 때가 된 것이다
+> **크기:** 3KB 이하로 유지한다. `RUNBOOK.md` 와 같은 한도이고, 둘을 합친 6KB 가
+> 세션 시작의 정액 예산이다. 넘으면 내용이 `decisions/` 로 갈 때가 된 것이다
 
 # 지금 상태 (2026-08-30)
 
@@ -11,26 +12,27 @@
 | `parser/` | 세이브 파싱 완료. 경기·팀·선수·**매치 일정** |
 | `ingest/` | 적재 완료. 운영 DB 팀 56 · 공식 698건 · 선수 실명 |
 | `analysis/` | 카운터·티어 집계 완료. **시너지는 미착수** |
-| `story/` | 사실→해석→창작→대조 + 저장(`dao/`) 완료. Groq 실호출 확인됨 |
+| `story/` | 사실→해석→창작→대조→저장까지 이어짐(`ArticleWriter`). 팀 실명 붙음 |
 | `web/` | **비어 있음** — 파일 0개 |
 | `draft/` | 비어 있음 (`banpick.md` 가 설계) |
 
-테스트 **341개** (DB 없이 280 · DB 필요 61). 마이그레이션 `V1`~`V8` **전부 적용됨**.
+테스트 **347개** (DB 없이 280 · DB 필요 67). 마이그레이션 `V1`~`V8` **전부 적용됨**.
 결정 **D1~D65**.
 
 ## 진행 중
 
-**화면.** `ArticleDao` 까지 왔다. 다음 순서:
-`story/ArticleWriter`(brief→호출→대조→저장) → `web/StoryController` → `templates/story/`.
+**화면.** 자바는 `ArticleWriter` 까지 왔다. 남은 것은 화면뿐이다:
+`web/StoryController` → `templates/story/list.html`·`detail.html` → `static/tfm.css`.
 설계는 `architecture.md` 5·6절과 `decisions/D61_*.md`.
+
+기사를 뽑으려면 `tfm.story.enabled=true` 여야 한다 — 꺼지면 빈이 아예 없다.
 
 ## 막힌 것
 
 - **`.env` → Spring 배선이 미검증이다.** 앱을 띄워야 확인된다 (키는 실호출로 확인됨)
 - **`tools/` 실호출 스크립트가 임시 파일에만 있다.** 저장소에 넣으려면 `gradlew test` 가
   네트워크를 안 타도록 opt-in 으로 만들어야 한다
-- **`bootRun`·psql 은 사용자가 돌린다.** 테스트는 `$env:TFM_DB_PASSWORD='postgres'` 로
-  에이전트도 돌릴 수 있다 (`RUNBOOK.md`)
+- **`bootRun`·psql 은 사용자가 돌린다.** 테스트는 `$env:TFM_DB_PASSWORD` 로 에이전트도 된다
 
 ## 최근에 뒤집힌 것 (오래된 문서를 믿기 전에 본다)
 

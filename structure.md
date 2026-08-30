@@ -72,8 +72,11 @@ A:\project\TeamFighter\
 │   │   ├─ HttpStoryClient · StoryProperties          JDK HttpClient + Jackson 3
 │   │   ├─ FactCheck · FactCheckResult      대조 — 모순 / 미확인 2등급
 │   │   ├─ ArticleDraft                     fact_status 를 타입이 계산한다
+│   │   ├─ ArticleWriter                    넷을 잇기만 한다. @Transactional 없음
+│   │   ├─ StoryConfiguration               플래그를 켜야 빈이 생긴다 (D61)
 │   │   └─ dao/         ArticleDao          업서트 — 재생성이 갱신이 된다
 │   │                    ArticleView · ArticleCard    상세용 · 목록용
+│   │                    StoryReference · StoryReferenceDao  이름표 (NameBook 구현)
 │   ├─ draft/           밴픽 시뮬            (banpick.md)
 │   │   ├─ DraftStateMachine · DraftSessionService · EvidenceGate
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
@@ -152,8 +155,8 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 `performance/` 는 티어·픽률·밴률까지 만들지만 **경기력 z값과 티어 등급은 비워 둔다** —
 둘 다 근거가 아직 없다 (D50).
 
-`story/` 는 사실→해석→창작→대조와 저장(`dao/`)까지 있다. 남은 것은 그 넷을 이어 붙이는
-`ArticleWriter` 하나다. `draft/` · `web/` · `templates/story/` 는 통째로 없다.
+`story/` 는 사실→해석→창작→대조→저장이 `ArticleWriter` 로 이어져 있다. 남은 것은 화면
+(`web/StoryController` · `templates/story/`)이다. `draft/` 는 통째로 없다.
 
 ---
 
