@@ -2,6 +2,13 @@ spring:
   application:
     name: tfm
 
+  # .env 를 설정으로 읽어들인다. 없으면 조용히 넘어간다(optional).
+  # OS 환경변수가 이보다 우선하므로 셸에서 준 값이 항상 이긴다.
+  # 주의: 빈 값(`TFM_X=`)은 "없음" 이 아니라 "빈 문자열" 이라 ${TFM_X:기본값} 의
+  #       기본값을 눌러버린다. 채우지 않을 키는 .env 에서 주석 처리해 둔다.
+  config:
+    import: optional:file:.env[.properties]
+
   datasource:
     url: jdbc:postgresql://localhost:5432/${TFM_DB_NAME:tfm}
     username: ${TFM_DB_USER:postgres}
@@ -57,6 +64,17 @@ tfm:
   #   gradlew.bat bootRun --args="--tfm.aggregate-on-start=true"
   # TfmProperties 에는 필드가 없다 — @ConditionalOnProperty 가 환경에서 직접 읽는다.
   aggregate-on-start: false
+
+  # 기사 생성 (story/). D61: 기본은 꺼짐이고, 켜야만 외부로 나간다.
+  story:
+    # 켜지 않으면 요청이 하나도 나가지 않는다. 적재·집계·통계 화면은 그대로 돈다.
+    enabled: ${TFM_STORY_ENABLED:false}
+    # OpenAI 호환 엔드포인트. base-url 만 바꾸면 Cerebras·로컬로 간다
+    base-url: ${TFM_STORY_BASE_URL:https://api.groq.com/openai/v1}
+    model: ${TFM_STORY_MODEL:llama-3.3-70b-versatile}
+    # 키는 환경변수 또는 .env 로만 받는다. 코드·설정 파일·커밋에 절대 넣지 않는다.
+    api-key: ${TFM_GROQ_API_KEY:}
+    timeout-seconds: ${TFM_STORY_TIMEOUT:60}
 
 logging:
   level:
