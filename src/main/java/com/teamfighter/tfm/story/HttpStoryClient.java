@@ -14,6 +14,8 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.function.Function;
+import java.util.regex.Pattern;
+import java.util.regex.Matcher;
 
 /**
  * OpenAI 호환 {@code /chat/completions} 를 부른다 — Groq · Cerebras · 로컬이 전부 이 꼴이다.
@@ -31,6 +33,28 @@ import java.util.function.Function;
 public class HttpStoryClient implements StoryClient {
 
     private static final Logger log = LoggerFactory.getLogger(HttpStoryClient.class);
+
+    /** 요청 한도 초과. 이것만 다시 시도한다 — 나머지 4xx 는 다시 보내도 같은 답이다. */
+    private static final int TOO_MANY_REQUESTS = 429;
+
+    /**
+     * 429 재시도 횟수.
+     *
+     * <p>둘이다. 무료 티어의 한도가 <b>분당 토큰</b>이라 몇 초만 기다리면 창이 다시 열리고,
+     * 그래도 안 되면 요청 자체가 한도보다 큰 것이라 몇 번을 더 보내도 같다.
+     * 기사 한 편이 호출 두 번이므로(기사·댓글) 둘째 호출이 첫째 때문에 걸리는 경우가 가장 흔하다.
+     */
+    private static final int RETRIES = 2;
+
+    /** 서버가 아무 말도 안 했을 때 기다릴 시간. */
+    private static final Duration DEFAULT_RETRY_WAIT = Duration.ofSeconds(5);
+
+    /** 아무리 길어도 이만큼만 기다린다. 더 길면 멈춘 것처럼 보인다. */
+    private static final Duration MAX_RETRY_WAIT = Duration.ofSeconds(20);
+
+    /** {@code "Please try again in 2.79s"} — Groq 이 본문에 넣어주는 남은 시간. */
+    private static final Pattern RETRY_HINT =
+            Pattern.compile("try again in ([0-9]+(?:\\.[0-9]+)?)s");
 
     private final StoryProperties properties;
     private final ObjectMapper mapper;
@@ -109,12 +133,81 @@ public class HttpStoryClient implements StoryClient {
                 .POST(HttpRequest.BodyPublishers.ofString(body, java.nio.charset.StandardCharsets.UTF_8))
                 .build();
 
-        HttpResponse<String> response = transport.apply(http);                  // 여기를 지나야 실제로 나간 것이다
-        if (response.statusCode() / 100 != 2) {
-            throw new StoryFailedException(
-                    "모델이 " + response.statusCode() + " 로 응답했다: " + snippet(response.body()));
+        for (int attempt = 1; ; attempt++) {                                    // 1. 429 면 기다렸다 다시 — 그 밖의 실패는 곧바로 던진다
+            HttpResponse<String> response = transport.apply(http);              // 2. 여기를 지나야 실제로 나간 것이다
+
+            if (response.statusCode() / 100 == 2) {                             // 3. 성공
+                return extractContent(response.body());
+            }
+
+            if (response.statusCode() != TOO_MANY_REQUESTS || attempt > RETRIES) {
+                throw new StoryFailedException(                                 // 4. 못 고칠 실패이거나 재시도를 다 썼다
+                        "모델이 " + response.statusCode() + " 로 응답했다: " + snippet(response.body()));
+            }
+
+            Duration wait = retryAfter(response);                               // 5. 얼마나 기다릴지는 서버가 안다
+            log.warn("모델이 429(요청 한도)로 응답했다. {}초 뒤 다시 시도한다 ({}/{})",
+                    wait.toMillis() / 1000.0, attempt, RETRIES);
+            sleep(wait);
         }
-        return extractContent(response.body());
+    }
+
+    /**
+     * 429 를 만났을 때 얼마나 기다릴까.
+     *
+     * <p>순서대로 본다.
+     * <ol>
+     *   <li>{@code Retry-After} 헤더 — HTTP 표준이고 초 단위 정수다</li>
+     *   <li>본문의 {@code "Please try again in 2.79s"} — Groq 이 여기에 넣어준다.
+     *       한도가 <b>분당 토큰</b>이라 남은 시간이 초 단위로 정확히 계산되는데,
+     *       그 값을 무시하고 고정 대기를 쓰면 너무 일찍(또 429) 또는 너무 늦게 간다</li>
+     *   <li>둘 다 없으면 {@link #DEFAULT_RETRY_WAIT}</li>
+     * </ol>
+     *
+     * <p>{@link #MAX_RETRY_WAIT} 로 자른다. 서버가 "60초 뒤" 라고 해도 화면 뒤에서
+     * 그만큼 붙잡고 있으면 사용자는 앱이 멈춘 줄 안다 — 그때는 차라리 실패로 알리는 편이 낫다.
+     */
+    private static Duration retryAfter(HttpResponse<String> response) {
+        Duration wait = response.headers().firstValue("retry-after")            // 1. 표준 헤더가 있으면 그것
+                .map(HttpStoryClient::parseSeconds)
+                .orElse(null);
+
+        if (wait == null) {                                                     // 2. 없으면 본문에서 찾는다
+            Matcher matcher = RETRY_HINT.matcher(response.body() == null ? "" : response.body());
+            if (matcher.find()) {
+                wait = parseSeconds(matcher.group(1));
+            }
+        }
+
+        if (wait == null || wait.isNegative() || wait.isZero()) {               // 3. 그래도 모르면 기본값
+            wait = DEFAULT_RETRY_WAIT;
+        }
+        return wait.compareTo(MAX_RETRY_WAIT) > 0 ? MAX_RETRY_WAIT : wait;      // 4. 너무 길면 자른다
+    }
+
+    /** {@code "2.79"} · {@code "3"} 을 Duration 으로. 못 읽으면 {@code null}. */
+    private static Duration parseSeconds(String raw) {
+        try {
+            double seconds = Double.parseDouble(raw.trim());
+            return Duration.ofMillis(Math.round(seconds * 1000));
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * 기다린다. 기다리는 동안 인터럽트가 오면 <b>플래그를 되살리고</b> 던진다.
+     *
+     * <p>{@code InterruptedException} 을 잡고 아무것도 안 하면 "누가 이 스레드를 멈추려 했다"
+     * 는 사실이 사라진다. 그러면 앱을 종료할 때 이 요청이 끝까지 버틴다.
+     */
+    private static void sleep(Duration wait) {
+        try {
+            Thread.sleep(wait.toMillis());
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new StoryFailedException("모델 호출을 기다리다 중단됐다", e);
+        }
     }
 
     /**

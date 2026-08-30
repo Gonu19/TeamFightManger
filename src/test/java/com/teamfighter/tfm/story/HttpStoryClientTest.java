@@ -119,12 +119,13 @@ class HttpStoryClientTest {
     @Test
     @DisplayName("2xx 가 아니면 던진다 — 상태 코드를 메시지에 남긴다")
     void nonSuccessStatus_throws() {
+        // 429 는 재시도 대상이라 여기서 쓰지 않는다. 그건 아래 재시도 테스트가 본다
         StoryClient client = new HttpStoryClient(props(true, "key"), MAPPER,
-                new Capturing(429, "{\"error\":\"rate limit\"}"));
+                new Capturing(500, "{\"error\":\"boom\"}"));
 
         assertThatThrownBy(() -> client.complete(REQUEST))
                 .isInstanceOf(StoryClient.StoryFailedException.class)
-                .hasMessageContaining("429");
+                .hasMessageContaining("500");
     }
 
     @Test
@@ -196,5 +197,64 @@ class HttpStoryClientTest {
         assertThatThrownBy(() -> client.complete(REQUEST))
                 .isInstanceOf(StoryClient.StoryUnavailableException.class);
         assertThat(transport.sent).isEmpty();
+    }
+
+    /** 정해진 응답을 순서대로 돌려주는 전송. 429 재시도를 보기 위한 것이다. */
+    private static final class Scripted implements Function<HttpRequest, HttpResponse<String>> {
+        private final List<HttpResponse<String>> answers;
+        private int next;
+        private int calls;
+
+        Scripted(List<HttpResponse<String>> answers) {
+            this.answers = answers;
+        }
+
+        @Override
+        public HttpResponse<String> apply(HttpRequest request) {
+            calls++;
+            return answers.get(Math.min(next++, answers.size() - 1));
+        }
+    }
+
+    private static HttpResponse<String> rateLimited() {
+        return new FakeResponse(429,
+                "{\"error\":{\"message\":\"Rate limit reached ... Please try again in 0.05s\"}}");
+    }
+
+    @Test
+    @DisplayName("429 면 서버가 말한 만큼 기다렸다 다시 부른다")
+    void retriesOnRateLimit() {
+        Scripted transport = new Scripted(List.of(rateLimited(), new FakeResponse(200, okBody("기사 본문"))));
+        HttpStoryClient client = new HttpStoryClient(props(true, "gsk_test"), MAPPER, transport);
+
+        String text = client.complete(REQUEST);
+
+        assertThat(text).isEqualTo("기사 본문");
+        assertThat(transport.calls).isEqualTo(2);          // 처음 한 번, 재시도 한 번
+    }
+
+    @Test
+    @DisplayName("계속 429 면 결국 던진다 — 무한히 기다리지 않는다")
+    void givesUpAfterRetries() {
+        Scripted transport = new Scripted(List.of(rateLimited()));
+        HttpStoryClient client = new HttpStoryClient(props(true, "gsk_test"), MAPPER, transport);
+
+        assertThatThrownBy(() -> client.complete(REQUEST))
+                .isInstanceOf(StoryClient.StoryFailedException.class)
+                .hasMessageContaining("429");
+
+        assertThat(transport.calls).isEqualTo(3);          // 처음 + 재시도 2회
+    }
+
+    @Test
+    @DisplayName("429 가 아닌 실패는 곧바로 던진다 — 다시 보내도 같은 답이다")
+    void doesNotRetryOtherFailures() {
+        Scripted transport = new Scripted(List.of(new FakeResponse(401, "{}")));
+        HttpStoryClient client = new HttpStoryClient(props(true, "gsk_test"), MAPPER, transport);
+
+        assertThatThrownBy(() -> client.complete(REQUEST))
+                .isInstanceOf(StoryClient.StoryFailedException.class);
+
+        assertThat(transport.calls).isEqualTo(1);
     }
 }
