@@ -203,7 +203,14 @@ public class ArticleDao {
      */
     @Transactional(readOnly = true)
     public Optional<ArticleView> find(long articleId) {
+        // queryForList(sql, 타입, 인자...) 는 컬럼이 하나일 때 쓰는 지름길이다.
+        // 행이 없으면 빈 목록을 준다 — queryForObject 와 달리 예외가 아니다.
         List<String> comments = jdbc.queryForList(SELECT_COMMENTS, String.class, articleId);
+
+        // query(sql, RowMapper, 인자...) — RowMapper 는 "행 하나 → 객체 하나" 함수다.
+        // 람다의 두 번째 인자 rowNum 은 0부터의 행 번호인데 여기서는 안 쓴다.
+        // rs.getString 이 준 문자열을 enum 으로 되돌리는 것은 valueOf 다 — DB 의 enum 값과
+        // 자바 enum 이름이 같아야 하고, 그 계약이 깨지면 여기서 예외로 즉시 드러난다.
         List<Finding> findings = jdbc.query(SELECT_FINDINGS,
                 (rs, rowNum) -> new Finding(
                         Severity.valueOf(rs.getString("severity")),
@@ -211,6 +218,9 @@ public class ArticleDao {
                         rs.getString("evidence")),
                 articleId);
 
+        // 기사 본체. 유일 키로 찾으므로 행은 0개 아니면 1개다. queryForObject 를 쓰면
+        // 0개일 때 EmptyResultDataAccessException 이 나는데, "없는 기사" 는 예외로 다룰
+        // 일이 아니라 Optional 로 답할 일이다 — 그래서 query 로 받아 목록 크기를 본다.
         List<ArticleView> found = jdbc.query(SELECT_ARTICLE,
                 (rs, rowNum) -> toView(rs, comments, findings), articleId);
         return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
@@ -233,6 +243,9 @@ public class ArticleDao {
         if (limit <= 0) {
             throw new IllegalArgumentException("limit 은 1 이상이어야 한다: " + limit);
         }
+        // 마지막 두 인자(slotId, limit)가 SQL 의 ? 두 개에 순서대로 들어간다.
+        // LIMIT 도 파라미터로 넘긴다 — 문자열로 이어 붙이면 SQL 주입의 통로가 되고,
+        // 프리페어드 스테이트먼트 캐시도 limit 값마다 따로 잡힌다.
         return jdbc.query(SELECT_RECENT, (rs, rowNum) -> new ArticleCard(
                 rs.getLong("article_id"),
                 rs.getInt("slot_id"),
@@ -246,6 +259,9 @@ public class ArticleDao {
                 rs.getInt("red_score"),
                 rs.getDouble("notability"),
                 rs.getString("headline"),
+                // timestamptz → OffsetDateTime. getTimestamp 로 받으면 시간대가 날아가
+                // JVM 기본 시간대로 해석되는데, 그 오차는 화면에서 "몇 시간 전에 쓴 기사"
+                // 로만 보여서 눈에 안 띈다.
                 rs.getObject("generated_at", java.time.OffsetDateTime.class),
                 FactStatus.valueOf(rs.getString("fact_status"))), slotId, limit);
     }
@@ -316,6 +332,13 @@ public class ArticleDao {
         return articleId;
     }
 
+    /**
+     * 댓글을 통째로 갈아 끼운다. 지우고 → 넣는다.
+     *
+     * <p>부르는 쪽({@link #save})이 {@code @Transactional} 이라 이 삭제와 아래 삽입은
+     * 같은 트랜잭션 안에 있다. 그래서 그 사이에 다른 요청이 조회해도 <b>빈 댓글난을 보지
+     * 않는다</b> — 커밋 전의 중간 상태는 남에게 안 보이기 때문이다.
+     */
     private void replaceComments(long articleId, List<String> comments) {
         jdbc.update("DELETE FROM article_comment WHERE article_id = ?", articleId);
         if (comments.isEmpty()) {
@@ -325,6 +348,9 @@ public class ArticleDao {
         for (int i = 0; i < comments.size(); i++) {
             batch.add(new Object[] { articleId, (short) (i + 1), comments.get(i) });
         }
+        // batchUpdate 는 INSERT 를 한 번에 묶어 보낸다 — 댓글 15개면 왕복이 15번에서
+        // 1번으로 준다. 세 번째 인자는 각 ? 의 SQL 타입인데, 이걸 주면 드라이버가 값을
+        // 추측하지 않는다 (특히 null 을 넘길 때 타입 없이는 어떤 컬럼인지 모른다).
         jdbc.batchUpdate(INSERT_COMMENT, batch,
                 new int[] { Types.BIGINT, Types.SMALLINT, Types.VARCHAR });
     }
@@ -383,6 +409,16 @@ public class ArticleDao {
         return rs.wasNull() ? null : value;
     }
 
+    /**
+     * {@code text[]} 컬럼 → 자바 목록.
+     *
+     * <p>{@link Array#getArray()} 는 {@code Object} 를 주는데 실제 타입은 {@code String[]} 이다
+     * (드라이버가 컬럼 타입을 보고 정한다). 그래서 캐스팅이 필요하고, 그 캐스팅이 맞다는
+     * 근거는 SQL 의 컬럼 타입뿐이다 — 컬럼 타입을 바꾸면 여기서 {@code ClassCastException} 이 난다.
+     *
+     * <p>{@code free()} 로 닫는 이유는 드라이버가 배열을 위해 잡아둔 자원을 바로 놓게 하기
+     * 위해서다. 안 해도 결국 GC 가 정리하지만, 그 "결국" 이 언제인지는 보장이 없다.
+     */
     private static List<String> textArray(ResultSet rs, String column) throws SQLException {
         Array array = rs.getArray(column);
         if (array == null) {

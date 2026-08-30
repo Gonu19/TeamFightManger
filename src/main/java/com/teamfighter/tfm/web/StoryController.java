@@ -5,6 +5,7 @@ import com.teamfighter.tfm.story.StoryGenerator;
 import com.teamfighter.tfm.story.dao.ArticleCard;
 import com.teamfighter.tfm.story.dao.ArticleDao;
 import com.teamfighter.tfm.story.dao.ArticleView;
+import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -63,10 +64,13 @@ public class StoryController {
     private static final int PAGE_SIZE = 50;
 
     private final ArticleDao articles;
+    private final StoryReferenceDao slots;
     private final Optional<StoryGenerator> generator;
 
-    public StoryController(ArticleDao articles, Optional<StoryGenerator> generator) {
+    public StoryController(ArticleDao articles, StoryReferenceDao slots,
+                           Optional<StoryGenerator> generator) {
         this.articles = articles;
+        this.slots = slots;
         this.generator = generator;
     }
 
@@ -95,9 +99,15 @@ public class StoryController {
      */
     @GetMapping("/story")
     public String list(@RequestParam(required = false) Integer slot, Model model) {
-        // 슬롯 목록은 save_slot 이 아니라 article 에서 뽑는다. 기사가 없는 슬롯을 기본값으로
-        // 골라주면 "기본 커리어를 보여준다" 는 목적이 그 자리에서 실패한다.
-        List<Integer> slots = articles.slotsWithArticles();
+        // 슬롯 목록은 article 에서 뽑는다 — 기사가 없는 슬롯을 기본값으로 골라주면
+        // "기본 커리어를 보여준다" 는 목적이 그 자리에서 실패하기 때문이다.
+        //
+        // 다만 한 편도 없으면 그 목록이 비고, 그러면 고를 커리어가 없어 생성 버튼도
+        // 안 그려진다 — 기사가 있어야 버튼이 보이고 버튼을 눌러야 기사가 생기는 순환이다.
+        // 그때만 적재된 커리어 전부로 물러선다. 첫 기사를 쓸 길을 열어두는 것이 목적이므로
+        // 기사가 하나라도 생기면 다시 위쪽 목록이 쓰인다.
+        List<Integer> withArticles = articles.slotsWithArticles();
+        List<Integer> slots = withArticles.isEmpty() ? this.slots.slotIds() : withArticles;
 
         // 사용자가 고른 값이 1순위, 없으면 첫 슬롯, 그것도 없으면 null.
         // null 을 그대로 뷰까지 보내는 이유는 "고를 것이 없다" 와 "안 골랐다" 가

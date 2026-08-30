@@ -54,6 +54,20 @@ public class StoryReferenceDao {
      * @throws IllegalStateException 없는 슬롯. 화면이 준 번호가 DB 에 없다는 뜻이라
      *                               조용히 넘어가면 "왜 아무 일도 안 일어나지" 가 된다
      */
+    /**
+     * 적재된 커리어 전부.
+     *
+     * <p>화면의 <b>부트스트랩</b>용이다. 기사가 한 편도 없으면 {@code article} 에서 뽑는
+     * 슬롯 목록이 비고, 그러면 "어느 커리어에 기사를 쓸까" 를 고를 수 없어 첫 기사를 영영
+     * 못 쓴다 — 기사가 있어야 버튼이 보이고 버튼을 눌러야 기사가 생기는 순환이다.
+     * 그 순환을 여기서 끊는다.
+     */
+    @Transactional(readOnly = true)
+    public List<Integer> slotIds() {
+        return jdbc.queryForList(
+                "SELECT slot_id FROM save_slot ORDER BY slot_id", Integer.class);
+    }
+
     @Transactional(readOnly = true)
     public String slotKey(int slotId) {
         List<String> found = jdbc.queryForList(

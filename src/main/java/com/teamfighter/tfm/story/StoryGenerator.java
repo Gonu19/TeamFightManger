@@ -87,21 +87,18 @@ public class StoryGenerator {
      *         <b>예외가 아니다.</b> "다 썼다" 는 정상 상태이고, 화면은 그걸 그대로 말하면 된다
      */
     public Optional<Long> writeLatestUnwritten(int slotId) {
-        Path saveFile = locateSaveFile(slotId);
+        Path saveFile = locateSaveFile(slotId);                                 // 1. 슬롯 → 파일 경로 (save_slot.slot_key 가 곧 파일명이다)
 
-        // 파일을 두 번 읽는다. 매치(MatchSchedule)와 세트(GameStat)가 세이브의 다른
-        // 구역에 있고 파서도 따로이기 때문이다. 파일이 2~3MB 라 두 번 읽어도 밀리초 단위고,
-        // 한 파서에 둘을 밀어 넣으면 파서 쪽 골든 파일 검증이 복잡해진다.
         List<ParsedSchedule> schedules;
         List<ParsedGame> sets;
         try {
-            schedules = MatchScheduleParser.read(saveFile);
-            sets = SaveParser.read(saveFile).gameStats();
+            schedules = MatchScheduleParser.read(saveFile);                     // 2. 매치 목록 (MatchSchedule 구역)
+            sets = SaveParser.read(saveFile).gameStats();                       // 3. 세트 목록 (GameStat 구역). 파서가 따로라 파일을 두 번 읽는다
         } catch (IOException e) {
             throw new UncheckedIOException("세이브를 읽지 못했다: " + saveFile, e);
         }
 
-        return writeLatestUnwritten(references.load(slotId), schedules, sets);
+        return writeLatestUnwritten(references.load(slotId), schedules, sets);  // 4. 이름표를 읽어 아래 오버로드로 넘긴다
     }
 
     /**
@@ -115,23 +112,15 @@ public class StoryGenerator {
         Objects.requireNonNull(schedules, "schedules");
         Objects.requireNonNull(sets, "sets");
 
-        Map<ParsedSchedule.MatchKey, List<ParsedGame>> setsByMatch = groupSets(sets);
-        Set<ArticleKey> alreadyWritten = articles.writtenKeys(reference.slotId());
+        Map<ParsedSchedule.MatchKey, List<ParsedGame>> setsByMatch = groupSets(sets);   // 1. 세트를 매치별로 묶는다 (시즌·일·무순 팀쌍이 열쇠)
+        Set<ArticleKey> alreadyWritten = articles.writtenKeys(reference.slotId());      // 2. 이미 쓴 매치 신원을 한 번에 읽어 둔다
 
-        Optional<ParsedSchedule> target = schedules.stream()
-                // 끝난 매치만. 진행 중인 매치로 기사를 쓰면 결과를 지어내게 된다
-                .filter(ParsedSchedule::isPlayed)
-                // 세트 기록이 남아 있는 매치만. 게임은 지난 시즌의 세트를 버리므로(D6)
-                // 옛 매치는 스코어만 있고 픽·킬이 없다 — 그걸로는 brief 의 두 등식을
-                // 세울 수 없고, MatchBrief 가 (정당하게) 던진다
-                .filter(match -> setsByMatch.containsKey(match.matchKey()))
-                // 이미 쓴 것 빼기. 여기서 세이브 번호를 DB 번호로 바꾼다 —
-                // 두 번호 공간이 섞이면 매번 같은 매치를 다시 쓰게 된다
-                .filter(match -> !alreadyWritten.contains(keyOf(reference, match)))
-                // 가장 최근. 시즌이 먼저고 그 안에서 일(day)이다.
-                // max 를 쓰면 정렬 없이 한 번 훑어서 고른다
-                .max(Comparator.comparingInt((ParsedSchedule m) -> orZero(m.season()))
-                        .thenComparingInt(m -> orZero(m.day())));
+        Optional<ParsedSchedule> target = schedules.stream()                            // 3. 후보를 걸러 하나만 남긴다 (아래 네 단계)
+                .filter(ParsedSchedule::isPlayed)                                       // 3-1. 끝난 매치만. 진행 중이면 결과를 지어내게 된다
+                .filter(match -> setsByMatch.containsKey(match.matchKey()))             // 3-2. 세트 기록이 있는 매치만. 옛 시즌은 세트가 버려져 있다 (D6)
+                .filter(match -> !alreadyWritten.contains(keyOf(reference, match)))     // 3-3. 아직 안 쓴 것만. keyOf 가 세이브 번호를 DB 번호로 바꾼다
+                .max(Comparator.comparingInt((ParsedSchedule m) -> orZero(m.season()))  // 3-4. 그중 가장 최근. max 는 정렬 없이 한 번 훑는다
+                        .thenComparingInt(m -> orZero(m.day())));                       //      시즌이 1순위, 같은 시즌이면 일(day)이 2순위
 
         if (target.isEmpty()) {
             log.info("슬롯 {}: 새로 쓸 매치가 없다 (끝난 매치 {}건, 이미 쓴 기사 {}편)",
@@ -141,18 +130,11 @@ public class StoryGenerator {
 
         ParsedSchedule match = target.get();
 
-        // SeasonBook 은 "그 매치 시점" 의 순위·라이벌을 만든다. 전체 일정을 넘기지만
-        // 미래를 안 본다 — 그 규칙은 SeasonBook 안에 있고 여기서 자르지 않는다.
-        // 여기서 잘라 넘기면 두 곳이 같은 규칙을 갖게 되고, 갈리는 순간 아무도 모른다.
-        SeasonBook book = new SeasonBook(schedules);
+        SeasonBook book = new SeasonBook(schedules);                            // 4. 순위·업셋·라이벌의 재료. 전체 일정을 넘겨도 미래는 안 본다
+        NotabilityContext context = book.contextFor(match, null);               // 5. 그 매치 시점의 맥락. null 은 "플레이어 팀을 모른다" 는 뜻
+        MatchBrief brief = MatchBrief.of(match, setsByMatch.get(match.matchKey()));  // 6. 사실만 모은다. 두 등식이 안 맞으면 여기서 던진다
 
-        // 플레이어 팀을 아직 모른다. null 이면 "내 팀 경기" 축이 빠지고 분량만 조금 줄 뿐,
-        // 없는 근거로 기사를 키우지는 않는다 (NotabilityContext 의 규칙).
-        NotabilityContext context = book.contextFor(match, null);
-
-        MatchBrief brief = MatchBrief.of(match, setsByMatch.get(match.matchKey()));
-
-        long articleId = writer.write(reference, brief, context);
+        long articleId = writer.write(reference, brief, context);               // 7. 여기부터는 ArticleWriter 의 일이다 (호출 → 대조 → 저장)
         log.info("슬롯 {}: 시즌 {} {}일 매치로 기사 {} 를 썼다",
                 reference.slotId(), match.season(), match.day(), articleId);
         return Optional.of(articleId);

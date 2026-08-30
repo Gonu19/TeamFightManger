@@ -8,6 +8,18 @@
   모순 표시를 목록에도 둔다. 상세에서만 경고하면 열어보기 전까지 알 수 없고,
   그러면 검증 장치가 사실상 꺼진 것과 같다.
 -->
+<!--
+  Thymeleaf 가 이 파일을 어떻게 처리하나 (읽는 순서대로)
+
+  1. 서버가 컨트롤러의 반환값 "story/list" 를 templates/story/list.html 로 바꾼다
+     (spring.thymeleaf 의 기본 prefix=templates/ · suffix=.html)
+  2. 이 파일을 HTML 로 파싱한 뒤 th:* 속성을 만나면 그 자리에서 실행한다
+  3. th:* 속성 자체는 결과 HTML 에서 사라진다. 브라우저는 평범한 HTML 만 받는다
+  4. 반면 이 주석 같은 <!-- --> 는 지워지지 않고 그대로 나간다
+
+  ${...} 는 컨트롤러가 model 에 담은 값이다. @{...} 는 URL 인데, 서버가 컨텍스트
+  경로를 앞에 붙여준다 — 앱이 / 가 아닌 경로에 배포돼도 링크가 안 깨진다.
+-->
 <html xmlns:th="http://www.thymeleaf.org" lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -17,9 +29,19 @@
 <body>
 <header class="top">
     <h1>연대기</h1>
+    <!--
+      커리어 선택. th:if 가 거짓이면 이 <form> 은 통째로 결과에서 빠진다
+      (숨기는 게 아니라 아예 안 그린다). 슬롯이 하나뿐이면 고를 것이 없으므로 안 그린다.
+      onchange 로 폼을 제출하니 GET /story?slot=N 이 되고, 목록이 그 커리어로 다시 그려진다.
+    -->
     <form class="slots" method="get" th:action="@{/story}" th:if="${slots.size() > 1}">
         <label for="slot">커리어</label>
         <select id="slot" name="slot" onchange="this.form.submit()">
+            <!--
+              th:each 는 이 <option> 하나를 틀로 삼아 목록 수만큼 복제한다.
+              th:selected 는 조건이 참일 때만 selected 속성이 붙는 불리언 속성이다 —
+              거짓이면 속성 자체가 안 나간다 (selected="false" 가 아니다).
+            -->
             <option th:each="s : ${slots}"
                     th:value="${s}"
                     th:text="'슬롯 ' + ${s}"
@@ -50,20 +72,32 @@
     </form>
 
     <p class="empty" th:if="${cards.isEmpty()}">
-        아직 쓴 기사가 없다.
+        <span th:if="${canGenerate}">아직 쓴 기사가 없다. 위 버튼을 누르면 최근 경기부터 쓴다.</span>
+        <span th:unless="${canGenerate}">아직 쓴 기사가 없다. 기사를 쓰려면 tfm.story.enabled=true 로 켠다.</span>
     </p>
 
     <ol class="cards" th:unless="${cards.isEmpty()}">
         <li class="card" th:each="card : ${cards}">
+            <!--
+              th:text 는 태그 <b>안의 내용</b>을 바꿔치기한다. 그래서 여기 적힌 "제목" 은
+              디자인 확인용 자리표시자이고 실제 응답에는 안 나온다.
+              th:text 는 값을 이스케이프한다 — 기사 제목에 <script> 가 들어와도 글자로 나온다.
+              (이스케이프 안 하는 th:utext 는 이 프로젝트에서 쓰지 않는다.)
+            -->
             <a class="headline" th:href="@{'/story/' + ${card.articleId}}" th:text="${card.headline}">제목</a>
 
             <p class="meta">
                 <span th:text="'시즌 ' + ${card.season} + ' · ' + ${card.day} + '일'">시점</span>
                 <span class="teams">
+                    <!-- ?: 는 엘비스 연산자. 왼쪽이 null 이면 오른쪽을 쓴다 -->
                     <span th:text="${card.blueTeamName} ?: ('팀 ' + ${card.blueTeamId})">블루</span>
                     <b th:text="${card.blueScore} + ' - ' + ${card.redScore}">스코어</b>
                     <span th:text="${card.redTeamName} ?: ('팀 ' + ${card.redTeamId})">레드</span>
                 </span>
+                <!--
+                  ${card.contradicted} 는 필드가 아니라 ArticleCard.isContradicted() 를 부른다.
+                  Thymeleaf 가 자바빈 규약대로 is/get 접두사를 붙여 찾기 때문이다.
+                -->
                 <span class="warn" th:if="${card.contradicted}" title="brief 와 어긋난 내용이 있다">
                     ⚠ 대조에서 모순
                 </span>

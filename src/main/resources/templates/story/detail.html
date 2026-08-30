@@ -36,6 +36,11 @@
             ⚠ 이 기사에는 <b>대조에서 어긋난 내용</b>이 있다. 아래 지적을 함께 읽는다.
         </div>
 
+        <!--
+          th:text 는 값을 이스케이프해서 태그 안 내용으로 넣는다. 그래서 본문의 줄바꿈은
+          HTML 에서 무시되고, 대신 CSS 의 white-space: pre-wrap 이 그것을 눈에 보이게 만든다.
+          여기 적힌 "본문" 은 브라우저로 파일을 직접 열었을 때만 보이는 자리표시자다.
+        -->
         <div class="body" th:text="${article.body}">본문</div>
     </article>
 
@@ -43,6 +48,7 @@
         <h2>댓글</h2>
         <!-- 닉네임을 두지 않는다. 프롬프트가 본문만 쓰게 하고 화면도 본문만 보여준다 -->
         <ul>
+            <!-- th:each 는 이 <li> 를 틀로 삼아 목록 수만큼 복제한다. 빈 목록이면 0개다 -->
             <li th:each="comment : ${article.comments}" th:text="${comment}">댓글</li>
         </ul>
     </section>
@@ -52,11 +58,19 @@
         <p class="note">
             기사를 만든 시점의 값이다. 집계가 나중에 갱신돼도 이 블록은 바뀌지 않는다.
         </p>
+        <!--
+          <pre> 는 공백과 줄바꿈을 그대로 살리는 태그다. BriefRenderer 가 만든 문자열이
+          줄 단위로 정렬돼 있어서 다른 태그에 넣으면 한 줄로 뭉개진다.
+        -->
         <pre th:text="${article.briefText}">사실 블록</pre>
 
         <div class="findings" th:if="${!article.findings.isEmpty()}">
             <h3>대조에서 나온 지적</h3>
             <ul>
+                <!--
+                  th:classappend 는 class 를 덮어쓰지 않고 뒤에 덧붙인다 (th:class 는 덮어쓴다).
+                  조건식 a ? b : c 는 자바와 같고, 여기서는 enum 이름을 문자열로 비교한다.
+                -->
                 <li th:each="finding : ${article.findings}"
                     th:classappend="${finding.severity.name() == 'CONTRADICTION'} ? 'contradiction' : 'unverified'">
                     <span class="tag"
@@ -75,6 +89,10 @@
     <footer class="origin">
         <span th:text="${article.model}">모델</span>
         ·
+        <!--
+          #temporals 는 Thymeleaf 가 기본으로 넣어주는 java.time 포맷 도구다.
+          그냥 찍으면 OffsetDateTime.toString() 이라 "2026-08-31T00:54:08.111+09:00" 이 나온다.
+        -->
         <span th:text="${#temporals.format(article.generatedAt, 'yyyy-MM-dd HH:mm')}">생성 시각</span>
     </footer>
 </main>

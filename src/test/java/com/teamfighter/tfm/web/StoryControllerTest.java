@@ -155,6 +155,27 @@ class StoryControllerTest {
     }
 
     @Test
+    @DisplayName("기사가 한 편도 없어도 커리어를 고를 수 있다 — 첫 기사를 쓸 길이 막히면 안 된다")
+    void slotIsSelectableEvenWithNoArticlesAnywhere() throws Exception {
+        // 이 테스트가 없을 때 진짜로 막혔다: 슬롯 목록을 article 에서만 뽑았더니
+        // 기사 0편 → 고를 커리어 없음 → 생성 버튼 없음 → 기사를 영영 못 씀.
+        // article 을 비우고(이 트랜잭션 안에서만) save_slot 만 남겨 그 상황을 만든다.
+        jdbc.update("DELETE FROM article");
+        int slotId = newSlot();
+
+        String html = mvc().perform(get("/story"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        // 슬롯이 하나면 선택 폼은 안 그리므로, 고른 커리어가 있다는 증거는
+        // "기사가 없다" 문구가 정상적으로 나오는 것과 200 응답이다
+        org.assertj.core.api.Assertions.assertThat(html).contains("아직 쓴 기사가 없다");
+        org.assertj.core.api.Assertions.assertThat(
+                jdbc.queryForObject("SELECT count(*)::int FROM save_slot WHERE slot_id = ?",
+                        Integer.class, slotId)).isEqualTo(1);
+    }
+
+    @Test
     @DisplayName("루트는 연대기로 보낸다 — 404 Whitelabel 이 아니다")
     void rootRedirectsToStory() throws Exception {
         mvc().perform(get("/"))
