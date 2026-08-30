@@ -76,16 +76,69 @@ public final class BriefRenderer {
             // 팀 이름을 줄마다 붙인다. `A · B / C · D` 로 두면 슬래시 좌우가 누구인지
             // 알 수 없다 — 실물 호출에서 모델이 2세트 진영을 반대로 썼고, 챔피언은
             // 전부 이 매치의 것이라 FactCheck 도 잡지 못했다. 사람도 같은 실수를 한다.
-            out.append("  픽  ").append(blue).append(": ")
-                    .append(champs(set.bluePick())).append('\n');
-            out.append("      ").append(red).append(": ")
-                    .append(champs(set.redPick())).append('\n');
+            // 선수 기록이 있으면 픽 목록 대신 <b>선수 줄</b>을 쓴다. 같은 정보가 두 꼴로
+            // 있으면 모델이 둘을 대조하다 섞는다 — 픽 목록은 선수 줄에 이미 다 들어 있다.
+            if (set.players().isEmpty()) {
+                out.append("  픽  ").append(blue).append(": ")
+                        .append(champs(set.bluePick())).append('\n');
+                out.append("      ").append(red).append(": ")
+                        .append(champs(set.redPick())).append('\n');
+            } else {
+                appendPlayers(out, set, blue, red, names);
+            }
             out.append("  밴  ").append(blue).append(": ")
                     .append(champs(set.blueBan())).append('\n');
             out.append("      ").append(red).append(": ")
                     .append(champs(set.redBan())).append('\n');
         }
         return out.toString();
+    }
+
+    /**
+     * 선수 한 명당 한 줄. <b>이 프로젝트에서 환각을 가장 많이 막는 한 줄이다.</b>
+     *
+     * <h2>왜 한 줄에 다 묶는가</h2>
+     *
+     * 모델은 정보가 많아지면 <b>관계를 섞는다.</b> 선수 목록과 픽 목록과 기록 표를 따로
+     * 주면 "Faker 가 닌자로 3킬, Chovy 가 마법사로 10킬" 이 "Faker 가 마법사로 10킬" 로
+     * 나온다. 낱말은 전부 사실이라 숫자 대조로도 안 걸린다 — <b>틀린 것은 연결이지 값이 아니다.</b>
+     *
+     * 그래서 선수 · 팀 · 챔피언 · 기록을 <b>한 줄 안에서 떨어지지 않게</b> 붙인다.
+     * 모델이 이 줄을 통째로 인용하면 관계가 자동으로 지켜지고, 줄을 쪼개 섞으면
+     * {@code FactCheck} 의 관계 검사에 걸린다.
+     *
+     * <pre>
+     *   MiG | Faker | Ninja | 3/1/4 | 딜 12000 · 탱 4300 · 힐 0
+     * </pre>
+     *
+     * <p>구분자를 {@code |} 로 둔 것도 같은 이유다. 쉼표는 문장에도 쓰여서 경계가 흐려지는데,
+     * 세로줄은 표의 칸처럼 읽힌다.
+     *
+     * <p>이름을 모르면 번호를 적는다({@code 선수 41}). 빈 칸으로 두면 기사가 채운다(D57).
+     */
+    private static void appendPlayers(StringBuilder out, MatchBrief.SetBrief set,
+                                      String blue, String red, NameBook names) {
+        for (MatchBrief.PlayerLine line : set.players()) {                      // 1. 세트의 선수 여덟 명
+            out.append("  ")
+                    .append(line.blue() ? blue : red)                           // 2. 어느 팀인지를 줄 맨 앞에
+                    .append(" | ").append(athlete(line.athleteId(), names))     // 3. 누가
+                    .append(" | ").append(line.champion())                      // 4. 무엇으로
+                    .append(" | ").append(line.kill()).append('/')              // 5. 킬/데스/어시
+                    .append(line.death()).append('/').append(line.assist())
+                    .append(" | 딜 ").append(line.dealing())                    // 6. 기여도 세 가지
+                    .append(" · 탱 ").append(line.tanking())
+                    .append(" · 힐 ").append(line.healing())
+                    .append('\n');
+        }
+    }
+
+    /** 선수 이름. 모르면 번호를 적는다 — 빈 칸을 남기지 않는다 (D57). */
+    private static String athlete(Integer athleteId, NameBook names) {
+        String name = names.athleteName(athleteId);
+        if (name != null && !name.isBlank()) {
+            return name;
+        }
+        return athleteId == null ? "선수 미상" : "선수 " + athleteId;
     }
 
     /**

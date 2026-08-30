@@ -109,11 +109,21 @@ class ArticleWriterTest {
 
     /** 세트 둘로 끝난 2-0 매치. 두 등식(승수 합·킬 합)을 맞춰 둔다 */
     private MatchBrief brief(int blueGameTeamId, int redGameTeamId) {
+        // 선수 줄까지 넣는다 — 사실 블록이 선수 이름을 담는지도 함께 본다
+        List<MatchBrief.PlayerLine> setOne = List.of(
+                new MatchBrief.PlayerLine(true, 101, "Jiangshi", 7, 2, 3, 12000, 4300, 0),
+                new MatchBrief.PlayerLine(false, 201, "Wolfman", 5, 4, 1, 9000, 2100, 0));
+        List<MatchBrief.PlayerLine> setTwo = List.of(
+                new MatchBrief.PlayerLine(true, 101, "Jiangshi", 6, 1, 2, 11000, 3900, 0),
+                new MatchBrief.PlayerLine(false, 201, "Wolfman", 3, 5, 2, 7000, 1800, 0));
+
         List<MatchBrief.SetBrief> sets = List.of(
                 new MatchBrief.SetBrief(1, false, true, 12, 8,
-                        List.of("Jiangshi"), List.of("Wolfman"), List.of(), List.of(), false, false),
+                        List.of("Jiangshi"), List.of("Wolfman"), List.of(), List.of(),
+                        false, false, setOne),
                 new MatchBrief.SetBrief(2, true, true, 9, 5,
-                        List.of("Jiangshi"), List.of("Wolfman"), List.of(), List.of(), false, false));
+                        List.of("Jiangshi"), List.of("Wolfman"), List.of(), List.of(),
+                        false, false, setTwo));
         return new MatchBrief(7, 3, "competition.name.spring", 2, 30, 1,
                 blueGameTeamId, redGameTeamId, 2, 0, 21, 13, 2, false, sets);
     }

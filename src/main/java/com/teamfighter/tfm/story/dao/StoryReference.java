@@ -27,13 +27,29 @@ public record StoryReference(
         Map<Integer, Integer> teamIdByGameTeamId,
         Map<Integer, String> teamNameByGameTeamId,
         Set<String> championCodes,
-        Set<String> teamNames) implements NameBook {
+        Set<String> teamNames,
+        Map<Integer, String> athleteNameByGameAthleteId) implements NameBook {
 
     public StoryReference {
         teamIdByGameTeamId = Map.copyOf(teamIdByGameTeamId);
         teamNameByGameTeamId = Map.copyOf(teamNameByGameTeamId);
         championCodes = Set.copyOf(championCodes);
         teamNames = Set.copyOf(teamNames);
+        athleteNameByGameAthleteId = Map.copyOf(athleteNameByGameAthleteId);
+    }
+
+    /**
+     * 커리어의 선수 이름 전부. {@code FactCheck} 가 <b>이 매치에 없는 선수</b>를
+     * 가려내는 데 쓴다 — 목록에 없는 낱말은 건드리지 않는다는 규칙이 그대로 적용된다.
+     */
+    public Set<String> athleteNames() {
+        return Set.copyOf(athleteNameByGameAthleteId.values());
+    }
+
+    /** 선수 이름. 모르면 {@code null} — 렌더러가 번호를 적는다 (D57). */
+    @Override
+    public String athleteName(Integer athleteId) {
+        return athleteId == null ? null : athleteNameByGameAthleteId.get(athleteId);
     }
 
     /** 모르면 {@code null}. 렌더러가 번호를 그대로 적는다 (D57). */

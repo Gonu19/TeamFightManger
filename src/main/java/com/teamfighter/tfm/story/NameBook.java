@@ -18,6 +18,17 @@ public interface NameBook {
     /** 대회 이름. 인자는 로컬라이제이션 키다. 모르면 {@code null}. */
     String competitionName(String key);
 
+    /**
+     * 선수 이름. 인자는 세이브의 {@code Athlete.ID} 다. 모르면 {@code null}.
+     *
+     * <p>기본 구현이 {@code null} 인 이유는 선수 이름 없이도 기사가 성립하기 때문이다 —
+     * 이 인터페이스를 구현한 기존 코드를 전부 고치게 만들 값어치는 없다.
+     * 이름을 아는 구현({@code StoryReference})만 덮어쓰면 된다.
+     */
+    default String athleteName(Integer athleteId) {
+        return null;
+    }
+
     /** 아무 이름도 모르는 이름표. 테스트와 이름 적재 전 단계에서 쓴다. */
     static NameBook ids() {
         return new NameBook() {

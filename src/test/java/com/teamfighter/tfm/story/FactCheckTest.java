@@ -39,6 +39,115 @@ class FactCheckTest {
         }
     };
 
+    /** 선수 이름을 아는 이름표. 101=Faker, 201=Chovy 로 둔다. */
+    private static final NameBook NAMES_WITH_ATHLETES = new NameBook() {
+        @Override
+        public String teamName(Integer teamId) {
+            return NAMES.teamName(teamId);
+        }
+
+        @Override
+        public String competitionName(String key) {
+            return NAMES.competitionName(key);
+        }
+
+        @Override
+        public String athleteName(Integer athleteId) {
+            if (athleteId == null) {
+                return null;
+            }
+            return switch (athleteId) {
+                case 101 -> "Faker";
+                case 201 -> "Chovy";
+                default -> null;
+            };
+        }
+    };
+
+    private static final Set<String> ATHLETES = Set.of("Faker", "Chovy", "Deft");
+
+    /**
+     * 선수 기록이 붙은 매치.
+     *
+     * <p>Faker 는 홈팀에서 {@code MagicKnight}, Chovy 는 원정팀에서 {@code Exorcist} 를 했다.
+     * 관계 검사는 이 두 쌍을 기준으로 돈다.
+     */
+    private static MatchBrief briefWithPlayers() {
+        List<MatchBrief.PlayerLine> players = List.of(
+                new MatchBrief.PlayerLine(true, 101, "MagicKnight", 7, 2, 3, 12000, 4300, 0),
+                new MatchBrief.PlayerLine(false, 201, "Exorcist", 5, 4, 1, 9000, 2100, 0));
+        MatchBrief.SetBrief set = new MatchBrief.SetBrief(
+                1, false, true, 11, 9,
+                List.of("MagicKnight"), List.of("Exorcist"),
+                List.of("Sniper"), List.of("Fighter"),
+                false, false, players);
+        return new MatchBrief(0, 1, "league.amateur", 2026, 7, 3,
+                HOME, AWAY, 2, 0, 24, 17, 2, false, List.of(set));
+    }
+
+    @Test
+    @DisplayName("선수와 챔피언을 잘못 묶으면 모순이다 — 낱말은 다 사실인데 연결이 틀렸다")
+    void wrongPlayerChampionPairIsContradiction() {
+        // Faker 는 MagicKnight 를 했고 Exorcist 는 Chovy 의 것이다.
+        // 숫자도 이름도 전부 이 매치의 것이라 기존 검사로는 하나도 안 걸린다.
+        String article = "Faker 가 Exorcist 로 경기를 지배했다.";
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES_WITH_ATHLETES, CHAMPIONS, Set.of(), ATHLETES, article);
+
+        assertThat(result.contradictions())
+                .anyMatch(f -> f.what().contains("선수와 챔피언을 잘못 묶었다"));
+        assertThat(result.isClean()).isFalse();
+    }
+
+    @Test
+    @DisplayName("맞게 묶으면 모순이 아니다")
+    void correctPairIsClean() {
+        String article = "Faker 가 MagicKnight 로 7킬을 올렸다. Chovy 는 Exorcist 로 맞섰다.";
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES_WITH_ATHLETES, CHAMPIONS, Set.of(), ATHLETES, article);
+
+        assertThat(result.contradictions()).isEmpty();
+    }
+
+    @Test
+    @DisplayName("한 문장에 선수 둘이 섞이면 모순이 아니라 미확인이다 — 확신할 때만 모순으로 올린다")
+    void ambiguousSentenceIsUnverifiedNotContradiction() {
+        // "상대로" 구조라 누가 무엇을 했는지 코드가 단정할 수 없다.
+        String article = "Faker 는 Chovy 의 Exorcist 를 상대로 버텼다. 그리고 Sniper 는 밴이었다.";
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES_WITH_ATHLETES, CHAMPIONS, Set.of(), ATHLETES, article);
+
+        assertThat(result.contradictions())
+                .noneMatch(f -> f.what().contains("잘못 묶었다"));
+    }
+
+    @Test
+    @DisplayName("이 매치에 없는 선수를 부르면 모순이다")
+    void unknownAthleteIsContradiction() {
+        String article = "Deft 가 결정적인 역할을 했다.";
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES_WITH_ATHLETES, CHAMPIONS, Set.of(), ATHLETES, article);
+
+        assertThat(result.contradictions())
+                .anyMatch(f -> f.what().equals("이 매치에 없는 선수") && f.evidence().equals("Deft"));
+    }
+
+    @Test
+    @DisplayName("선수 이름을 안 넘기면 관계 검사를 하지 않는다 — 기존 호출은 그대로 돈다")
+    void withoutAthleteVocabularyNothingChanges() {
+        String article = "Faker 가 Exorcist 로 경기를 지배했다.";
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES, CHAMPIONS, Set.of(), article);
+
+        assertThat(result.contradictions())
+                .noneMatch(f -> f.what().contains("잘못 묶었다"));
+    }
+
     /** 2세트 매치. 매치 2-0, 킬 24-17. 세트 킬은 11-9 와 13-8. */
     private static MatchBrief brief() {
         ParsedGame one = new ParsedGame(1, 0, 2026, 7, 1, HOME, AWAY, 11, 9, 0,

@@ -2,6 +2,7 @@ package com.teamfighter.tfm.story;
 
 import com.teamfighter.tfm.parser.common.ParsedSchedule;
 import com.teamfighter.tfm.parser.model.ParsedGame;
+import com.teamfighter.tfm.parser.model.ParsedStat;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -61,7 +62,41 @@ public record MatchBrief(
             List<String> blueBan,
             List<String> redBan,
             boolean isOvertime,
-            boolean isSuddenDeath) {
+            boolean isSuddenDeath,
+            List<PlayerLine> players) {
+
+        public SetBrief {
+            players = players == null ? List.of() : List.copyOf(players);
+        }
+    }
+
+    /**
+     * 세트 하나에서 <b>선수 한 명</b>이 한 일. 기사가 사람 이야기를 하려면 이게 있어야 한다.
+     *
+     * <p><b>한 줄에 전부 묶여 있다는 것이 핵심이다.</b> 선수 · 챔피언 · 기록이 따로 놀면
+     * 모델이 그 셋을 섞는다 — "Faker 가 닌자로 3킬, Chovy 가 마법사로 10킬" 을 주면
+     * "Faker 가 마법사로 10킬" 이 나온다. 관계는 프롬프트에서 한 덩어리로 붙어 있어야 하고,
+     * 그렇게 붙여 주는 것이 {@link BriefRenderer} 의 일이다.
+     *
+     * <p><b>진영은 챔피언 이름으로 가른다.</b> {@code champStat} 의 순서는 믿을 수 없다 —
+     * D20 이 적재에서 같은 이유로 챔피언 이름 매칭을 골랐다(인덱스 순서가 경기의 20.5%에서
+     * 어긋난다). 골든 파일 805세트 6,440행을 실측했다: 양쪽이 같은 챔피언을 고른 세트 0건,
+     * 픽 목록에 없는 스탯 행 0건이므로 이름으로 가르는 것이 유일하게 정해진다.
+     *
+     * @param blue      매치 기준 블루팀인가. 세트의 진영이 아니라 <b>매치 기준</b>이다
+     * @param athleteId 세이브의 {@code Athlete.ID}. 이름은 슬롯별 표에서 찾는다
+     *                  (공식전에만 있다 — 스크림 {@code MatchStat} 에는 선수가 없다)
+     */
+    public record PlayerLine(
+            boolean blue,
+            Integer athleteId,
+            String champion,
+            int kill,
+            int death,
+            int assist,
+            int dealing,
+            int tanking,
+            int healing) {
     }
 
     /**
@@ -93,19 +128,23 @@ public record MatchBrief(
         ordered.sort(Comparator.comparing(g -> g.setNo() == null ? 0 : g.setNo()));
 
         for (ParsedGame game : ordered) {
-            boolean swapped = swapped(schedule, game);
+            boolean swapped = swapped(schedule, game);                          // 이 세트의 진영이 매치 기준과 반대인가
             boolean blueWon = (Integer.valueOf(0).equals(game.winTeam())) != swapped;
             int bk = orZero(swapped ? game.redScore() : game.blueScore());
             int rk = orZero(swapped ? game.blueScore() : game.redScore());
 
+            List<String> bluePicks = picks(swapped ? game.redPick() : game.bluePick());
+            List<String> redPicks = picks(swapped ? game.bluePick() : game.redPick());
+
             normalized.add(new SetBrief(
                     orZero(game.setNo()), swapped, blueWon, bk, rk,
-                    picks(swapped ? game.redPick() : game.bluePick()),
-                    picks(swapped ? game.bluePick() : game.redPick()),
+                    bluePicks,
+                    redPicks,
                     picks(swapped ? game.redBan() : game.blueBan()),
                     picks(swapped ? game.blueBan() : game.redBan()),
                     Boolean.TRUE.equals(game.isOvertime()),
-                    Boolean.TRUE.equals(game.isSuddenDeath())));
+                    Boolean.TRUE.equals(game.isSuddenDeath()),
+                    playerLines(game, bluePicks, redPicks)));
 
             wins += blueWon ? 1 : 0;
             losses += blueWon ? 0 : 1;
@@ -150,6 +189,42 @@ public record MatchBrief(
             throw new IllegalArgumentException(
                     what + ": 세트 합 " + blue + ":" + red + ", 스케줄 " + expectBlue + ":" + expectRed);
         }
+    }
+
+    /**
+     * 개인 기록을 매치 기준 진영에 붙인다.
+     *
+     * <p>{@code champStat} 은 진영을 안 알려준다. 그래서 <b>챔피언 이름이 어느 픽 목록에
+     * 있는지</b>로 가른다 — D20 이 적재에서 고른 것과 같은 방법이고, 이유도 같다
+     * ({@code champStat} 의 인덱스 순서가 경기의 20.5%에서 어긋난다).
+     *
+     * <p>어느 쪽에도 없거나 양쪽에 다 있으면 <b>던진다.</b> 골든 파일 805세트에서 한 번도
+     * 없었던 상황이라(겹치는 픽 0건 · 픽에 없는 스탯 0건), 그게 나온다면 우리 가정이 깨진
+     * 것이다. 조용히 버리면 그 선수만 기사에서 사라지는데, 빠졌다는 사실 자체가 안 보인다.
+     *
+     * @param bluePicks 매치 기준 블루팀의 픽 (이미 진영 정규화된 목록)
+     */
+    private static List<PlayerLine> playerLines(ParsedGame game,
+                                                List<String> bluePicks, List<String> redPicks) {
+        if (game.champStat() == null) {                                         // 이벤트전은 개인 기록이 없다 (D16)
+            return List.of();
+        }
+        List<PlayerLine> lines = new ArrayList<>();
+        for (ParsedStat stat : game.champStat()) {
+            String champion = stat.champion();
+            boolean inBlue = bluePicks.contains(champion);                      // 1. 블루 픽에 있나
+            boolean inRed = redPicks.contains(champion);                        // 2. 레드 픽에 있나
+            if (inBlue == inRed) {                                              // 3. 둘 다이거나 둘 다 아니면 가를 수 없다
+                throw new IllegalArgumentException(
+                        "개인 기록의 챔피언을 진영에 붙일 수 없다: " + champion
+                                + " (블루 " + bluePicks + ", 레드 " + redPicks + ")");
+            }
+            lines.add(new PlayerLine(                                           // 4. 매치 기준 진영으로 한 줄
+                    inBlue, stat.athleteId(), champion,
+                    orZero(stat.kill()), orZero(stat.death()), orZero(stat.assist()),
+                    orZero(stat.dealing()), orZero(stat.tanking()), orZero(stat.healing())));
+        }
+        return lines;
     }
 
     private static List<String> picks(List<String> raw) {

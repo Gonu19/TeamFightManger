@@ -159,4 +159,67 @@ class BriefRendererTest {
             assertThat(allowed).contains(Integer.parseInt(m.group()));
         }
     }
+
+    @Test
+    @DisplayName("선수 기록이 있으면 한 줄에 팀·선수·챔피언·기록을 묶는다 — 관계가 떨어지면 모델이 섞는다")
+    void playerLineKeepsTheRelationTogether() {
+        MatchBrief.PlayerLine faker =
+                new MatchBrief.PlayerLine(true, 101, "MagicKnight", 7, 2, 3, 12000, 4300, 0);
+        MatchBrief.SetBrief set = new MatchBrief.SetBrief(
+                1, false, true, 11, 9,
+                List.of("MagicKnight"), List.of("Exorcist"),
+                List.of(), List.of(), false, false, List.of(faker));
+        MatchBrief brief = new MatchBrief(0, 1, "league.amateur", 2026, 7, 3,
+                30, 37, 1, 0, 11, 9, 1, false, List.of(set));
+
+        NameBook names = new NameBook() {
+            @Override public String teamName(Integer teamId) { return teamId == 30 ? "Ember" : "Damwon"; }
+            @Override public String competitionName(String key) { return "아마추어 리그"; }
+            @Override public String athleteName(Integer athleteId) {
+                return athleteId != null && athleteId == 101 ? "Faker" : null;
+            }
+        };
+
+        String text = BriefRenderer.render(brief, names);
+
+        // 넷이 한 줄 안에 있어야 한다. 줄이 갈리면 모델이 관계를 섞는다
+        String line = text.lines()
+                .filter(l -> l.contains("Faker"))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("선수 줄이 없다: " + text));
+
+        assertThat(line).contains("Ember").contains("Faker")
+                .contains("MagicKnight").contains("7/2/3").contains("12000");
+    }
+
+    @Test
+    @DisplayName("선수 줄이 있으면 픽 목록을 따로 적지 않는다 — 같은 정보가 두 꼴이면 섞인다")
+    void pickListIsDroppedWhenPlayersAreKnown() {
+        MatchBrief.SetBrief set = new MatchBrief.SetBrief(
+                1, false, true, 11, 9,
+                List.of("MagicKnight"), List.of("Exorcist"),
+                List.of(), List.of(), false, false,
+                List.of(new MatchBrief.PlayerLine(true, 101, "MagicKnight", 7, 2, 3, 1, 1, 0),
+                        new MatchBrief.PlayerLine(false, 201, "Exorcist", 4, 5, 1, 1, 1, 0)));
+        MatchBrief brief = new MatchBrief(0, 1, "league.amateur", 2026, 7, 3,
+                30, 37, 1, 0, 11, 9, 1, false, List.of(set));
+
+        String text = BriefRenderer.render(brief, NameBook.ids());
+
+        assertThat(text).doesNotContain("  픽  ");
+    }
+
+    @Test
+    @DisplayName("선수 이름을 모르면 번호를 적는다 — 빈 칸을 남기지 않는다 (D57)")
+    void unknownAthleteFallsBackToNumber() {
+        MatchBrief.SetBrief set = new MatchBrief.SetBrief(
+                1, false, true, 11, 9,
+                List.of("MagicKnight"), List.of("Exorcist"),
+                List.of(), List.of(), false, false,
+                List.of(new MatchBrief.PlayerLine(true, 999, "MagicKnight", 1, 0, 0, 1, 1, 0)));
+        MatchBrief brief = new MatchBrief(0, 1, "league.amateur", 2026, 7, 3,
+                30, 37, 1, 0, 11, 9, 1, false, List.of(set));
+
+        assertThat(BriefRenderer.render(brief, NameBook.ids())).contains("선수 999");
+    }
 }

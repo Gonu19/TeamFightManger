@@ -76,7 +76,9 @@ public class ArticleWriter {
         FactCheckResult factCheck = FactCheck.run(                              // 6. 대조 — 제목을 떼기 전 원문(raw)을 본다. 제목에 든 숫자도 잡으려고
                 brief, reference,
                 reference.championCodes(),                                      //    챔피언 어휘는 코드다. name_ko 를 쓰면 대조가 반대로 작동한다 (D66 ①)
-                reference.teamNames(), raw);
+                reference.teamNames(),
+                reference.athleteNames(),                                       //    선수 이름을 넘겨야 관계 검사(선수↔챔피언)가 돈다
+                raw);
 
         List<String> comments = StoryPrompts.splitComments(                     // 7. 창작 2 — 댓글. "1. ...\n2. ..." 답을 줄 단위로 잘라 목록으로
                 client.complete(

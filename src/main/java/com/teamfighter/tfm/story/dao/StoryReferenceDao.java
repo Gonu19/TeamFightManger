@@ -36,24 +36,22 @@ public class StoryReferenceDao {
             SELECT code FROM champion ORDER BY champion_id
             """;
 
+    /**
+     * 선수 이름표. {@code name} 이 NULL 인 선수(이름 풀에 없는 번호)는 빼고 읽는다 —
+     * 이름이 없으면 렌더러가 번호를 적고, 번호는 이 표에서 찾을 필요가 없다.
+     */
+    private static final String ATHLETES = """
+            SELECT game_athlete_id, name FROM athlete
+            WHERE slot_id = ? AND name IS NOT NULL
+            ORDER BY game_athlete_id
+            """;
+
     private final JdbcTemplate jdbc;
 
     public StoryReferenceDao(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
     }
 
-    /**
-     * 슬롯의 세이브 파일명. {@code slot_key} 는 파일명 그대로 저장돼 있다(D28) —
-     * 적재가 {@code SlotFile.slotKeyOf} 로 넣은 값이고, 그래서 세이브 폴더에 이어 붙이면
-     * 경로가 된다.
-     *
-     * <p>기사 생성이 이걸 필요로 하는 이유는 <b>DB 에 매치 일정이 없기</b> 때문이다.
-     * 적재는 경기(세트)만 넣는다 — 매치({@code MatchSchedule})는 기사가 생기기 전에
-     * 필요가 없어서 스키마에 자리가 없다. 그래서 기사를 쓰려면 세이브를 다시 읽어야 한다.
-     *
-     * @throws IllegalStateException 없는 슬롯. 화면이 준 번호가 DB 에 없다는 뜻이라
-     *                               조용히 넘어가면 "왜 아무 일도 안 일어나지" 가 된다
-     */
     /**
      * 적재된 커리어 전부.
      *
@@ -68,6 +66,18 @@ public class StoryReferenceDao {
                 "SELECT slot_id FROM save_slot ORDER BY slot_id", Integer.class);
     }
 
+    /**
+     * 슬롯의 세이브 파일명. {@code slot_key} 는 파일명 그대로 저장돼 있다(D28) —
+     * 적재가 {@code SlotFile.slotKeyOf} 로 넣은 값이고, 그래서 세이브 폴더에 이어 붙이면
+     * 경로가 된다.
+     *
+     * <p>기사 생성이 이걸 필요로 하는 이유는 <b>DB 에 매치 일정이 없기</b> 때문이다.
+     * 적재는 경기(세트)만 넣는다 — 매치({@code MatchSchedule})는 기사가 생기기 전에
+     * 필요가 없어서 스키마에 자리가 없다. 그래서 기사를 쓰려면 세이브를 다시 읽어야 한다.
+     *
+     * @throws IllegalStateException 없는 슬롯. 화면이 준 번호가 DB 에 없다는 뜻이라
+     *                               조용히 넘어가면 "왜 아무 일도 안 일어나지" 가 된다
+     */
     @Transactional(readOnly = true)
     public String slotKey(int slotId) {
         List<String> found = jdbc.queryForList(
@@ -97,6 +107,11 @@ public class StoryReferenceDao {
         Set<String> champions = new LinkedHashSet<>(
                 jdbc.queryForList(CHAMPION_CODES, String.class));
 
-        return new StoryReference(slotId, teamIds, teamNames, champions, names);
+        Map<Integer, String> athletes = new LinkedHashMap<>();
+        jdbc.query(ATHLETES, rs -> {
+            athletes.put(rs.getInt("game_athlete_id"), rs.getString("name"));
+        }, slotId);
+
+        return new StoryReference(slotId, teamIds, teamNames, champions, names, athletes);
     }
 }

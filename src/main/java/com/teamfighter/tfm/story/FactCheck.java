@@ -2,8 +2,10 @@ package com.teamfighter.tfm.story;
 
 import java.util.ArrayList;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.regex.Matcher;
@@ -40,6 +42,15 @@ public final class FactCheck {
 
     private static final Pattern NUMBER = Pattern.compile("\\d+");
 
+    /**
+     * 문장 경계. 마침표·물음표·느낌표·줄바꿈에서 자른다.
+     *
+     * <p>완벽한 문장 분리가 아니다 — 소수점이나 약어에서도 잘린다. 그래도 되는 이유는
+     * 이 검사가 <b>더 잘게 자를수록 안전해지기</b> 때문이다. 잘못 잘리면 관계를 놓칠 뿐
+     * (미검출), 없는 관계를 만들어내지는 않는다.
+     */
+    private static final Pattern SENTENCE = Pattern.compile("[.!?\\n]+");
+
     private FactCheck() {
     }
 
@@ -59,6 +70,22 @@ public final class FactCheck {
      */
     public static FactCheckResult run(MatchBrief brief, NameBook names,
                                       Set<String> allChampions, Set<String> allTeamNames,
+                                      String article) {
+        return run(brief, names, allChampions, allTeamNames, Set.of(), article);
+    }
+
+    /**
+     * 선수 이름까지 대조한다.
+     *
+     * <p>선수가 들어오면 검사가 하나 더 생긴다 — <b>관계</b>다. 값이 전부 사실인데
+     * 연결만 틀린 문장("Faker 가 마법사로 10킬")은 숫자 대조로도 챔피언 대조로도 안 걸린다.
+     * 낱말은 다 이 매치의 것이기 때문이다.
+     *
+     * @param allAthleteNames 커리어의 선수 이름 전체. 비어 있으면 선수 검사를 건너뛴다
+     */
+    public static FactCheckResult run(MatchBrief brief, NameBook names,
+                                      Set<String> allChampions, Set<String> allTeamNames,
+                                      Set<String> allAthleteNames,
                                       String article) {
         Objects.requireNonNull(brief, "brief");
         Objects.requireNonNull(names, "names");
@@ -122,6 +149,22 @@ public final class FactCheck {
             }
         }
 
+        // --- 4. 선수 이름 ---
+        // 이 매치에 나온 선수와, 그 선수가 실제로 한 챔피언들.
+        // 관계 검사가 이 표를 기준으로 돈다.
+        Map<String, Set<String>> playedBy = playedBy(brief, names);             // 선수 이름 → 그가 한 챔피언들
+        for (String athlete : allAthleteNames) {
+            if (!playedBy.containsKey(athlete) && mentions(article, athlete)) {
+                contradictions.add(new FactCheckResult.Finding(
+                        "이 매치에 없는 선수", athlete));
+            }
+        }
+
+        // --- 5. 관계: 선수 ↔ 챔피언 ---
+        if (!playedBy.isEmpty()) {
+            checkRelations(article, playedBy, picked, contradictions, unverified);
+        }
+
         // --- 그 밖의 숫자는 "모르는 것" 으로만 남긴다 ---
         Matcher number = NUMBER.matcher(article);
         Set<String> seen = new LinkedHashSet<>();
@@ -182,6 +225,82 @@ public final class FactCheck {
             out.add(s.redKill());
         });
         return out;
+    }
+
+    /**
+     * 이 매치에서 <b>누가 무엇을 했나</b>. 관계 검사의 기준표다.
+     *
+     * <p>세트를 가로질러 모은다 — 한 선수가 세트마다 다른 챔피언을 하므로 값이 집합이다.
+     * 이름을 모르는 선수는 넣지 않는다. 기사가 그 선수를 이름으로 부를 수 없으니
+     * 검사할 대상도 아니다.
+     */
+    private static Map<String, Set<String>> playedBy(MatchBrief brief, NameBook names) {
+        Map<String, Set<String>> played = new LinkedHashMap<>();
+        for (MatchBrief.SetBrief set : brief.sets()) {                          // 1. 세트마다
+            for (MatchBrief.PlayerLine line : set.players()) {                  // 2. 선수마다
+                String name = names.athleteName(line.athleteId());              // 3. 이름을 아는 선수만
+                if (name == null || name.isBlank()) {
+                    continue;
+                }
+                played.computeIfAbsent(name, k -> new LinkedHashSet<>())        // 4. 이름 → 챔피언 집합
+                        .add(line.champion());
+            }
+        }
+        return played;
+    }
+
+    /**
+     * 한 문장 안에서 선수와 챔피언이 <b>잘못 묶였는지</b> 본다.
+     *
+     * <h2>어떻게 판정하나</h2>
+     *
+     * 문장 단위로 자른 뒤, 그 문장에 나온 선수와 챔피언을 모은다. 그리고 문장에 나온
+     * 챔피언이 <b>같은 문장에 나온 어느 선수의 것도 아니면</b> 관계가 틀린 것이다.
+     *
+     * <h2>확신하는 것만 모순으로 올린다</h2>
+     *
+     * <ul>
+     *   <li>선수 하나 · 챔피언 하나뿐인 문장이면 연결이 하나로 정해진다 → <b>모순</b></li>
+     *   <li>여럿이 섞인 문장은 "상대로", "맞서" 같은 구조일 수 있다 → <b>미확인</b></li>
+     * </ul>
+     *
+     * 이 구분이 없으면 목록이 잡음으로 가득 차고, 잡음이 되면 아무도 안 본다(D66 ③).
+     *
+     * <p>밴된 챔피언은 여기서 보지 않는다 — 아무도 하지 않았으므로 전부 걸리고,
+     * 그 언급은 이미 위에서 미확인으로 올렸다.
+     */
+    private static void checkRelations(String article,
+                                       Map<String, Set<String>> playedBy,
+                                       Set<String> picked,
+                                       List<FactCheckResult.Finding> contradictions,
+                                       List<FactCheckResult.Finding> unverified) {
+        for (String sentence : SENTENCE.split(article)) {                       // 1. 문장 단위로 자른다
+            List<String> athletesHere = playedBy.keySet().stream()              // 2. 이 문장에 나온 선수
+                    .filter(name -> mentions(sentence, name))
+                    .toList();
+            if (athletesHere.isEmpty()) {
+                continue;                                                       //    선수 얘기가 아니면 볼 것이 없다
+            }
+            List<String> championsHere = picked.stream()                        // 3. 이 문장에 나온 (뽑힌) 챔피언
+                    .filter(champion -> mentions(sentence, champion))
+                    .toList();
+
+            for (String champion : championsHere) {
+                boolean anyoneHere = athletesHere.stream()                      // 4. 이 문장의 선수 중 하나라도 그 챔피언을 했나
+                        .anyMatch(name -> playedBy.get(name).contains(champion));
+                if (anyoneHere) {
+                    continue;
+                }
+                String what = String.join(", ", athletesHere) + " ↔ " + champion;
+                if (athletesHere.size() == 1 && championsHere.size() == 1) {    // 5. 연결이 하나로 정해지면 모순
+                    contradictions.add(new FactCheckResult.Finding(
+                            "선수와 챔피언을 잘못 묶었다", what));
+                } else {                                                        // 6. 섞여 있으면 사람이 볼 목록으로만
+                    unverified.add(new FactCheckResult.Finding(
+                            "한 문장에 선수와 남의 챔피언이 같이 나왔다 — 관계 확인", what));
+                }
+            }
+        }
     }
 
     private static Set<String> championsPicked(MatchBrief brief) {
