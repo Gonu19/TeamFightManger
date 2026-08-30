@@ -34,9 +34,9 @@ import java.util.regex.Pattern;
  */
 public final class FactCheck {
 
-    /** {@code 2 - 0} · {@code 2-0} · {@code 2:0} · {@code 2대 0} 을 모두 잡는다. */
+    /** 스코어 꼴. 모델이 유니코드 대시(U+2011 등)를 쓰므로 전부 받는다 — 실물에서 겪었다. */
     private static final Pattern SCORE =
-            Pattern.compile("(\\d{1,3})\\s*(?:[-:]|대)\\s*(\\d{1,3})");
+            Pattern.compile("(\\d{1,3})\\s*(?:[-‐‑‒–—―−:]|대)\\s*(\\d{1,3})");
 
     private static final Pattern NUMBER = Pattern.compile("\\d+");
 

@@ -41,6 +41,11 @@ public final class StoryPrompts {
                 - 경기 밖의 사건(이적, 부상, 관중 반응, 과거 전적)을 지어내지 않는다.
                 - 원인을 단정하지 않는다. "밴픽이 갈랐다" 처럼 확인할 수 없는 인과는
                   "~로 보인다" 로 쓰거나 아예 쓰지 않는다.
+                - 「사실」에 없는 개념을 끌어오지 않는다. 승점·순위·연승·상대 전적은
+                  주지 않았으므로 쓰지 않는다.
+                - 픽과 밴을 목록으로 나열하지 않는다. 여덟 이름을 그대로 옮기면 표를
+                  문장으로 바꾼 것일 뿐이다. 필요하면 한둘만 짚는다.
+                - 세트마다 같은 구조로 쓰지 않는다. 승부가 갈린 지점을 중심에 둔다.
 
                 문체:
                 - 스포츠 기사체. 담백하게 쓰고 과장하지 않는다.
@@ -48,15 +53,15 @@ public final class StoryPrompts {
                 - 소제목·목록·마크다운을 쓰지 않는다. 문단만 쓴다.
                 """;
 
+        // 주목도의 이유는 넘기지 않는다. 그것은 해석층의 말이고, 넘기면 기사가
+        // 그 말을 사실처럼 쓴다 — 실물에서 "내 팀 경기라는 점 때문에 주목받았다" 가
+        // 본문 첫 줄에 나왔다. 주목도는 분량으로만 반영한다.
         String user = """
                 아래 사실만으로 기사를 써라. 분량은 %d문단이다.
-
-                이 경기가 주목되는 이유: %s
 
                 --- 사실 ---
                 %s""".formatted(
                 notability.paragraphs(),
-                notability.reasons().isEmpty() ? "특별한 것 없음" : String.join(", ", notability.reasons()),
                 BriefRenderer.render(brief, names));
 
         return new StoryRequest(system, user, notability.paragraphs() * 320, 0.4);

@@ -95,6 +95,17 @@ class BriefRendererTest {
     }
 
     @Test
+    @DisplayName("픽·밴 줄에 어느 팀 것인지 적는다 — 슬래시 좌우로는 알 수 없다")
+    void render_labelsEachSideOfPicks() {
+        String text = BriefRenderer.render(twoSetMatch(), NAMES);
+
+        // 실물 호출에서 모델이 2세트 진영을 반대로 썼다. 챔피언은 전부 이 매치의
+        // 것이라 FactCheck 도 잡지 못하는 종류의 오류다.
+        assertThat(text).contains("Ember scale: Exorcist");
+        assertThat(text).contains("Damwon Gaming: Fighter");
+    }
+
+    @Test
     @DisplayName("이름을 모르면 번호로 적는다 — 지어내지 않는다")
     void render_fallsBackToIdsWithoutInventingNames() {
         String text = BriefRenderer.render(twoSetMatch(), NameBook.ids());
@@ -135,7 +146,8 @@ class BriefRendererTest {
         // 텍스트에 나오는 정수를 전부 모아 brief 가 아는 값인지 확인한다.
         java.util.Set<Integer> allowed = new java.util.HashSet<>(List.of(
                 brief.season(), brief.day(), brief.round(),
-                brief.blueScore(), brief.redScore(), brief.blueKill(), brief.redKill()));
+                brief.blueScore(), brief.redScore(), brief.blueKill(), brief.redKill(),
+                brief.blueTeamId(), brief.redTeamId()));
         brief.sets().forEach(s -> {
             allowed.add(s.setNo());
             allowed.add(s.blueKill());

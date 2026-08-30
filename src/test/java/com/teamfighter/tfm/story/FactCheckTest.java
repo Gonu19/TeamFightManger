@@ -81,6 +81,21 @@ class FactCheckTest {
     }
 
     @Test
+    @DisplayName("유니코드 대시를 쓴 스코어도 검사한다 — 모델이 실제로 U+2011 을 쓴다")
+    void unicodeDashScore_isStillChecked() {
+        // 실물 호출에서 gpt-oss 가 "2‑1" 로 썼다. ASCII 하이픈만 보면 이 스코어가
+        // 검사 대상에서 통째로 빠져서, 검증이 있는 척만 하게 된다.
+        for (String dash : new String[]{"‐", "‑", "–", "—", "−"}) {
+            assertThat(check("팀이 3" + dash + "1 로 이겼다.").contradictions())
+                    .as("대시 %s", dash)
+                    .isNotEmpty();
+            assertThat(check("팀이 2" + dash + "0 로 이겼다.").contradictions())
+                    .as("대시 %s (맞는 스코어)", dash)
+                    .isEmpty();
+        }
+    }
+
+    @Test
     @DisplayName("진 팀을 앞에 쓴 스코어는 모순이 아니다 — 관점이 다를 뿐이다")
     void reversedScore_isNotContradiction() {
         FactCheckResult result = check("Damwon Gaming 은 0 - 2 로 무너졌다.");

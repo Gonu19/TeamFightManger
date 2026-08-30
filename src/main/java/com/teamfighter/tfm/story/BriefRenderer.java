@@ -73,10 +73,17 @@ public final class BriefRenderer {
             }
             out.append(SEP).append(winner).append(" 승")
                     .append("  (").append(set.blueKill()).append(" - ").append(set.redKill()).append(")\n");
-            out.append("  픽  ").append(champs(set.bluePick()))
-                    .append("  /  ").append(champs(set.redPick())).append('\n');
-            out.append("  밴  ").append(champs(set.blueBan()))
-                    .append("  /  ").append(champs(set.redBan())).append('\n');
+            // 팀 이름을 줄마다 붙인다. `A · B / C · D` 로 두면 슬래시 좌우가 누구인지
+            // 알 수 없다 — 실물 호출에서 모델이 2세트 진영을 반대로 썼고, 챔피언은
+            // 전부 이 매치의 것이라 FactCheck 도 잡지 못했다. 사람도 같은 실수를 한다.
+            out.append("  픽  ").append(blue).append(": ")
+                    .append(champs(set.bluePick())).append('\n');
+            out.append("      ").append(red).append(": ")
+                    .append(champs(set.redPick())).append('\n');
+            out.append("  밴  ").append(blue).append(": ")
+                    .append(champs(set.blueBan())).append('\n');
+            out.append("      ").append(red).append(": ")
+                    .append(champs(set.redBan())).append('\n');
         }
         return out.toString();
     }

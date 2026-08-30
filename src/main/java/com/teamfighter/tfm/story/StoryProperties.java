@@ -21,7 +21,7 @@ public record StoryProperties(
     public StoryProperties {
         baseUrl = baseUrl == null || baseUrl.isBlank()
                 ? "https://api.groq.com/openai/v1" : baseUrl.strip();
-        model = model == null || model.isBlank() ? "llama-3.3-70b-versatile" : model.strip();
+        model = model == null || model.isBlank() ? "openai/gpt-oss-120b" : model.strip();
         apiKey = apiKey == null ? "" : apiKey.strip();
         timeoutSeconds = timeoutSeconds <= 0 ? 60 : timeoutSeconds;
     }
