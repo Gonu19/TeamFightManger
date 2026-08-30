@@ -1,0 +1,162 @@
+package com.teamfighter.tfm.web;
+
+import com.teamfighter.tfm.story.ArticleDraft;
+import com.teamfighter.tfm.story.ArticleDraft.Finding;
+import com.teamfighter.tfm.story.ArticleDraft.Severity;
+import com.teamfighter.tfm.story.dao.ArticleDao;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.test.context.ActiveProfiles;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.transaction.annotation.Transactional;
+import org.springframework.web.context.WebApplicationContext;
+
+import java.util.List;
+
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.view;
+
+/**
+ * 화면이 그려지는지 본다. <b>템플릿까지 진짜로 렌더링한다.</b>
+ *
+ * <p>뷰 이름만 확인하면 Thymeleaf 표현식의 오타는 하나도 안 잡힌다 — 그런 오류는 컴파일도
+ * 통과하고 테스트도 통과한 다음 브라우저에서만 터진다. 그래서 응답 본문까지 읽는다.
+ *
+ * <p>{@code @Transactional} 이라 각 테스트가 넣은 기사는 끝나면 사라진다. 목록 화면이
+ * "기사가 있는 첫 슬롯" 을 고르므로, 다른 테스트가 남긴 기사가 있으면 결과가 흔들린다 —
+ * 그래서 목록 테스트는 <b>슬롯을 명시</b>해서 부른다.
+ */
+@SpringBootTest
+@ActiveProfiles("test")
+@Transactional
+class StoryControllerTest {
+
+    @Autowired
+    private WebApplicationContext context;
+
+    @Autowired
+    private JdbcTemplate jdbc;
+
+    @Autowired
+    private ArticleDao articles;
+
+    private MockMvc mvc() {
+        return MockMvcBuilders.webAppContextSetup(context).build();
+    }
+
+    private int newSlot() {
+        return jdbc.queryForObject("""
+                INSERT INTO save_slot (slot_key) VALUES (?) RETURNING slot_id
+                """, Integer.class, "web_" + System.nanoTime());
+    }
+
+    private int team(int slotId, int gameTeamId, String name) {
+        return jdbc.queryForObject("""
+                INSERT INTO team (slot_id, game_team_id, name)
+                VALUES (?, ?, ?) RETURNING team_id
+                """, Integer.class, slotId, gameTeamId, name);
+    }
+
+    private long article(int slotId, int blue, int red, int season, int day,
+                         String headline, List<Finding> findings) {
+        return articles.save(new ArticleDraft(
+                slotId, 7, 3, "competition.name.spring", season, day, 2,
+                blue, red, 2, 1, 41, 38,
+                0.62, List.of("순위 다툼"),
+                headline, "첫 세트를 내준 쪽이 남은 둘을 가져갔다.",
+                "블루 2 - 1 레드 · 킬 41 - 38",
+                "openai/gpt-oss-120b",
+                List.of("이게 실화냐", "다음 경기도 보자"),
+                findings));
+    }
+
+    @Test
+    @DisplayName("목록이 제목과 팀 실명을 그린다")
+    void listRenders() throws Exception {
+        int slotId = newSlot();
+        int blue = team(slotId, 33, "Seorabal Gaming");
+        int red = team(slotId, 34, "OZ Gaming");
+        article(slotId, blue, red, 2, 30, "완봉으로 끝난 승부", List.of());
+
+        mvc().perform(get("/story").param("slot", String.valueOf(slotId)))
+                .andExpect(status().isOk())
+                .andExpect(view().name("story/list"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("완봉으로 끝난 승부")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("Seorabal Gaming")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("OZ Gaming")));
+    }
+
+    @Test
+    @DisplayName("목록이 모순 기사를 표시한다 — 열어보기 전에 보인다")
+    void listShowsContradiction() throws Exception {
+        int slotId = newSlot();
+        int blue = team(slotId, 33, "Seorabal Gaming");
+        int red = team(slotId, 34, "OZ Gaming");
+        article(slotId, blue, red, 2, 30, "의심스러운 기사",
+                List.of(new Finding(Severity.CONTRADICTION, "스코어가 다르다", "3-0 으로")));
+
+        mvc().perform(get("/story").param("slot", String.valueOf(slotId)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("대조에서 모순")));
+    }
+
+    @Test
+    @DisplayName("기사가 없는 커리어는 빈 화면이다 — 오류가 아니다")
+    void emptySlotIsNotAnError() throws Exception {
+        int slotId = newSlot();
+
+        mvc().perform(get("/story").param("slot", String.valueOf(slotId)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("아직 쓴 기사가 없다")));
+    }
+
+    @Test
+    @DisplayName("상세가 본문·댓글·사실 블록·지적을 한 화면에 놓는다")
+    void detailRenders() throws Exception {
+        int slotId = newSlot();
+        int blue = team(slotId, 33, "Seorabal Gaming");
+        int red = team(slotId, 34, "OZ Gaming");
+        long id = article(slotId, blue, red, 2, 30, "완봉으로 끝난 승부",
+                List.of(new Finding(Severity.UNVERIFIED, "brief 에 없는 숫자", "20")));
+
+        mvc().perform(get("/story/" + id))
+                .andExpect(status().isOk())
+                .andExpect(view().name("story/detail"))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("첫 세트를 내준 쪽이")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("이게 실화냐")))
+                // 「이 기사가 쓴 숫자」 — 생성 시점의 문자열 그대로 (D61 결정 2)
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("블루 2 - 1 레드")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("미확인")))
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("brief 에 없는 숫자")));
+    }
+
+    @Test
+    @DisplayName("상세에 통계 화면으로 가는 링크가 없다 (D61)")
+    void detailHasNoLinkIntoStatistics() throws Exception {
+        int slotId = newSlot();
+        int blue = team(slotId, 33, "Seorabal Gaming");
+        int red = team(slotId, 34, "OZ Gaming");
+        long id = article(slotId, blue, red, 2, 30, "완봉으로 끝난 승부", List.of());
+
+        String html = mvc().perform(get("/story/" + id))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        org.assertj.core.api.Assertions.assertThat(html)
+                .doesNotContain("/tier")
+                .doesNotContain("/champion/")
+                .doesNotContain("/synergy");
+    }
+
+    @Test
+    @DisplayName("없는 기사는 404 다 — 빈 화면 200 이 아니다")
+    void missingArticleIsNotFound() throws Exception {
+        mvc().perform(get("/story/999999999")).andExpect(status().isNotFound());
+    }
+}

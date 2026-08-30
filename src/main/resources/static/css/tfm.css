@@ -1,0 +1,157 @@
+/*
+ * 연대기 화면.
+ *
+ * 프레임워크를 안 들인다 — 화면 둘에 CSS 200줄이면 충분하고, 로컬 단일 사용자라
+ * 브라우저 호환도 하나만 보면 된다. 새 의존은 D31 이 준 기준(실제로 도는지 확인된
+ * 것만)을 통과해야 하는데, 여기서 그 비용을 낼 이유가 없다.
+ *
+ * 색은 셋뿐이다: 글자 · 흐린 글자 · 경고. 기사 화면에서 색이 늘면 어디가 사실이고
+ * 어디가 창작인지가 색으로 읽히기 시작하는데, 그 구분은 위치로 하기로 했다.
+ */
+
+:root {
+    --ink: #1b1b1b;
+    --dim: #6a6a6a;
+    --line: #e0e0e0;
+    --warn: #a33;
+    --bg: #fdfdfc;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0 1.5rem 4rem;
+    background: var(--bg);
+    color: var(--ink);
+    font: 16px/1.7 "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+}
+
+main { max-width: 44rem; margin: 0 auto; }
+
+.top {
+    max-width: 44rem;
+    margin: 0 auto;
+    padding: 1.5rem 0 1rem;
+    border-bottom: 1px solid var(--line);
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 1rem;
+}
+
+.top h1 { font-size: 1.3rem; margin: 0; letter-spacing: 0.02em; }
+
+.back { color: var(--dim); text-decoration: none; font-size: 0.9rem; }
+.back:hover { color: var(--ink); }
+
+.slots label { color: var(--dim); font-size: 0.85rem; margin-right: 0.4rem; }
+
+/* --- 목록 --- */
+
+.cards { list-style: none; padding: 0; margin: 1.5rem 0 0; }
+
+.card { padding: 1rem 0; border-bottom: 1px solid var(--line); }
+
+.headline {
+    display: block;
+    font-size: 1.1rem;
+    font-weight: 600;
+    color: var(--ink);
+    text-decoration: none;
+}
+
+.headline:hover { text-decoration: underline; }
+
+.meta {
+    margin: 0.35rem 0 0;
+    color: var(--dim);
+    font-size: 0.85rem;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+}
+
+.meta b { color: var(--ink); font-weight: 600; }
+
+.empty { color: var(--dim); margin: 3rem 0; text-align: center; }
+
+/* --- 경고 --- */
+
+.warn { color: var(--warn); }
+
+.banner {
+    border: 1px solid var(--warn);
+    border-radius: 3px;
+    padding: 0.6rem 0.8rem;
+    margin: 1rem 0;
+    font-size: 0.9rem;
+}
+
+/* --- 기사 --- */
+
+article h1 { font-size: 1.6rem; line-height: 1.4; margin: 2rem 0 0.5rem; }
+
+.body { margin: 1.5rem 0 3rem; white-space: pre-wrap; }
+
+.comments { border-top: 1px solid var(--line); padding-top: 1rem; }
+
+.comments h2, .facts h2 { font-size: 1rem; color: var(--dim); font-weight: 600; }
+
+.comments ul { list-style: none; padding: 0; }
+
+.comments li {
+    padding: 0.5rem 0 0.5rem 0.8rem;
+    border-left: 2px solid var(--line);
+    margin-bottom: 0.4rem;
+}
+
+/* --- 사실 블록 --- */
+
+.facts { border-top: 1px solid var(--line); margin-top: 2rem; padding-top: 1rem; }
+
+.facts pre {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    padding: 0.9rem;
+    overflow-x: auto;
+    font: 13px/1.6 Consolas, "D2Coding", monospace;
+    white-space: pre-wrap;
+}
+
+.note { color: var(--dim); font-size: 0.82rem; margin: 0.4rem 0; }
+
+.findings h3 { font-size: 0.9rem; color: var(--dim); margin-top: 1.5rem; }
+
+.findings ul { list-style: none; padding: 0; }
+
+.findings li { padding: 0.3rem 0; font-size: 0.9rem; }
+
+.findings .tag {
+    display: inline-block;
+    min-width: 3.2rem;
+    font-size: 0.75rem;
+    color: var(--dim);
+    border: 1px solid var(--line);
+    border-radius: 2px;
+    padding: 0 0.3rem;
+    text-align: center;
+    margin-right: 0.4rem;
+}
+
+.findings .contradiction .tag { color: var(--warn); border-color: var(--warn); }
+
+.findings code {
+    background: #f2f2f0;
+    padding: 0 0.25rem;
+    border-radius: 2px;
+    font: 12px Consolas, "D2Coding", monospace;
+}
+
+.origin {
+    margin-top: 2.5rem;
+    color: var(--dim);
+    font-size: 0.78rem;
+    text-align: right;
+}

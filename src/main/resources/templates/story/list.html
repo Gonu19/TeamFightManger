@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<!--
+  연대기 목록.
+
+  통계 화면으로 가는 링크가 없다 (D61). 상단 탭도 아직 없다 — 갈 곳이 하나뿐이라
+  탭을 그리면 그게 탭인지 제목인지 구분되지 않는다. 통계 화면이 생길 때 붙인다.
+
+  모순 표시를 목록에도 둔다. 상세에서만 경고하면 열어보기 전까지 알 수 없고,
+  그러면 검증 장치가 사실상 꺼진 것과 같다.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>연대기 — 팀파이트 매니저</title>
+    <link rel="stylesheet" th:href="@{/css/tfm.css}">
+</head>
+<body>
+<header class="top">
+    <h1>연대기</h1>
+    <form class="slots" method="get" th:action="@{/story}" th:if="${slots.size() > 1}">
+        <label for="slot">커리어</label>
+        <select id="slot" name="slot" onchange="this.form.submit()">
+            <option th:each="s : ${slots}"
+                    th:value="${s}"
+                    th:text="'슬롯 ' + ${s}"
+                    th:selected="${s == selectedSlot}"></option>
+        </select>
+    </form>
+</header>
+
+<main>
+    <p class="empty" th:if="${cards.isEmpty()}">
+        아직 쓴 기사가 없다.
+    </p>
+
+    <ol class="cards" th:unless="${cards.isEmpty()}">
+        <li class="card" th:each="card : ${cards}">
+            <a class="headline" th:href="@{'/story/' + ${card.articleId}}" th:text="${card.headline}">제목</a>
+
+            <p class="meta">
+                <span th:text="'시즌 ' + ${card.season} + ' · ' + ${card.day} + '일'">시점</span>
+                <span class="teams">
+                    <span th:text="${card.blueTeamName} ?: ('팀 ' + ${card.blueTeamId})">블루</span>
+                    <b th:text="${card.blueScore} + ' - ' + ${card.redScore}">스코어</b>
+                    <span th:text="${card.redTeamName} ?: ('팀 ' + ${card.redTeamId})">레드</span>
+                </span>
+                <span class="warn" th:if="${card.contradicted}" title="brief 와 어긋난 내용이 있다">
+                    ⚠ 대조에서 모순
+                </span>
+            </p>
+        </li>
+    </ol>
+</main>
+</body>
+</html>

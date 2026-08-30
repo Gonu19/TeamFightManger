@@ -82,6 +82,7 @@ A:\project\TeamFighter\
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
 │   │   └─ dao/
 │   ├─ web/
+│   │   ├─ StoryController                  /story · /story/{id} — 있다
 │   │   ├─ 컨트롤러: Tier · Champion · Synergy · Gaps · Draft · Slot
 │   │   ├─ sse/                             실시간 갱신
 │   │   └─ view/                            서버가 계산해 내려보내는 표시 모델
@@ -97,8 +98,9 @@ A:\project\TeamFighter\
 │   │   ├─ V6__team_identity.sql          team.name_key · 팀 이름 시드 52 (D56)
 │   │   ├─ V7__athlete.sql                athlete · 선수 이름 풀 551 (D58)
 │   │   └─ V8__article.sql                article · comment · finding (D61)
-│   ├─ templates/ + templates/fragments/
-│   └─ static/css · static/js
+│   ├─ templates/story/                    list.html · detail.html
+│   ├─ templates/ + templates/fragments/    (통계 화면은 아직)
+│   └─ static/css/tfm.css · static/js
 │
 └─ src/test/java/...                        main 과 거울 구조
 ```
@@ -155,8 +157,10 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 `performance/` 는 티어·픽률·밴률까지 만들지만 **경기력 z값과 티어 등급은 비워 둔다** —
 둘 다 근거가 아직 없다 (D50).
 
-`story/` 는 사실→해석→창작→대조→저장이 `ArticleWriter` 로 이어져 있다. 남은 것은 화면
-(`web/StoryController` · `templates/story/`)이다. `draft/` 는 통째로 없다.
+`story/` 는 파서에서 화면까지 이어졌다 — `/story` 와 `/story/{id}` 가 돈다.
+`web/` 에 있는 것은 그 둘뿐이고 통계 화면(`/tier` · `/champion` · `/gaps` · `/teams`)과
+`draft/` 는 아직 없다. 상단 탭도 통계 화면이 생길 때 붙인다 — 갈 곳이 하나뿐인 탭은
+탭으로 안 읽힌다.
 
 ---
 

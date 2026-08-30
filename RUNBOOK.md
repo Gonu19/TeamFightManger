@@ -26,6 +26,8 @@ $env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat test
 
 ```powershell
 $env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat bootRun   # http://127.0.0.1:8088
+# 화면은 연대기뿐이다 — /story
+$env:TFM_STORY_ENABLED = 'true'; .\gradlew.bat bootRun   # 기사 생성도 켠다 (키 필요)
 .\gradlew.bat bootRun --args="--tfm.reingest-on-start=true"   # 수리용
 .\gradlew.bat bootRun --args="--tfm.aggregate-on-start=true"  # 위와 같이 켜지 말 것
 ```

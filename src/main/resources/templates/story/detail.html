@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<!--
+  기사 하나.
+
+  아래에서 위로 읽으면 이 화면의 규칙이 보인다 — 창작(기사·댓글)이 위에 있고,
+  그것을 검증하는 사실(「이 기사가 쓴 숫자」)과 지적이 아래에 붙는다. 사실 블록은
+  기사를 만든 MatchBrief 를 그대로 박아둔 문자열이라, 나중에 집계가 갱신돼도
+  바뀌지 않는다 (D61 결정 2).
+
+  숫자에 링크를 걸지 않는다. 티어·챔피언 화면으로 가는 길을 여기서 열면
+  D61 이 물리적으로 끊어둔 경계가 다시 이어진다.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${article.headline} + ' — 연대기'">기사</title>
+    <link rel="stylesheet" th:href="@{/css/tfm.css}">
+</head>
+<body>
+<header class="top">
+    <a class="back" th:href="@{/story(slot=${article.slotId})}">← 연대기</a>
+</header>
+
+<main>
+    <article>
+        <h1 th:text="${article.headline}">제목</h1>
+
+        <p class="meta">
+            <span th:text="'시즌 ' + ${article.season} + ' · ' + ${article.day} + '일'">시점</span>
+            <span th:text="${article.blueTeamName} ?: ('팀 ' + ${article.blueTeamId})">블루</span>
+            <b th:text="${article.blueScore} + ' - ' + ${article.redScore}">스코어</b>
+            <span th:text="${article.redTeamName} ?: ('팀 ' + ${article.redTeamId})">레드</span>
+        </p>
+
+        <div class="warn banner" th:if="${article.contradicted}">
+            ⚠ 이 기사에는 <b>대조에서 어긋난 내용</b>이 있다. 아래 지적을 함께 읽는다.
+        </div>
+
+        <div class="body" th:text="${article.body}">본문</div>
+    </article>
+
+    <section class="comments" th:if="${!article.comments.isEmpty()}">
+        <h2>댓글</h2>
+        <!-- 닉네임을 두지 않는다. 프롬프트가 본문만 쓰게 하고 화면도 본문만 보여준다 -->
+        <ul>
+            <li th:each="comment : ${article.comments}" th:text="${comment}">댓글</li>
+        </ul>
+    </section>
+
+    <section class="facts">
+        <h2>이 기사가 쓴 숫자</h2>
+        <p class="note">
+            기사를 만든 시점의 값이다. 집계가 나중에 갱신돼도 이 블록은 바뀌지 않는다.
+        </p>
+        <pre th:text="${article.briefText}">사실 블록</pre>
+
+        <div class="findings" th:if="${!article.findings.isEmpty()}">
+            <h3>대조에서 나온 지적</h3>
+            <ul>
+                <li th:each="finding : ${article.findings}"
+                    th:classappend="${finding.severity.name() == 'CONTRADICTION'} ? 'contradiction' : 'unverified'">
+                    <span class="tag"
+                          th:text="${finding.severity.name() == 'CONTRADICTION'} ? '모순' : '미확인'">등급</span>
+                    <span th:text="${finding.what}">무엇이</span>
+                    <code th:text="${finding.evidence}" th:if="${!finding.evidence.isEmpty()}">근거</code>
+                </li>
+            </ul>
+            <p class="note">
+                <b>미확인은 틀렸다는 뜻이 아니다.</b> brief 가 모르는 것이다 —
+                기사가 지어낸 것일 수도, 그냥 산문일 수도 있다.
+            </p>
+        </div>
+    </section>
+
+    <footer class="origin">
+        <span th:text="${article.model}">모델</span>
+        ·
+        <span th:text="${#temporals.format(article.generatedAt, 'yyyy-MM-dd HH:mm')}">생성 시각</span>
+    </footer>
+</main>
+</body>
+</html>

@@ -13,19 +13,19 @@
 | `ingest/` | 적재 완료. 운영 DB 팀 56 · 공식 698건 · 선수 실명 |
 | `analysis/` | 카운터·티어 집계 완료. **시너지는 미착수** |
 | `story/` | 사실→해석→창작→대조→저장까지 이어짐(`ArticleWriter`). 팀 실명 붙음 |
-| `web/` | **비어 있음** — 파일 0개 |
+| `web/` | 연대기(`/story`)만 있다. 통계 화면은 **미착수** |
 | `draft/` | 비어 있음 (`banpick.md` 가 설계) |
 
-테스트 **347개** (DB 없이 280 · DB 필요 67). 마이그레이션 `V1`~`V8` **전부 적용됨**.
+테스트 **353개** (DB 없이 280 · DB 필요 73). 마이그레이션 `V1`~`V8` **전부 적용됨**.
 결정 **D1~D67**.
 
 ## 진행 중
 
-**화면.** 자바는 `ArticleWriter` 까지 왔다. 남은 것은 화면뿐이다:
-`web/StoryController` → `templates/story/list.html`·`detail.html` → `static/tfm.css`.
-설계는 `architecture.md` 5·6절과 `decisions/D61_*.md`.
+**연대기 화면이 끝났다** (`/story` · `/story/{id}`). story/ 는 파서부터 화면까지 이어졌다.
+다음은 통계 화면(`/tier` · `/champion/{code}` · `/gaps`)이고, 그때 상단 탭을 붙인다 —
+지금은 갈 곳이 하나뿐이라 탭이 없다.
 
-기사를 뽑으려면 `tfm.story.enabled=true` 여야 한다 — 꺼지면 빈이 아예 없다.
+기사를 뽑으려면 `tfm.story.enabled=true` 여야 한다 — 꺼져도 이미 쓴 기사는 읽힌다.
 
 ## 막힌 것
 

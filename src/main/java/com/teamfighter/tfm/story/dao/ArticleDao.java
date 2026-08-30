@@ -129,6 +129,15 @@ public class ArticleDao {
             LIMIT ?
             """;
 
+    /**
+     * 기사가 <b>있는</b> 슬롯만 준다. {@code save_slot} 전체가 아니다 —
+     * 화면이 기본 커리어를 고를 때 빈 목록으로 시작하지 않게 하는 것이 이 질의의 목적이고,
+     * 기사가 하나도 없는 슬롯을 골라주면 그 목적이 그대로 실패한다.
+     */
+    private static final String SELECT_SLOTS = """
+            SELECT DISTINCT slot_id FROM article ORDER BY slot_id
+            """;
+
     private final JdbcTemplate jdbc;
 
     public ArticleDao(JdbcTemplate jdbc) {
@@ -149,6 +158,11 @@ public class ArticleDao {
         replaceComments(articleId, draft.comments());
         replaceFindings(articleId, draft.findings());
         return articleId;
+    }
+
+    @Transactional(readOnly = true)
+    public List<Integer> slotsWithArticles() {
+        return jdbc.queryForList(SELECT_SLOTS, Integer.class);
     }
 
     /**
