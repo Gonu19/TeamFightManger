@@ -186,12 +186,33 @@ public class StoryController {
             return "redirect:/story/" + articleId.get();
 
         } catch (StoryClient.StoryUnavailableException e) {
-            // 켜져는 있는데 키가 없는 상태. 오류 화면보다 목록 위의 한 줄이 낫다 —
-            // 사용자가 할 일이 "설정을 고친다" 로 분명하기 때문이다.
-            log.warn("기사 생성을 부를 수 없다: {}", e.getMessage());
-            redirect.addFlashAttribute("notice", "기사 생성을 부를 수 없다: " + e.getMessage());
-            redirect.addAttribute("slot", slot);
-            return "redirect:/story";
+            // 부를 수 없는 상태(키가 없거나 헤더로 못 쓰는 값). 오류 화면보다 목록 위의
+            // 한 줄이 낫다 — 사용자가 할 일이 "설정을 고친다" 로 분명하기 때문이다.
+            return backToListWith(redirect, slot, "기사 생성을 부를 수 없다: " + e.getMessage(), e);
+
+        } catch (StoryClient.StoryFailedException e) {
+            // 불렀는데 실패했다(네트워크·4xx·5xx). 이것도 500 흰 화면으로 두지 않는다.
+            // 삼키는 것과는 다르다 — 메시지를 화면에 띄우고 스택은 로그에 남긴다.
+            return backToListWith(redirect, slot, "모델 호출이 실패했다: " + e.getMessage(), e);
+
+        } catch (IllegalStateException e) {
+            // 세이브 파일을 못 찾는 경우가 여기로 온다(경로 설정·적재 안 된 팀 등).
+            // 원인이 사용자 환경이라 화면에서 읽을 수 있어야 한다.
+            return backToListWith(redirect, slot, "기사를 쓸 수 없다: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 실패를 목록 화면의 한 줄로 돌려보낸다.
+     *
+     * <p>스택 트레이스는 로그에만 남긴다 — 화면에 내면 읽을 사람이 없고, 예외 메시지에
+     * 설정값이 섞여 있으면 그것까지 같이 노출된다.
+     */
+    private String backToListWith(RedirectAttributes redirect, int slot,
+                                  String notice, Exception cause) {
+        log.warn("기사 생성 실패 (슬롯 {})", slot, cause);                        // 1. 원인은 스택까지 로그로
+        redirect.addFlashAttribute("notice", notice);                           // 2. 사람이 읽을 한 줄은 화면으로
+        redirect.addAttribute("slot", slot);                                    // 3. 보던 커리어를 유지한 채 목록으로
+        return "redirect:/story";
     }
 }

@@ -167,4 +167,34 @@ class HttpStoryClientTest {
                 .doesNotContain(secret)
                 .contains("설정됨");
     }
+
+    @Test
+    @DisplayName("키에 헤더로 못 쓰는 문자가 있으면 부르기 전에 막는다 — 값은 메시지에 안 넣는다")
+    void rejectsKeyThatCannotGoIntoAHeader() {
+        // 실제로 겪은 사고: 예시 명령의 자리표시자 <키> 를 그대로 환경변수에 넣었다.
+        // 한글이라 헤더 값이 될 수 없고, JDK 가 던지는 예외 메시지에는 그 값이 통째로 들어간다.
+        Capturing transport = new Capturing(200, "{}");
+        HttpStoryClient client = new HttpStoryClient(props(true, "<키>"), MAPPER, transport);
+
+        assertThatThrownBy(() -> client.complete(REQUEST))
+                .isInstanceOf(StoryClient.StoryUnavailableException.class)
+                .hasMessageContaining("HTTP 헤더로 쓸 수 없는 문자")
+                .hasMessageNotContaining("<키>");                 // 우리 메시지에 값이 새면 안 된다
+
+        assertThat(transport.sent).isEmpty();                     // 요청은 나가지 않았다
+    }
+
+    @Test
+    @DisplayName("줄바꿈이 섞인 키도 막는다 — 헤더 분리 공격의 통로다")
+    void rejectsKeyWithNewline() {
+        Capturing transport = new Capturing(200, "{}");
+        // 줄바꿈을 문자로 붙인다 — 이스케이프로 적으면 소스에서 눈에 안 띈다
+        String keyWithNewline = "gsk_abc" + (char) 10 + "def";
+        HttpStoryClient client = new HttpStoryClient(
+                props(true, keyWithNewline), MAPPER, transport);
+
+        assertThatThrownBy(() -> client.complete(REQUEST))
+                .isInstanceOf(StoryClient.StoryUnavailableException.class);
+        assertThat(transport.sent).isEmpty();
+    }
 }

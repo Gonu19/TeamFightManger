@@ -83,10 +83,22 @@ public class HttpStoryClient implements StoryClient {
                     "API 키가 없다. 환경변수 TFM_GROQ_API_KEY 또는 .env 에 넣는다. "
                             + properties.describe());
         }
+        if (!isHeaderSafe(properties.apiKey())) {                                // 키가 헤더로 나갈 수 있는 값인지 먼저 본다
+            throw new StoryUnavailableException(
+                    "API 키에 HTTP 헤더로 쓸 수 없는 문자가 있다 (한글·공백·줄바꿈 등). "
+                            + "자리표시자를 그대로 넣지 않았는지 확인한다. "
+                            + "환경변수가 .env 보다 우선하므로, 셸에 남은 값이 파일을 가릴 수 있다 — "
+                            + "PowerShell 이면 Remove-Item Env:TFM_GROQ_API_KEY. "
+                            + properties.describe());
+        }
 
         String body = toRequestBody(request);
         // 무엇이 나가는지 남긴다 (D61 결정 4). 키도 본문도 찍지 않는다 — 크기만 남긴다.
-        log.info("모델 호출 — {} · 요청 {}자 · 출력 상한 {}토큰",
+        //
+        // "호출" 이 아니라 "준비" 라고 적는다. 이 줄은 요청을 만들기 전에 찍히므로
+        // 여기까지 왔다고 요청이 나간 것이 아니다 — 실제로 헤더를 만들다 죽은 적이 있고,
+        // 그때 이 로그가 "모델 호출" 이라 적혀 있어서 모델까지 갔다고 읽혔다.
+        log.info("모델 호출 준비 — {} · 요청 {}자 · 출력 상한 {}토큰",
                 properties.model(), body.length(), request.maxTokens());
 
         HttpRequest http = HttpRequest.newBuilder()
@@ -97,12 +109,34 @@ public class HttpStoryClient implements StoryClient {
                 .POST(HttpRequest.BodyPublishers.ofString(body, java.nio.charset.StandardCharsets.UTF_8))
                 .build();
 
-        HttpResponse<String> response = transport.apply(http);
+        HttpResponse<String> response = transport.apply(http);                  // 여기를 지나야 실제로 나간 것이다
         if (response.statusCode() / 100 != 2) {
             throw new StoryFailedException(
                     "모델이 " + response.statusCode() + " 로 응답했다: " + snippet(response.body()));
         }
         return extractContent(response.body());
+    }
+
+    /**
+     * 값이 HTTP 헤더로 나갈 수 있는가.
+     *
+     * <p>헤더 값에는 <b>보이는 ASCII</b>(0x21~0x7E)와 공백만 허용된다. 한글·제어문자·줄바꿈이
+     * 들어가면 JDK 의 {@code HttpRequest.Builder.header} 가
+     * {@code IllegalArgumentException: invalid header value} 를 던지는데, 그 예외 메시지에는
+     * <b>값이 그대로 들어간다</b> — 진짜 키였다면 로그와 오류 화면에 통째로 찍힌다.
+     * 그래서 그 앞에서 우리가 먼저 막고, 우리 메시지에는 값을 절대 넣지 않는다.
+     *
+     * <p>공백도 거른다. 문법상 헤더 값 안의 공백은 허용되지만 API 키에는 들어갈 일이 없고,
+     * 들어갔다면 붙여넣기 사고일 가능성이 높다.
+     */
+    private static boolean isHeaderSafe(String value) {
+        for (int i = 0; i < value.length(); i++) {                              // 1. 한 글자씩 코드포인트를 본다
+            char ch = value.charAt(i);
+            if (ch < 0x21 || ch > 0x7E) {                                       // 2. 보이는 ASCII 밖이면 (한글·공백·제어문자·탭·줄바꿈)
+                return false;                                                   // 3. 헤더로 못 쓴다
+            }
+        }
+        return true;
     }
 
     private String toRequestBody(StoryRequest request) {
