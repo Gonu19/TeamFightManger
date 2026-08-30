@@ -63,21 +63,37 @@ public class ArticleWriter {
         Objects.requireNonNull(brief, "brief");
         Objects.requireNonNull(context, "context");
 
+        // 1) 해석 — 이 매치가 얼마나 중요한가. 결과는 "몇 문단인가" 하나로만 쓰인다.
+        //    이유 문자열도 들어 있지만 프롬프트로는 안 넘어간다 (D66 결정 2).
         Notability notability = Notability.of(brief, context);
+
+        // 2) 사실을 한 덩어리 문자열로. 이 문자열이 프롬프트에도 들어가고 화면 하단
+        //    「이 기사가 쓴 숫자」에도 그대로 나간다 — 둘이 갈리면 검증 블록이 장식이 된다.
         String briefText = BriefRenderer.render(brief, reference);
 
+        // 3) 창작 1 — 기사. 프롬프트는 "제목 한 줄, 빈 줄, 본문" 을 요구한다.
         String raw = client.complete(StoryPrompts.article(brief, reference, notability));
+
+        // splitHeadline 은 [제목, 본문] 두 칸짜리 배열을 준다. 형식을 못 지킨 답이면
+        // 제목 칸이 빈 문자열이고 본문 칸에 전부 들어온다 — 던지지 않는다(형식 위반은
+        // 사실 오류가 아니다). 그때만 스코어라인으로 제목을 짓는다.
         String[] split = ArticleDraft.splitHeadline(raw);
         String body = split[1];
         String headline = split[0].isBlank() ? fallbackHeadline(brief, reference) : split[0];
 
-        // 대조는 기사 전체를 본다. 제목을 떼어내기 전 원문이라야 제목에 든 숫자도 잡힌다
+        // 4) 대조 — 기사 전체(raw)를 본다. 제목을 떼어내기 전 원문이라야 제목에 든 숫자도
+        //    잡힌다. 어휘는 reference 가 준다: 챔피언은 코드(name_ko 가 아니다 — D66 ①),
+        //    팀 이름은 이 커리어 전체. 둘 다 brief 와 같은 어휘여야 대조가 성립한다.
         FactCheckResult factCheck = FactCheck.run(
                 brief, reference, reference.championCodes(), reference.teamNames(), raw);
 
+        // 5) 창작 2 — 댓글. 기사 본문을 읽고 반응하게 한다(제목 없이 body 만 넘긴다).
+        //    splitComments 는 "1. ...\n2. ..." 꼴 답을 줄 단위로 잘라 목록으로 만든다.
         List<String> comments = StoryPrompts.splitComments(
                 client.complete(StoryPrompts.comments(brief, reference, notability, body)));
 
+        // 6) 저장 꼴로 옮긴다. 여기서 세이브 팀 번호가 DB 번호로 바뀌고(teamId),
+        //    fact_status 는 넘기지 않는다 — ArticleDraft 가 findings 로부터 계산한다.
         ArticleDraft draft = ArticleDraft.of(
                 reference.slotId(), brief, notability,
                 reference.teamId(brief.blueTeamId()),

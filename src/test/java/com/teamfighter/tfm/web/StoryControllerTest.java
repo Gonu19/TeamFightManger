@@ -155,6 +155,49 @@ class StoryControllerTest {
     }
 
     @Test
+    @DisplayName("루트는 연대기로 보낸다 — 404 Whitelabel 이 아니다")
+    void rootRedirectsToStory() throws Exception {
+        mvc().perform(get("/"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
+                        .redirectedUrl("/story"));
+    }
+
+    @Test
+    @DisplayName("slot 없이 열어도 200 이다 — 기본 커리어를 스스로 고른다")
+    void listWithoutSlotStillRenders() throws Exception {
+        mvc().perform(get("/story")).andExpect(status().isOk());
+    }
+
+    @Test
+    @DisplayName("story 가 꺼져 있으면 생성 버튼을 안 그린다 — 눌러야 알려주는 버튼은 버튼이 아니다")
+    void generateButtonHiddenWhenStoryDisabled() throws Exception {
+        int slotId = newSlot();
+        int blue = team(slotId, 33, "Seorabal Gaming");
+        int red = team(slotId, 34, "OZ Gaming");
+        article(slotId, blue, red, 2, 30, "완봉으로 끝난 승부", List.of());
+
+        // 테스트 프로파일은 tfm.story.enabled 가 없다(=false). 그래서 StoryGenerator 빈이
+        // 아예 없고, 컨트롤러는 Optional.empty() 를 받는다
+        String html = mvc().perform(get("/story").param("slot", String.valueOf(slotId)))
+                .andReturn().getResponse().getContentAsString();
+
+        // 주석에도 /story/generate 가 나오므로(Thymeleaf 는 HTML 주석을 지우지 않는다)
+        // 경로가 아니라 버튼 자체가 없음을 본다
+        org.assertj.core.api.Assertions.assertThat(html)
+                .doesNotContain("최근 경기 기사 쓰기")
+                .doesNotContain("<form class=\"generate\"");
+    }
+
+    @Test
+    @DisplayName("꺼진 상태로 생성을 부르면 503 이다 — 조용히 아무 일도 안 일어나지 않는다")
+    void generateWhenDisabledIsServiceUnavailable() throws Exception {
+        mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/story/generate").param("slot", "1"))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
     @DisplayName("없는 기사는 404 다 — 빈 화면 200 이 아니다")
     void missingArticleIsNotFound() throws Exception {
         mvc().perform(get("/story/999999999")).andExpect(status().isNotFound());

@@ -73,16 +73,19 @@ A:\project\TeamFighter\
 │   │   ├─ FactCheck · FactCheckResult      대조 — 모순 / 미확인 2등급
 │   │   ├─ ArticleDraft                     fact_status 를 타입이 계산한다
 │   │   ├─ ArticleWriter                    넷을 잇기만 한다. @Transactional 없음
+│   │   ├─ StoryGenerator                   수동 트리거. 안 쓴 매치 중 최근 하나
 │   │   ├─ StoryConfiguration               플래그를 켜야 빈이 생긴다 (D61)
 │   │   └─ dao/         ArticleDao          업서트 — 재생성이 갱신이 된다
 │   │                    ArticleView · ArticleCard    상세용 · 목록용
 │   │                    StoryReference · StoryReferenceDao  이름표 (NameBook 구현)
+│   │                    ArticleKey          매치 신원 — 이미 쓴 것 판정
 │   ├─ draft/           밴픽 시뮬            (banpick.md)
 │   │   ├─ DraftStateMachine · DraftSessionService · EvidenceGate
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
 │   │   └─ dao/
 │   ├─ web/
-│   │   ├─ StoryController                  /story · /story/{id} — 있다
+│   │   ├─ StoryController                  / · /story · /story/{id}
+│   │   │                                    POST /story/generate (수동 트리거)
 │   │   ├─ 컨트롤러: Tier · Champion · Synergy · Gaps · Draft · Slot
 │   │   ├─ sse/                             실시간 갱신
 │   │   └─ view/                            서버가 계산해 내려보내는 표시 모델
@@ -157,7 +160,7 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 `performance/` 는 티어·픽률·밴률까지 만들지만 **경기력 z값과 티어 등급은 비워 둔다** —
 둘 다 근거가 아직 없다 (D50).
 
-`story/` 는 파서에서 화면까지 이어졌다 — `/story` 와 `/story/{id}` 가 돈다.
+`story/` 는 파서에서 화면까지 이어졌다 — 목록·상세·수동 생성이 돈다.
 `web/` 에 있는 것은 그 둘뿐이고 통계 화면(`/tier` · `/champion` · `/gaps` · `/teams`)과
 `draft/` 는 아직 없다. 상단 탭도 통계 화면이 생길 때 붙인다 — 갈 곳이 하나뿐인 탭은
 탭으로 안 읽힌다.

@@ -6,6 +6,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -39,6 +40,28 @@ public class StoryReferenceDao {
 
     public StoryReferenceDao(JdbcTemplate jdbc) {
         this.jdbc = jdbc;
+    }
+
+    /**
+     * 슬롯의 세이브 파일명. {@code slot_key} 는 파일명 그대로 저장돼 있다(D28) —
+     * 적재가 {@code SlotFile.slotKeyOf} 로 넣은 값이고, 그래서 세이브 폴더에 이어 붙이면
+     * 경로가 된다.
+     *
+     * <p>기사 생성이 이걸 필요로 하는 이유는 <b>DB 에 매치 일정이 없기</b> 때문이다.
+     * 적재는 경기(세트)만 넣는다 — 매치({@code MatchSchedule})는 기사가 생기기 전에
+     * 필요가 없어서 스키마에 자리가 없다. 그래서 기사를 쓰려면 세이브를 다시 읽어야 한다.
+     *
+     * @throws IllegalStateException 없는 슬롯. 화면이 준 번호가 DB 에 없다는 뜻이라
+     *                               조용히 넘어가면 "왜 아무 일도 안 일어나지" 가 된다
+     */
+    @Transactional(readOnly = true)
+    public String slotKey(int slotId) {
+        List<String> found = jdbc.queryForList(
+                "SELECT slot_key FROM save_slot WHERE slot_id = ?", String.class, slotId);
+        if (found.isEmpty()) {
+            throw new IllegalStateException("슬롯 " + slotId + " 이 없다");
+        }
+        return found.get(0);
     }
 
     @Transactional(readOnly = true)

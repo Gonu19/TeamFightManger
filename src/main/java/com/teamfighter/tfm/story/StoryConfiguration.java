@@ -1,5 +1,6 @@
 package com.teamfighter.tfm.story;
 
+import com.teamfighter.tfm.ingest.watcher.TfmProperties;
 import com.teamfighter.tfm.story.dao.ArticleDao;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -38,5 +39,19 @@ public class StoryConfiguration {
     public ArticleWriter articleWriter(StoryClient client, ArticleDao articles,
                                        StoryReferenceDao references, StoryProperties properties) {
         return new ArticleWriter(client, articles, references, properties);
+    }
+
+    /**
+     * 수동 트리거의 알맹이. 화면의 버튼이 이걸 부른다.
+     *
+     * <p>{@link ArticleWriter} 와 같은 조건이다 — 꺼진 설치에는 생성기 자체가 없고,
+     * 그래서 {@code StoryController} 는 이 빈을 <b>{@link java.util.Optional} 로 받는다.</b>
+     * 없으면 버튼을 안 그린다. 눌러야 "꺼져 있습니다" 를 알려주는 버튼은 버튼이 아니다.
+     */
+    @ConditionalOnProperty(prefix = "tfm.story", name = "enabled", havingValue = "true")
+    @Bean
+    public StoryGenerator storyGenerator(ArticleWriter writer, ArticleDao articles,
+                                         StoryReferenceDao references, TfmProperties properties) {
+        return new StoryGenerator(writer, articles, references, properties);
     }
 }

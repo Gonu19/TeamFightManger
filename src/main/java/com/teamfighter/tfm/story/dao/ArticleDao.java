@@ -16,6 +16,7 @@ import java.sql.Types;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 기사·댓글·지적을 {@code article} · {@code article_comment} · {@code article_finding} 에 넣고 꺼낸다
@@ -138,6 +139,11 @@ public class ArticleDao {
             SELECT DISTINCT slot_id FROM article ORDER BY slot_id
             """;
 
+    /** 매치 신원 네 값만. 본문을 안 읽는 이유는 {@link #writtenKeys} 가 적어 뒀다. */
+    private static final String SELECT_KEYS = """
+            SELECT season, day, blue_team_id, red_team_id FROM article WHERE slot_id = ?
+            """;
+
     private final JdbcTemplate jdbc;
 
     public ArticleDao(JdbcTemplate jdbc) {
@@ -163,6 +169,30 @@ public class ArticleDao {
     @Transactional(readOnly = true)
     public List<Integer> slotsWithArticles() {
         return jdbc.queryForList(SELECT_SLOTS, Integer.class);
+    }
+
+    /**
+     * 그 슬롯에서 <b>이미 기사를 쓴 매치</b>의 신원 전부.
+     *
+     * <p>생성기가 "다음에 쓸 매치" 를 고를 때 쓴다. 한 커리어가 100편 남짓이라 통째로 올려도
+     * 몇 KB 이고, {@link Set} 이므로 매치마다 조회를 날리는 대신 메모리에서 한 번에 거른다.
+     * 매치마다 {@code SELECT ... WHERE} 를 날리면 질의 100번이 나가는데, 그건 느린 게 아니라
+     * <b>안 보이게 느린</b> 종류다.
+     *
+     * <p>업서트라서 <b>안 걸러도 결과는 같다</b> — 다시 쓰면 덮일 뿐이다. 그래서 이 메서드는
+     * 정확성이 아니라 <b>비용</b>을 위한 것이다: 걸러내지 않으면 이미 쓴 기사를 다시 쓰느라
+     * 모델 호출이 두 번씩 더 나간다.
+     */
+    @Transactional(readOnly = true)
+    public Set<ArticleKey> writtenKeys(int slotId) {
+        List<ArticleKey> rows = jdbc.query(SELECT_KEYS,
+                (rs, rowNum) -> new ArticleKey(
+                        rs.getInt("season"),
+                        rs.getInt("day"),
+                        rs.getInt("blue_team_id"),
+                        rs.getInt("red_team_id")),
+                slotId);
+        return Set.copyOf(rows);
     }
 
     /**
@@ -226,10 +256,22 @@ public class ArticleDao {
      * 쉼표·중괄호가 든 이유 한 줄이 조용히 여러 원소로 쪼개진다.
      */
     private long upsert(ArticleDraft draft) {
+        // jdbc.execute(sql, PreparedStatementCallback) 는 JdbcTemplate 의 가장 낮은 층이다.
+        // update()/query() 와 달리 준비된 PreparedStatement 를 그대로 넘겨주고, 연결을 닫는
+        // 것과 예외를 스프링 예외로 바꾸는 것만 대신해 준다. 여기서 이 층까지 내려온 이유는
+        // 두 가지를 동시에 해야 하기 때문이다 — 배열 파라미터를 만들고(연결이 필요하다),
+        // INSERT ... RETURNING 의 결과를 읽는다(update() 는 갱신된 행 수만 준다).
         Long articleId = jdbc.execute(UPSERT, (PreparedStatement ps) -> {
+            // text[] 파라미터. 배열은 드라이버가 연결 위에서 만들어야 한다 —
+            // "{a,b}" 같은 문자열로 넘겨 CAST 하면 값 안의 쉼표·중괄호가 구분자로 읽혀
+            // 이유 한 줄이 조용히 여러 원소로 쪼개진다.
             Array reasons = ps.getConnection()
                     .createArrayOf("text", draft.notabilityReasons().toArray(String[]::new));
             try {
+                // JDBC 의 ? 는 1번부터다. i++ 로 세는 이유는 컬럼을 하나 끼워 넣을 때
+                // 아래 번호를 전부 고쳐야 하는 상황을 없애기 위해서다 — 그 수정은
+                // 빠뜨려도 컴파일이 되고, 값이 옆 컬럼으로 들어가도 타입만 맞으면
+                // 예외도 안 난다.
                 int i = 1;
                 ps.setInt(i++, draft.slotId());
                 ps.setObject(i++, draft.scheduleId(), Types.INTEGER);
@@ -250,8 +292,12 @@ public class ArticleDao {
                 ps.setString(i++, draft.body());
                 ps.setString(i++, draft.briefText());
                 ps.setString(i++, draft.model());
+                // enum 은 문자열로 넘기고 SQL 쪽에서 CAST(? AS article_fact_status) 한다.
+                // 드라이버는 PostgreSQL 사용자 정의 enum 을 모르기 때문이다.
                 ps.setString(i, draft.factStatus().name());
 
+                // INSERT 든 UPDATE 든 RETURNING 이 행 하나를 주므로 executeQuery 다
+                // (executeUpdate 는 결과 집합을 못 읽는다). try-with-resources 로 닫는다.
                 try (ResultSet rs = ps.executeQuery()) {
                     if (!rs.next()) {
                         throw new IllegalStateException(

@@ -29,6 +29,26 @@
 </header>
 
 <main>
+    <!--
+      flash 메시지. POST /story/generate 가 리다이렉트하면서 한 번만 실어 보낸 값이라,
+      새로고침하면 사라진다 (RedirectAttributes.addFlashAttribute).
+    -->
+    <p class="notice" th:if="${notice}" th:text="${notice}">알림</p>
+
+    <!--
+      수동 트리거 (D61 결정 4 · 수동 생성).
+      - 버튼은 story 가 켜져 있을 때만 그린다 — canGenerate 가 그 신호다
+      - POST 인 이유: 이 요청은 모델 호출 두 번이고 DB 를 바꾼다. GET 이면 새로고침만으로
+        다시 나간다
+      - 한 번에 한 편이다. "아직 안 쓴 매치 중 가장 최근 것" 하나만 쓴다
+    -->
+    <form class="generate" method="post" th:action="@{/story/generate}"
+          th:if="${canGenerate and selectedSlot != null}">
+        <input type="hidden" name="slot" th:value="${selectedSlot}">
+        <button type="submit">최근 경기 기사 쓰기</button>
+        <span class="hint">한 번에 한 편. 모델 호출 두 번이 나간다.</span>
+    </form>
+
     <p class="empty" th:if="${cards.isEmpty()}">
         아직 쓴 기사가 없다.
     </p>
