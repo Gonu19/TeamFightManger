@@ -11,35 +11,38 @@
 | `parser/` | 세이브 파싱 완료. 경기·팀·선수·**매치 일정** |
 | `ingest/` | 적재 완료. 운영 DB 팀 56 · 공식 698건 · 선수 실명 |
 | `analysis/` | 카운터·티어 집계 완료. **시너지는 미착수** |
-| `story/` | 사실→해석→창작→대조 전 계층 완료. Groq 실호출 확인됨 |
+| `story/` | 사실→해석→창작→대조 + 저장(`dao/`) 완료. Groq 실호출 확인됨 |
 | `web/` | **비어 있음** — 파일 0개 |
 | `draft/` | 비어 있음 (`banpick.md` 가 설계) |
 
-DB 없이 도는 테스트 **98개**. 마이그레이션 `V1`~`V8`. 결정 **D1~D65**.
+테스트 **341개** (DB 없이 280 · DB 필요 61). 마이그레이션 `V1`~`V8` **전부 적용됨**.
+결정 **D1~D65**.
 
 ## 진행 중
 
-**화면.** `V8__article.sql`(기사·댓글·대조 결과)만 놓였고 자바가 없다.
-다음 순서: `story/dao/ArticleDao` → `story/ArticleWriter` → `web/StoryController` → 템플릿.
+**화면.** `ArticleDao` 까지 왔다. 다음 순서:
+`story/ArticleWriter`(brief→호출→대조→저장) → `web/StoryController` → `templates/story/`.
 설계는 `architecture.md` 5·6절과 `decisions/D61_*.md`.
 
 ## 막힌 것
 
-- **DB 비밀번호를 에이전트가 입력하지 못한다.** `gradlew test` 전체·`bootRun`·psql 은 사용자가 돌린다
-- **`V8` 이 아직 적용된 적 없다.** 다음 `gradlew test` 에서 Flyway 가 처음 적용한다
-- **`.env` → Spring 배선이 미검증이다.** 앱을 띄워야 확인된다 (키 자체는 Groq 실호출로 확인됨)
+- **`.env` → Spring 배선이 미검증이다.** 앱을 띄워야 확인된다 (키는 실호출로 확인됨)
 - **`tools/` 실호출 스크립트가 임시 파일에만 있다.** 저장소에 넣으려면 `gradlew test` 가
   네트워크를 안 타도록 opt-in 으로 만들어야 한다
+- **`bootRun`·psql 은 사용자가 돌린다.** 테스트는 `$env:TFM_DB_PASSWORD='postgres'` 로
+  에이전트도 돌릴 수 있다 (`RUNBOOK.md`)
 
 ## 최근에 뒤집힌 것 (오래된 문서를 믿기 전에 본다)
 
-- **시너지·카운터는 승패가 아니라 경기력에서 본다** (D63). 승패는 경기당 1비트라
-  805경기로도 t<2 였는데, `champ_stat` 으로 보면 150경기에서 잡힌다
+- **시너지·카운터는 승패가 아니라 경기력에서 본다** (D63). 805경기로도 t<2 였던 것이
+  `champ_stat` 으로 보면 150경기에서 잡힌다
 - **챔피언 쌍은 역할군의 다른 이름이 아니다** (D64). 다만 지표마다 부호의 뜻이 다르다 —
   카운터는 `death` 로 본다. `dealing` 의 상대 효과는 "흡수 성향" 이다
 - **없는 게 아니라 안 보이는 것이다** (D62). D60 의 "2인만 실재한다" 를 그렇게 읽으면 안 된다
 - **Groq 카탈로그에 llama 계열이 없다.** 기본 모델은 `openai/gpt-oss-120b`.
   `architecture.md` 의 옛 모델명을 믿고 호출하면 404 다
+- **`@Repository` 의 인자 검증은 `IllegalArgumentException` 으로 안 나간다.** 예외 변환이
+  `InvalidDataAccessApiUsageException` 으로 바꾼다(원인은 남는다). DAO 를 부르는 쪽에서 걸린다
 
 ## 이 파일의 규칙
 

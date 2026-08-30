@@ -1,0 +1,342 @@
+package com.teamfighter.tfm.story.dao;
+
+import com.teamfighter.tfm.story.ArticleDraft;
+import com.teamfighter.tfm.story.ArticleDraft.FactStatus;
+import com.teamfighter.tfm.story.ArticleDraft.Finding;
+import com.teamfighter.tfm.story.ArticleDraft.Severity;
+import org.springframework.jdbc.core.JdbcTemplate;
+import org.springframework.stereotype.Repository;
+import org.springframework.transaction.annotation.Transactional;
+
+import java.sql.Array;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Types;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * 기사·댓글·지적을 {@code article} · {@code article_comment} · {@code article_finding} 에 넣고 꺼낸다
+ * (D22: 적재·집계는 JdbcTemplate).
+ *
+ * <p><b>업서트다. 재생성이 갱신이 된다.</b> 같은 매치를 다시 돌리면 기사가 한 편 더 생기는 게
+ * 아니라 있던 것이 덮인다 — 그래서 유일 키가 {@code schedule_id} 가 아니라
+ * {@code (slot_id, season, day, blue_team_id, red_team_id)} 다. {@code MatchSchedule.ID} 는
+ * 대회마다 ID 공간이 따로라 단독으로는 유일하지 않다(실측 190건이 114개 값에 겹친다).
+ *
+ * <p><b>{@code fact_status} 를 여기서 계산하지 않는다.</b> {@link ArticleDraft#factStatus()} 가
+ * 준 값을 그대로 넣는다. V8 주석이 "모순이 하나라도 있으면 {@code CONTRADICTED}" 를 적재의
+ * 책임으로 남겼는데(트리거를 두지 않기로 한 D35 의 선례다), 그 책임을 DAO 코드가 지면 저장
+ * 경로가 하나 늘 때마다 다시 틀릴 수 있다. 타입이 계산하면 틀리게 넣을 방법 자체가 없다.
+ *
+ * <p><b>자식 행은 지우고 다시 넣는다.</b> 댓글과 지적은 {@code ordinal} 로만 구분되는데,
+ * 다시 생성한 기사의 댓글 수가 줄면(15개 → 12개) 업서트만으로는 <b>옛 댓글 3개가 남는다.</b>
+ * 그것들은 지금 본문과 아무 관계가 없고, 화면에서는 그냥 댓글로 보인다. 삭제와 삽입이 한
+ * 트랜잭션 안에 있어야 그 사이의 조회가 빈 댓글난을 보지 않는다.
+ */
+@Repository
+public class ArticleDao {
+
+    /**
+     * 유일 키에 든 다섯 컬럼은 {@code DO UPDATE SET} 에 넣지 않는다 — 그 값들로 행을 찾았으니
+     * 같을 수밖에 없다. {@code generated_at} 은 {@code EXCLUDED} 로 새로 찍는다: 재생성은
+     * 새 기사를 쓴 것이므로 시각도 그때가 맞다.
+     *
+     * <p>{@code now()} 가 아니라 {@code clock_timestamp()} 다. {@code now()} 는 트랜잭션
+     * <b>시작</b> 시각이라 한 트랜잭션에서 여러 편을 저장하면 전부 같은 시각이 찍힌다 —
+     * 목록의 정렬 기준이 되는 값이 뭉개진다 ({@code AggRunRecorder} 에서 같은 것에 데었다).
+     */
+    private static final String UPSERT = """
+            INSERT INTO article
+                (slot_id, schedule_id, competition_id, competition_key, season, day, round,
+                 blue_team_id, red_team_id, blue_score, red_score, blue_kill, red_kill,
+                 notability, notability_reasons, headline, body, brief_text, model,
+                 generated_at, fact_status)
+            VALUES (?, ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?,
+                    ?, ?, ?, ?, ?, ?,
+                    clock_timestamp(), CAST(? AS article_fact_status))
+            ON CONFLICT (slot_id, season, day, blue_team_id, red_team_id)
+            DO UPDATE SET
+                schedule_id        = EXCLUDED.schedule_id,
+                competition_id     = EXCLUDED.competition_id,
+                competition_key    = EXCLUDED.competition_key,
+                round              = EXCLUDED.round,
+                blue_score         = EXCLUDED.blue_score,
+                red_score          = EXCLUDED.red_score,
+                blue_kill          = EXCLUDED.blue_kill,
+                red_kill           = EXCLUDED.red_kill,
+                notability         = EXCLUDED.notability,
+                notability_reasons = EXCLUDED.notability_reasons,
+                headline           = EXCLUDED.headline,
+                body               = EXCLUDED.body,
+                brief_text         = EXCLUDED.brief_text,
+                model              = EXCLUDED.model,
+                generated_at       = EXCLUDED.generated_at,
+                fact_status        = EXCLUDED.fact_status
+            RETURNING article_id
+            """;
+
+    private static final String INSERT_COMMENT = """
+            INSERT INTO article_comment (article_id, ordinal, body) VALUES (?, ?, ?)
+            """;
+
+    private static final String INSERT_FINDING = """
+            INSERT INTO article_finding (article_id, ordinal, severity, what, evidence)
+            VALUES (?, ?, CAST(? AS article_finding_severity), ?, ?)
+            """;
+
+    /**
+     * 팀 이름은 조인해서 준다. {@code team.name} 은 NULL 일 수 있고, 그때는 화면이
+     * 번호로 그린다 — 여기서 "팀 33" 같은 문자열을 지어내면 그게 이름인지 자리표시자인지
+     * 화면이 구분할 수 없게 된다.
+     */
+    private static final String SELECT_ARTICLE = """
+            SELECT a.*, bt.name AS blue_team_name, rt.name AS red_team_name
+            FROM article a
+            JOIN team bt ON bt.team_id = a.blue_team_id
+            JOIN team rt ON rt.team_id = a.red_team_id
+            WHERE a.article_id = ?
+            """;
+
+    private static final String SELECT_COMMENTS = """
+            SELECT body FROM article_comment WHERE article_id = ? ORDER BY ordinal
+            """;
+
+    private static final String SELECT_FINDINGS = """
+            SELECT severity, what, evidence FROM article_finding
+            WHERE article_id = ? ORDER BY ordinal
+            """;
+
+    /**
+     * 최근 순은 <b>경기 시점</b> 순이다 ({@code season DESC, day DESC}).
+     * {@code generated_at} 으로 정렬하면 옛 시즌을 나중에 다시 생성했을 때 그게 맨 위로 올라온다.
+     * {@code article_slot_time_idx} 가 이 정렬을 그대로 받는다.
+     */
+    private static final String SELECT_RECENT = """
+            SELECT a.article_id, a.slot_id, a.season, a.day,
+                   a.blue_team_id, a.red_team_id,
+                   bt.name AS blue_team_name, rt.name AS red_team_name,
+                   a.blue_score, a.red_score, a.notability, a.headline,
+                   a.generated_at, a.fact_status
+            FROM article a
+            JOIN team bt ON bt.team_id = a.blue_team_id
+            JOIN team rt ON rt.team_id = a.red_team_id
+            WHERE a.slot_id = ?
+            ORDER BY a.season DESC, a.day DESC, a.article_id DESC
+            LIMIT ?
+            """;
+
+    private final JdbcTemplate jdbc;
+
+    public ArticleDao(JdbcTemplate jdbc) {
+        this.jdbc = jdbc;
+    }
+
+    /**
+     * 기사 한 편을 통째로 저장한다. 이미 있으면 덮는다.
+     *
+     * <p>기사·댓글·지적이 <b>한 트랜잭션</b>이다. 셋이 갈리면 댓글만 새것이고 본문은 옛것인
+     * 기사가 화면에 뜨는데, 그건 예외 없이 조용히 일어난다.
+     *
+     * @return 저장된 {@code article_id}. 재생성이면 원래 있던 것과 같은 값이다
+     */
+    @Transactional
+    public long save(ArticleDraft draft) {
+        long articleId = upsert(draft);
+        replaceComments(articleId, draft.comments());
+        replaceFindings(articleId, draft.findings());
+        return articleId;
+    }
+
+    /**
+     * 자식 행을 <b>기사보다 먼저</b> 읽는다. {@code RowMapper} 안에서 또 조회하면 열린
+     * {@code ResultSet} 위에서 같은 연결에 질의를 얹게 된다 — 지금은 돌지만 커서를 쓰는
+     * 순간 깨지는 종류의 코드다. 없는 기사면 두 조회가 빈 목록을 줄 뿐이고, 그 비용은
+     * 인덱스 조회 두 번이다.
+     */
+    @Transactional(readOnly = true)
+    public Optional<ArticleView> find(long articleId) {
+        List<String> comments = jdbc.queryForList(SELECT_COMMENTS, String.class, articleId);
+        List<Finding> findings = jdbc.query(SELECT_FINDINGS,
+                (rs, rowNum) -> new Finding(
+                        Severity.valueOf(rs.getString("severity")),
+                        rs.getString("what"),
+                        rs.getString("evidence")),
+                articleId);
+
+        List<ArticleView> found = jdbc.query(SELECT_ARTICLE,
+                (rs, rowNum) -> toView(rs, comments, findings), articleId);
+        return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
+    }
+
+    /**
+     * 최근 기사 목록.
+     *
+     * <p><b>{@code limit} 이 0 이하면 던진다.</b> 빈 목록을 돌려주면 화면이 비어도 기사가 없는
+     * 것인지 인자가 틀린 것인지 구분되지 않는다.
+     *
+     * <p>다만 <b>밖에서 잡히는 예외 타입은 {@link IllegalArgumentException} 이 아니다.</b>
+     * {@code @Repository} 빈이라 예외 변환이 걸려 있어서, JPA 규약대로
+     * {@code InvalidDataAccessApiUsageException} 으로 바뀌어 나간다(원인은 그대로 달려 있다).
+     * 테스트가 그 사실에 걸려서 알게 됐다 — 부르는 쪽이 {@code IllegalArgumentException} 을
+     * 잡으려 들면 안 잡힌다.
+     */
+    @Transactional(readOnly = true)
+    public List<ArticleCard> recent(int slotId, int limit) {
+        if (limit <= 0) {
+            throw new IllegalArgumentException("limit 은 1 이상이어야 한다: " + limit);
+        }
+        return jdbc.query(SELECT_RECENT, (rs, rowNum) -> new ArticleCard(
+                rs.getLong("article_id"),
+                rs.getInt("slot_id"),
+                rs.getInt("season"),
+                rs.getInt("day"),
+                rs.getInt("blue_team_id"),
+                rs.getInt("red_team_id"),
+                rs.getString("blue_team_name"),
+                rs.getString("red_team_name"),
+                rs.getInt("blue_score"),
+                rs.getInt("red_score"),
+                rs.getDouble("notability"),
+                rs.getString("headline"),
+                rs.getObject("generated_at", java.time.OffsetDateTime.class),
+                FactStatus.valueOf(rs.getString("fact_status"))), slotId, limit);
+    }
+
+    /**
+     * {@code notability_reasons} 가 {@code text[]} 라 {@code PreparedStatement} 를 직접 만진다.
+     * 배열은 연결에서 만들어야 하고({@code createArrayOf}), 문자열로 넘겨 캐스팅하면
+     * 쉼표·중괄호가 든 이유 한 줄이 조용히 여러 원소로 쪼개진다.
+     */
+    private long upsert(ArticleDraft draft) {
+        Long articleId = jdbc.execute(UPSERT, (PreparedStatement ps) -> {
+            Array reasons = ps.getConnection()
+                    .createArrayOf("text", draft.notabilityReasons().toArray(String[]::new));
+            try {
+                int i = 1;
+                ps.setInt(i++, draft.slotId());
+                ps.setObject(i++, draft.scheduleId(), Types.INTEGER);
+                ps.setObject(i++, draft.competitionId(), Types.INTEGER);
+                ps.setObject(i++, draft.competitionKey(), Types.VARCHAR);
+                ps.setInt(i++, draft.season());
+                ps.setInt(i++, draft.day());
+                ps.setObject(i++, draft.round(), Types.INTEGER);
+                ps.setInt(i++, draft.blueTeamId());
+                ps.setInt(i++, draft.redTeamId());
+                ps.setInt(i++, draft.blueScore());
+                ps.setInt(i++, draft.redScore());
+                ps.setInt(i++, draft.blueKill());
+                ps.setInt(i++, draft.redKill());
+                ps.setDouble(i++, draft.notability());
+                ps.setArray(i++, reasons);
+                ps.setString(i++, draft.headline());
+                ps.setString(i++, draft.body());
+                ps.setString(i++, draft.briefText());
+                ps.setString(i++, draft.model());
+                ps.setString(i, draft.factStatus().name());
+
+                try (ResultSet rs = ps.executeQuery()) {
+                    if (!rs.next()) {
+                        throw new IllegalStateException(
+                                "기사를 저장하지 못했다 — RETURNING 이 비었다: "
+                                        + describe(draft));
+                    }
+                    return rs.getLong(1);
+                }
+            } finally {
+                reasons.free();
+            }
+        });
+        if (articleId == null) {
+            throw new IllegalStateException("기사를 저장하지 못했다: " + describe(draft));
+        }
+        return articleId;
+    }
+
+    private void replaceComments(long articleId, List<String> comments) {
+        jdbc.update("DELETE FROM article_comment WHERE article_id = ?", articleId);
+        if (comments.isEmpty()) {
+            return;
+        }
+        List<Object[]> batch = new ArrayList<>(comments.size());
+        for (int i = 0; i < comments.size(); i++) {
+            batch.add(new Object[] { articleId, (short) (i + 1), comments.get(i) });
+        }
+        jdbc.batchUpdate(INSERT_COMMENT, batch,
+                new int[] { Types.BIGINT, Types.SMALLINT, Types.VARCHAR });
+    }
+
+    private void replaceFindings(long articleId, List<Finding> findings) {
+        jdbc.update("DELETE FROM article_finding WHERE article_id = ?", articleId);
+        if (findings.isEmpty()) {
+            return;
+        }
+        List<Object[]> batch = new ArrayList<>(findings.size());
+        for (int i = 0; i < findings.size(); i++) {
+            Finding finding = findings.get(i);
+            batch.add(new Object[] {
+                    articleId, (short) (i + 1), finding.severity().name(),
+                    finding.what(), finding.evidence() });
+        }
+        jdbc.batchUpdate(INSERT_FINDING, batch,
+                new int[] { Types.BIGINT, Types.SMALLINT, Types.VARCHAR,
+                        Types.VARCHAR, Types.VARCHAR });
+    }
+
+    private static ArticleView toView(ResultSet rs, List<String> comments, List<Finding> findings)
+            throws SQLException {
+        return new ArticleView(
+                rs.getLong("article_id"),
+                rs.getInt("slot_id"),
+                nullableInt(rs, "schedule_id"),
+                nullableInt(rs, "competition_id"),
+                rs.getString("competition_key"),
+                rs.getInt("season"),
+                rs.getInt("day"),
+                nullableInt(rs, "round"),
+                rs.getInt("blue_team_id"),
+                rs.getInt("red_team_id"),
+                rs.getString("blue_team_name"),
+                rs.getString("red_team_name"),
+                rs.getInt("blue_score"),
+                rs.getInt("red_score"),
+                rs.getInt("blue_kill"),
+                rs.getInt("red_kill"),
+                rs.getDouble("notability"),
+                textArray(rs, "notability_reasons"),
+                rs.getString("headline"),
+                rs.getString("body"),
+                rs.getString("brief_text"),
+                rs.getString("model"),
+                rs.getObject("generated_at", java.time.OffsetDateTime.class),
+                FactStatus.valueOf(rs.getString("fact_status")),
+                comments,
+                findings);
+    }
+
+    /** {@code getInt} 는 NULL 을 0 으로 준다. 0 은 실제로 있을 수 있는 라운드 번호다. */
+    private static Integer nullableInt(ResultSet rs, String column) throws SQLException {
+        int value = rs.getInt(column);
+        return rs.wasNull() ? null : value;
+    }
+
+    private static List<String> textArray(ResultSet rs, String column) throws SQLException {
+        Array array = rs.getArray(column);
+        if (array == null) {
+            return List.of();
+        }
+        try {
+            return List.of((String[]) array.getArray());
+        } finally {
+            array.free();
+        }
+    }
+
+    private static String describe(ArticleDraft draft) {
+        return "슬롯 " + draft.slotId() + " 시즌 " + draft.season() + " 일 " + draft.day()
+                + " (" + draft.blueTeamId() + " vs " + draft.redTeamId() + ")";
+    }
+}

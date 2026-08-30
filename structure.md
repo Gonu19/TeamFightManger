@@ -63,6 +63,17 @@ A:\project\TeamFighter\
 │   │   ├─ synergy/                          아직 없음
 │   │   └─ dao/         MatchObservationDao · AnalysisConfigDao (D46: 행만 꺼낸다)
 │   │                    CounterWriter · PerformanceWriter · AggRunRecorder
+│   ├─ story/           기사·댓글 (D61). 집계와 링크로 잇지 않는다
+│   │   ├─ MatchBrief                       사실 — 세트 합 = 스케줄 스코어를 강제
+│   │   ├─ Notability · NotabilityContext   해석 — 아는 축만으로 분량을 정한다
+│   │   ├─ SeasonBook                       순위·업셋·라이벌. 미래를 안 본다
+│   │   ├─ BriefRenderer · NameBook         프롬프트와 화면이 같은 문자열
+│   │   ├─ StoryPrompts · StoryRequest · StoryClient   창작 — 두 목소리
+│   │   ├─ HttpStoryClient · StoryProperties          JDK HttpClient + Jackson 3
+│   │   ├─ FactCheck · FactCheckResult      대조 — 모순 / 미확인 2등급
+│   │   ├─ ArticleDraft                     fact_status 를 타입이 계산한다
+│   │   └─ dao/         ArticleDao          업서트 — 재생성이 갱신이 된다
+│   │                    ArticleView · ArticleCard    상세용 · 목록용
 │   ├─ draft/           밴픽 시뮬            (banpick.md)
 │   │   ├─ DraftStateMachine · DraftSessionService · EvidenceGate
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
@@ -81,7 +92,8 @@ A:\project\TeamFighter\
 │   │   ├─ V4__ban_rate_denominator.sql     밴률 분모 분리 (D50)
 │   │   ├─ V5__current_patch_basis.sql      메타 반감기 2 · GLOBAL 중단 (D53)
 │   │   ├─ V6__team_identity.sql          team.name_key · 팀 이름 시드 52 (D56)
-│   │   └─ V7__athlete.sql                athlete · 선수 이름 풀 551 (D58)
+│   │   ├─ V7__athlete.sql                athlete · 선수 이름 풀 551 (D58)
+│   │   └─ V8__article.sql                article · comment · finding (D61)
 │   ├─ templates/ + templates/fragments/
 │   └─ static/css · static/js
 │
@@ -138,7 +150,10 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 `analysis/` 에서 아직 없는 것은 `synergy/`(2·3인 조합 · 역할군 4인)와, 2단 축소를 실제로
 쓰는 패치별 집계다. 지금 저장하는 것은 1단(전체 누적, `patch_id IS NULL`)뿐이다.
 `performance/` 는 티어·픽률·밴률까지 만들지만 **경기력 z값과 티어 등급은 비워 둔다** —
-둘 다 근거가 아직 없다 (D50). `draft/` · `web/` 는 통째로 없다.
+둘 다 근거가 아직 없다 (D50).
+
+`story/` 는 사실→해석→창작→대조와 저장(`dao/`)까지 있다. 남은 것은 그 넷을 이어 붙이는
+`ArticleWriter` 하나다. `draft/` · `web/` · `templates/story/` 는 통째로 없다.
 
 ---
 
