@@ -1,6 +1,8 @@
 package com.teamfighter.tfm.story.dao;
 
-import com.teamfighter.tfm.story.ArticleDraft.CommentLine;
+import com.teamfighter.tfm.story.gallery.GalleryComment;
+import com.teamfighter.tfm.story.gallery.GalleryIssue;
+import com.teamfighter.tfm.story.gallery.GalleryIssue.GalleryIssueCategory;
 import com.teamfighter.tfm.story.gallery.GalleryPost;
 import com.teamfighter.tfm.story.gallery.GalleryPostKind;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -9,12 +11,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.time.OffsetDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 갤러리 페이지를 저장하고 읽는다.
@@ -23,16 +27,28 @@ import java.util.Optional;
  *
  * {@link ArticleDao} 는 업서트다. 기사는 <b>같은 매치를 다시 맞춰본 결과</b>라 새 것이
  * 옛 것보다 낫기 때문이다. 갤러리는 반대다 — 이 층에는 정답이 없고, 다시 뽑으면
- * 그냥 <b>다른 갤</b>이 나온다. 그래서 배치가 쌓이고 화면이 최신 것을 고른다.
+ * 그냥 <b>다른 갤</b>이 나온다. 그래서 배치가 쌓이고 화면이 페이지로 넘긴다.
  *
  * <p>그 차이가 스키마에도 있다: {@code gallery_batch} 에는 UNIQUE 가 없다.
+ *
+ * <h2>기사에 매달리지 않는다 (D73)</h2>
+ *
+ * V11 은 갤러리를 기사에 걸었다. 그러면 기사를 먼저 써야 갤러리가 생기므로 기사가
+ * <b>관문</b>이 된다. 지금은 매치에 직접 붙고, 기사가 있으면 링크로만 잇는다.
  */
 @Repository
 public class GalleryDao {
 
     private static final String INSERT_BATCH = """
-            INSERT INTO gallery_batch (article_id, model, chunks)
-            VALUES (?, ?, ?) RETURNING batch_id
+            INSERT INTO gallery_batch
+                (slot_id, article_id, season, day, blue_team_id, red_team_id,
+                 blue_score, red_score, model, chunks)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING batch_id
+            """;
+
+    private static final String INSERT_ISSUE = """
+            INSERT INTO gallery_issue (batch_id, ordinal, category, headline, body, issue_date)
+            VALUES (?, ?, CAST(? AS gallery_issue_category), ?, ?, ?)
             """;
 
     /**
@@ -42,28 +58,46 @@ public class GalleryDao {
     private static final String INSERT_POST = """
             INSERT INTO gallery_post
                 (batch_id, ordinal, kind, title, author, body, views, likes,
-                 declared_concept, image_desc)
-            VALUES (?, ?, CAST(? AS gallery_post_kind), ?, ?, ?, ?, ?, ?, ?)
+                 declared_concept, image_desc, posted_at)
+            VALUES (?, ?, CAST(? AS gallery_post_kind), ?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING post_id
             """;
 
     private static final String INSERT_COMMENT = """
-            INSERT INTO gallery_comment (post_id, ordinal, parent_ordinal, author, body)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO gallery_comment (post_id, ordinal, parent_ordinal, author, body, posted_at)
+            VALUES (?, ?, ?, ?, ?, ?)
             """;
 
-    /** 그 기사의 <b>가장 최근</b> 페이지 하나. 옛 페이지는 아직 화면이 안 그린다. */
-    private static final String SELECT_LATEST_BATCH = """
-            SELECT batch_id, article_id, generated_at, model, chunks
-            FROM gallery_batch
-            WHERE article_id = ?
-            ORDER BY generated_at DESC, batch_id DESC
-            LIMIT 1
+    /**
+     * 페이지 목록. <b>경기 시점 순</b>이다 — {@code generated_at} 으로 정렬하면
+     * 옛 시즌을 나중에 뽑았을 때 그게 맨 위로 올라온다.
+     */
+    private static final String SELECT_BATCHES = """
+            SELECT g.batch_id, g.slot_id, g.article_id, g.season, g.day,
+                   g.blue_team_id, g.red_team_id, g.blue_score, g.red_score,
+                   g.generated_at, g.model, g.chunks,
+                   bt.name AS blue_team_name, rt.name AS red_team_name
+            FROM gallery_batch g
+            LEFT JOIN team bt ON bt.team_id = g.blue_team_id
+            LEFT JOIN team rt ON rt.team_id = g.red_team_id
+            WHERE g.slot_id = ?
+            ORDER BY g.season DESC, g.day DESC, g.generated_at DESC, g.batch_id DESC
+            """;
+
+    private static final String SELECT_BATCH = """
+            SELECT g.batch_id, g.slot_id, g.article_id, g.season, g.day,
+                   g.blue_team_id, g.red_team_id, g.blue_score, g.red_score,
+                   g.generated_at, g.model, g.chunks,
+                   bt.name AS blue_team_name, rt.name AS red_team_name
+            FROM gallery_batch g
+            LEFT JOIN team bt ON bt.team_id = g.blue_team_id
+            LEFT JOIN team rt ON rt.team_id = g.red_team_id
+            WHERE g.batch_id = ?
             """;
 
     private static final String SELECT_POSTS = """
             SELECT post_id, ordinal, kind, title, author, body, views, likes,
-                   is_concept, image_desc
+                   is_concept, image_desc, posted_at
             FROM gallery_post
             WHERE batch_id = ?
             ORDER BY ordinal
@@ -74,36 +108,37 @@ public class GalleryDao {
      * 그건 느린 게 아니라 안 보이게 느린 종류다 ({@code ArticleDao} 가 적어 둔 그대로).
      */
     private static final String SELECT_COMMENTS = """
-            SELECT c.post_id, c.ordinal, c.parent_ordinal, c.author, c.body
+            SELECT c.post_id, c.ordinal, c.parent_ordinal, c.author, c.body, c.posted_at
             FROM gallery_comment c
             JOIN gallery_post p ON p.post_id = c.post_id
             WHERE p.batch_id = ?
             ORDER BY c.post_id, c.ordinal
             """;
 
-    /** 그 기사에 갤러리가 몇 페이지 쌓였나. 화면이 "다시 불러오기" 옆에 적는다. */
-    private static final String COUNT_BATCHES = """
-            SELECT count(*) FROM gallery_batch WHERE article_id = ?
+    private static final String SELECT_ISSUES = """
+            SELECT category, headline, body, issue_date FROM gallery_issue
+            WHERE batch_id = ? ORDER BY ordinal
             """;
 
-    /**
-     * 갤러리가 아직 없는 <b>가장 최근 매치 기사</b> 하나.
-     *
-     * <p>매치 기사만 본다({@code kind = 'MATCH'}). 총평에는 선수별 표가 없고
-     * ({@code RoundBrief} 는 매치당 한 줄이다) 그 표가 없으면 갤 글이 "잘했다/못했다" 로
-     * 뭉개진다 — 그건 우리가 프롬프트로 못 고친다고 결론 낸 바로 그 실패다.
-     *
-     * <p>최근 순은 <b>경기 시점</b> 순이다. {@code generated_at} 으로 정렬하면 옛 시즌을
-     * 나중에 생성했을 때 그게 맨 위로 올라온다 ({@code ArticleDao.SELECT_RECENT} 와 같은 이유).
-     */
-    private static final String SELECT_ANCHOR = """
-            SELECT a.article_id, a.season, a.day, a.blue_team_id, a.red_team_id,
-                   a.headline, a.body
-            FROM article a
-            WHERE a.slot_id = ? AND a.kind = 'MATCH'
-              AND NOT EXISTS (SELECT 1 FROM gallery_batch g WHERE g.article_id = a.article_id)
-            ORDER BY a.season DESC, a.day DESC, a.article_id DESC
-            LIMIT 1
+    /** 갤러리가 이미 있는 매치. 생성기가 "다음에 뽑을 매치" 를 고를 때 쓴다. */
+    private static final String SELECT_KEYS = """
+            SELECT DISTINCT season, day, blue_team_id, red_team_id
+            FROM gallery_batch WHERE slot_id = ?
+            """;
+
+    /** 갤러리가 있는 커리어. 화면이 기본 슬롯을 고를 때 쓴다. */
+    private static final String SELECT_SLOTS = """
+            SELECT DISTINCT slot_id FROM gallery_batch ORDER BY slot_id
+            """;
+
+    /** 최근 이슈 헤드라인. 다음 이슈가 이것들과 겹치지 않게 프롬프트에 넘긴다. */
+    private static final String SELECT_RECENT_HEADLINES = """
+            SELECT i.headline
+            FROM gallery_issue i
+            JOIN gallery_batch g ON g.batch_id = i.batch_id
+            WHERE g.slot_id = ?
+            ORDER BY g.generated_at DESC, i.ordinal
+            LIMIT ?
             """;
 
     private final JdbcTemplate jdbc;
@@ -115,24 +150,32 @@ public class GalleryDao {
     /**
      * 페이지 하나를 통째로 저장한다.
      *
-     * <p>배치·글·댓글이 <b>한 트랜잭션</b>이다. 갈리면 글은 있는데 댓글이 없는 페이지가
-     * 화면에 뜨고, 그건 예외 없이 조용히 일어난다.
+     * <p>배치·이슈·글·댓글이 <b>한 트랜잭션</b>이다. 갈리면 글은 있는데 댓글이 없는
+     * 페이지가 화면에 뜨고, 그건 예외 없이 조용히 일어난다.
      *
-     * @param chunks 이 페이지를 만드는 데 든 호출 수. 조각 하나가 실패해도 저장은 한다 —
-     *               그때 이 값과 글 수가 안 맞고, 그 불일치가 곧 기록이다 (D72)
      * @return 저장된 {@code batch_id}
      */
     @Transactional
-    public long save(long articleId, String model, int chunks, List<GalleryPost> posts) {
-        Objects.requireNonNull(model, "model");
+    public long save(GalleryBatch batch, List<GalleryIssue> issues, List<GalleryPost> posts) {
+        Objects.requireNonNull(batch, "batch");
+        Objects.requireNonNull(issues, "issues");
         Objects.requireNonNull(posts, "posts");
         if (posts.isEmpty()) {
             throw new IllegalArgumentException("글이 하나도 없는 페이지는 저장하지 않는다");
         }
 
-        Long batchId = jdbc.queryForObject(INSERT_BATCH, Long.class, articleId, model, chunks);
+        Long batchId = jdbc.queryForObject(INSERT_BATCH, Long.class,
+                batch.slotId(), batch.articleId(), batch.season(), batch.day(),
+                batch.blueTeamId(), batch.redTeamId(), batch.blueScore(), batch.redScore(),
+                batch.model(), batch.chunks());
         if (batchId == null) {
             throw new IllegalStateException("배치를 넣었는데 batch_id 가 안 나왔다");
+        }
+
+        int issueOrdinal = 1;
+        for (GalleryIssue issue : issues) {
+            jdbc.update(INSERT_ISSUE, batchId, issueOrdinal++, issue.category().name(),
+                    issue.headline(), issue.body(), issue.issueDate());
         }
 
         int ordinal = 1;
@@ -143,74 +186,67 @@ public class GalleryDao {
         return batchId;
     }
 
-    /** 그 기사의 최신 갤러리. 아직 없으면 {@link Optional#empty()} — 예외가 아니다. */
+    /**
+     * 그 커리어의 페이지 목록. <b>글도 댓글도 안 읽는다</b> — 페이지 번호를 그리는 데
+     * 필요한 것은 머리말뿐이고, 페이지 열 개의 글을 다 끌어오면 화면 하나가 수 MB 를 읽는다.
+     */
     @Transactional(readOnly = true)
-    public Optional<GalleryView> findLatest(long articleId) {
-        List<long[]> ids = new ArrayList<>();
-        List<GalleryView> found = jdbc.query(SELECT_LATEST_BATCH, (rs, rowNum) -> {
-            ids.add(new long[] {rs.getLong("batch_id")});
-            return new GalleryView(
-                    rs.getLong("batch_id"),
-                    rs.getLong("article_id"),
-                    rs.getObject("generated_at", java.time.OffsetDateTime.class),
-                    rs.getString("model"),
-                    rs.getInt("chunks"),
-                    List.of());
-        }, articleId);
+    public List<GalleryView> pages(int slotId) {
+        return jdbc.query(SELECT_BATCHES,
+                (rs, rowNum) -> readBatch(rs, List.of(), List.of()), slotId);
+    }
 
-        if (found.isEmpty()) {
-            return Optional.empty();
-        }
-        long batchId = ids.get(0)[0];
+    /** 페이지 하나를 통째로. 없으면 {@link Optional#empty()} — 예외가 아니다. */
+    @Transactional(readOnly = true)
+    public Optional<GalleryView> find(long batchId) {
+        // 자식 행을 RowMapper 밖에서 먼저 읽는다. 매퍼 안에서 또 조회하면 열린 ResultSet
+        // 위에 같은 연결로 질의를 얹게 된다 (ArticleDao 와 같은 이유).
+        List<GalleryIssue> issues = jdbc.query(SELECT_ISSUES,
+                (rs, rowNum) -> new GalleryIssue(
+                        GalleryIssueCategory.valueOf(rs.getString("category")),
+                        rs.getString("headline"),
+                        rs.getString("body"),
+                        rs.getString("issue_date")), batchId);
 
-        // 자식 행을 배치보다 나중에, 그러나 RowMapper 밖에서 읽는다. 매퍼 안에서 또
-        // 조회하면 열린 ResultSet 위에 같은 연결로 질의를 얹게 된다 (ArticleDao 와 같은 이유).
-        Map<Long, List<CommentLine>> commentsByPost = loadComments(batchId);
+        Map<Long, List<GalleryComment>> commentsByPost = loadComments(batchId);
         List<GalleryView.Post> posts = jdbc.query(SELECT_POSTS,
                 (rs, rowNum) -> readPost(rs, commentsByPost), batchId);
 
-        GalleryView head = found.get(0);
-        return Optional.of(new GalleryView(head.batchId(), head.articleId(),
-                head.generatedAt(), head.model(), head.chunks(), posts));
-    }
-
-    /**
-     * 갤러리를 아직 안 붙인 최근 매치 기사. 다 붙였으면 {@link Optional#empty()} —
-     * <b>예외가 아니다.</b> "다 했다" 는 정상 상태이고, 화면은 그걸 그대로 말하면 된다.
-     */
-    @Transactional(readOnly = true)
-    public Optional<GalleryAnchor> nextAnchor(int slotId) {
-        List<GalleryAnchor> found = jdbc.query(SELECT_ANCHOR, (rs, rowNum) -> new GalleryAnchor(
-                rs.getLong("article_id"),
-                new ArticleKey(rs.getInt("season"), rs.getInt("day"),
-                        rs.getInt("blue_team_id"), rs.getInt("red_team_id")),
-                rs.getString("headline"),
-                rs.getString("body")), slotId);
+        List<GalleryView> found = jdbc.query(SELECT_BATCH,
+                (rs, rowNum) -> readBatch(rs, issues, posts), batchId);
         return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
     }
 
     /**
-     * 그 배치가 어느 기사에 붙었나. 화면 주소가 {@code article_id} 라 되짚을 일이 있다.
+     * 갤러리가 이미 있는 매치의 신원 전부.
+     *
+     * <p>{@link ArticleKey} 를 그대로 쓴다. 이름은 기사에서 왔지만 담는 값은
+     * <b>매치 신원</b>(시즌 · 일 · DB 팀 번호 둘)이고, 그건 기사든 갤러리든 같다.
      */
     @Transactional(readOnly = true)
-    public Optional<Long> articleOf(long batchId) {
-        List<Long> found = jdbc.queryForList(
-                "SELECT article_id FROM gallery_batch WHERE batch_id = ?", Long.class, batchId);
-        return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
+    public Set<ArticleKey> writtenKeys(int slotId) {
+        return Set.copyOf(jdbc.query(SELECT_KEYS,
+                (rs, rowNum) -> new ArticleKey(rs.getInt("season"), rs.getInt("day"),
+                        rs.getInt("blue_team_id"), rs.getInt("red_team_id")), slotId));
     }
 
-    /** 그 기사에 쌓인 페이지 수. */
+    /** 갤러리가 있는 커리어. */
     @Transactional(readOnly = true)
-    public int countBatches(long articleId) {
-        Integer count = jdbc.queryForObject(COUNT_BATCHES, Integer.class, articleId);
-        return count == null ? 0 : count;
+    public List<Integer> slotsWithGalleries() {
+        return jdbc.queryForList(SELECT_SLOTS, Integer.class);
+    }
+
+    /** 최근 이슈 헤드라인. 다음 이슈가 겹치지 않게 프롬프트에 넘긴다. */
+    @Transactional(readOnly = true)
+    public List<String> recentHeadlines(int slotId, int limit) {
+        return jdbc.queryForList(SELECT_RECENT_HEADLINES, String.class, slotId, limit);
     }
 
     private long insertPost(long batchId, int ordinal, GalleryPost post) {
         Long postId = jdbc.queryForObject(INSERT_POST, Long.class,
                 batchId, ordinal, post.kind().name(), post.title(), post.author(),
                 post.body(), post.views(), post.likes(),
-                post.declaredConcept(), post.imageDesc());
+                post.declaredConcept(), post.imageDesc(), post.postedAt());
         if (postId == null) {
             throw new IllegalStateException("글을 넣었는데 post_id 가 안 나왔다");
         }
@@ -224,28 +260,50 @@ public class GalleryDao {
      * 들어가도 트랜잭션 끝에서만 검사한다. 파서는 부모를 먼저 넣지만, 그 순서에
      * 저장이 <b>의존하지 않게</b> 스키마가 받쳐 준다.
      */
-    private void insertComments(long postId, List<CommentLine> comments) {
+    private void insertComments(long postId, List<GalleryComment> comments) {
         int ordinal = 1;
-        for (CommentLine line : comments) {
+        for (GalleryComment line : comments) {
             jdbc.update(INSERT_COMMENT, postId, ordinal++,
-                    line.parentOrdinal(), line.author(), line.body());
+                    line.parentOrdinal(), line.author(), line.body(), line.postedAt());
         }
     }
 
-    private Map<Long, List<CommentLine>> loadComments(long batchId) {
-        Map<Long, List<CommentLine>> out = new LinkedHashMap<>();
+    private Map<Long, List<GalleryComment>> loadComments(long batchId) {
+        Map<Long, List<GalleryComment>> out = new LinkedHashMap<>();
         jdbc.query(SELECT_COMMENTS, rs -> {
             out.computeIfAbsent(rs.getLong("post_id"), key -> new ArrayList<>())
-                    .add(new CommentLine(
+                    .add(new GalleryComment(
                             rs.getString("author"),
                             rs.getString("body"),
-                            nullableInt(rs, "parent_ordinal")));
+                            nullableInt(rs, "parent_ordinal"),
+                            rs.getString("posted_at")));
         }, batchId);
         return out;
     }
 
+    private static GalleryView readBatch(ResultSet rs, List<GalleryIssue> issues,
+                                         List<GalleryView.Post> posts) throws SQLException {
+        return new GalleryView(
+                rs.getLong("batch_id"),
+                rs.getInt("slot_id"),
+                nullableLong(rs, "article_id"),
+                rs.getInt("season"),
+                rs.getInt("day"),
+                nullableInt(rs, "blue_team_id"),
+                nullableInt(rs, "red_team_id"),
+                rs.getString("blue_team_name"),
+                rs.getString("red_team_name"),
+                nullableInt(rs, "blue_score"),
+                nullableInt(rs, "red_score"),
+                rs.getObject("generated_at", OffsetDateTime.class),
+                rs.getString("model"),
+                rs.getInt("chunks"),
+                issues,
+                posts);
+    }
+
     private static GalleryView.Post readPost(ResultSet rs,
-                                             Map<Long, List<CommentLine>> comments)
+                                             Map<Long, List<GalleryComment>> comments)
             throws SQLException {
         long postId = rs.getLong("post_id");
         return new GalleryView.Post(
@@ -259,6 +317,7 @@ public class GalleryDao {
                 nullableInt(rs, "likes"),
                 rs.getBoolean("is_concept"),
                 rs.getString("image_desc"),
+                rs.getString("posted_at"),
                 comments.getOrDefault(postId, List.of()));
     }
 
@@ -268,6 +327,11 @@ public class GalleryDao {
      */
     private static Integer nullableInt(ResultSet rs, String column) throws SQLException {
         int value = rs.getInt(column);
+        return rs.wasNull() ? null : value;
+    }
+
+    private static Long nullableLong(ResultSet rs, String column) throws SQLException {
+        long value = rs.getLong(column);
         return rs.wasNull() ? null : value;
     }
 }

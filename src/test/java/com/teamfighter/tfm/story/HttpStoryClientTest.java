@@ -243,7 +243,9 @@ class HttpStoryClientTest {
                 .isInstanceOf(StoryClient.StoryFailedException.class)
                 .hasMessageContaining("429");
 
-        assertThat(transport.calls).isEqualTo(3);          // 처음 + 재시도 2회
+        // 처음 + 재시도 5회. 갤러리가 이 예산을 둘에서 다섯으로 올렸다(D73) —
+        // 페이지 하나가 호출 다섯이라 뒤 조각은 429 를 맞는 것이 정상이다.
+        assertThat(transport.calls).isEqualTo(6);
     }
 
     @Test

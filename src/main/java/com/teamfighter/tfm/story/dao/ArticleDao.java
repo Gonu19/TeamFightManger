@@ -148,6 +148,13 @@ public class ArticleDao {
             WHERE slot_id = ? AND kind = 'MATCH'
             """;
 
+    /** 매치 신원으로 기사 하나를 찾는다. 갤러리가 "기사 보기" 링크를 걸지 정할 때 쓴다. */
+    private static final String SELECT_ID_BY_KEY = """
+            SELECT article_id FROM article
+            WHERE slot_id = ? AND kind = 'MATCH'
+              AND season = ? AND day = ? AND blue_team_id = ? AND red_team_id = ?
+            """;
+
     /** 총평을 이미 쓴 날. 팀이 없으므로 날짜만 본다. */
     private static final String SELECT_ROUND_KEYS = """
             SELECT season, day FROM article WHERE slot_id = ? AND kind = 'ROUND'
@@ -208,6 +215,19 @@ public class ArticleDao {
      * 총평을 이미 쓴 날들. 팀 자리는 0 으로 채워 돌려준다 —
      * {@link ArticleKey} 가 {@code int} 라 NULL 을 못 담고, 팀 번호 0 은 DB 가 만들지 않는다.
      */
+    /**
+     * 그 매치의 기사 번호. 없으면 {@link Optional#empty()}.
+     *
+     * <p>갤러리가 부른다 — 기사가 있으면 화면에 링크를 걸고, 없으면 안 건다.
+     * <b>갤러리 생성에는 안 쓴다</b>(D73): 갤 글의 근거는 선수별 표이지 기사 본문이 아니다.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Long> findIdByKey(int slotId, ArticleKey key) {
+        List<Long> found = jdbc.queryForList(SELECT_ID_BY_KEY, Long.class,
+                slotId, key.season(), key.day(), key.blueTeamId(), key.redTeamId());
+        return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
+    }
+
     @Transactional(readOnly = true)
     public Set<ArticleKey> writtenRoundKeys(int slotId) {
         List<ArticleKey> rows = jdbc.query(SELECT_ROUND_KEYS,

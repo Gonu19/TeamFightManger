@@ -78,15 +78,18 @@
             <input type="hidden" name="slot" th:value="${selectedSlot}">
             <button type="submit">그날 총평 쓰기</button>
         </form>
-        <form method="post" th:action="@{/story/generate-gallery}">
-            <input type="hidden" name="slot" th:value="${selectedSlot}">
-            <button type="submit">갤러리 만들기</button>
-        </form>
-        <span class="hint">
-            앞의 둘은 각각 모델 호출 두 번, 갤러리는 <b>네 번</b>이다.
-            나눠 누르면 분당 한도에 덜 걸린다.
-        </span>
+        <span class="hint">각각 모델 호출 두 번. 나눠 누르면 분당 한도에 덜 걸린다.</span>
     </div>
+
+    <!--
+      갤러리로 넘어가는 문. <b>생성 버튼과 나란히 두지 않는다</b> — 위의 둘은 누르면
+      요금이 나가고, 이건 그냥 페이지 이동이다. 같은 줄에 있으면 그 차이가 안 보인다.
+      갤러리는 기사가 없어도 되므로(D73) 기사 유무와 무관하게 항상 그린다.
+    -->
+    <p class="go-gallery">
+        <a th:href="@{/gallery(slot=${selectedSlot})}">🔥 갤러리 가기 →</a>
+        <span class="hint">경기마다 게시글 20편과 댓글이 붙는 게시판</span>
+    </p>
 
     <p class="empty" th:if="${cards.isEmpty()}">
         <span th:if="${canGenerate}">아직 쓴 기사가 없다. 위 버튼을 누르면 최근 경기부터 쓴다.</span>

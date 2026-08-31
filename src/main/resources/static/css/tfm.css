@@ -210,65 +210,18 @@ article h1 { font-size: 1.6rem; line-height: 1.4; margin: 2rem 0 0.5rem; }
     font-size: 0.92rem;
 }
 
-/* --- 갤러리 (레퍼런스 모드의 게시판을 옮긴 것) --- */
-
-.gallery-link { margin: 1.5rem 0 0; }
-.gallery-link a { font-size: 0.95rem; }
-
-.gallery-head h1 { margin-bottom: 0.3rem; }
+/* --- 갤러리로 가는 문 --- */
 
 /*
-  목록. 표(<table>)가 아니라 목록에 grid 를 얹었다 — 각 글이 <details> 로 펼쳐지는데,
-  표의 행 안에서 펼치면 열 너비가 본문 길이에 끌려간다.
-*/
-.posts { list-style: none; padding: 0; margin: 1.2rem 0 0; border-top: 1px solid var(--ink); }
-.posts > li { border-bottom: 1px solid var(--line); }
-
-.posts summary {
-    display: grid;
-    grid-template-columns: 3.2rem 4.5rem 1fr auto 7rem 3rem 3rem;
-    align-items: baseline;
-    gap: 0.5rem;
-    padding: 0.5rem 0.3rem;
-    cursor: pointer;
-    font-size: 0.9rem;
+ * 생성 버튼과 떨어뜨려 둔다. 위의 둘은 누르면 요금이 나가고 이건 그냥 이동이다 —
+ * 같은 줄에 두면 그 차이가 안 보인다. 게시판 자체의 스타일은 gallery.css 에 있다.
+ */
+.go-gallery {
+    margin: 1.6rem 0 0;
+    padding: 0.8rem 1rem;
+    background: #f7f8fc;
+    border-left: 3px solid #3b4890;
 }
 
-.posts summary:hover { background: #fafaf7; }
-
-/* 개념글은 굵게. 모드가 추천 30 이상을 개념글로 올리는 것을 DB 가 계산해 굳혔다 (D71) */
-.posts > li.concept summary { font-weight: 600; background: #fcfcf6; }
-.posts > li.concept .num { color: #b03a2e; }
-
-.posts .num, .posts .num-cell, .posts .kind {
-    color: var(--dim);
-    font-size: 0.76rem;
-}
-
-.posts .num, .posts .num-cell { text-align: right; }
-.posts .kind { text-align: center; border: 1px solid var(--line); border-radius: 2px; padding: 0 0.2rem; }
-
-.posts .title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.posts .cmt { color: #d64545; font-size: 0.76rem; }
-.posts .who { color: var(--dim); font-size: 0.76rem; overflow: hidden; text-overflow: ellipsis; }
-
-.post-body {
-    padding: 0.8rem 0.3rem 1.2rem;
-    border-top: 1px dashed var(--line);
-}
-
-/* 짤방은 실제 이미지가 없다. 파일명만 나오므로 첨부처럼 보이게 둔다 */
-.image-desc {
-    color: var(--dim);
-    font-size: 0.82rem;
-    margin: 0 0 0.6rem;
-}
-
-.post-body .body { font-size: 0.95rem; }
-.post-body .thread { margin-top: 1rem; padding-top: 0.6rem; border-top: 1px solid var(--line); }
-
-/* 좁은 화면에서는 조회수·추천수를 접는다. 제목이 먼저 읽혀야 한다 */
-@media (max-width: 720px) {
-    .posts summary { grid-template-columns: 2.6rem 1fr auto; }
-    .posts .kind, .posts .who, .posts .num-cell { display: none; }
-}
+.go-gallery a { font-size: 1rem; font-weight: 600; color: #3b4890; }
+.go-gallery .hint { display: block; margin-top: 0.3rem; color: var(--dim); font-size: 0.78rem; }

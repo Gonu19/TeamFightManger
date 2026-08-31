@@ -1,6 +1,5 @@
 package com.teamfighter.tfm.story.gallery;
 
-import com.teamfighter.tfm.story.ArticleDraft.CommentLine;
 import com.teamfighter.tfm.story.JsonSalvage;
 import tools.jackson.databind.JsonNode;
 
@@ -86,6 +85,7 @@ public final class GalleryPosts {
                 JsonSalvage.intOrNull(node, "likes"),
                 node.path("is_concept").asBoolean(false),
                 imageDesc,
+                JsonSalvage.text(node, "date"),
                 readComments(node.path("comments")));
     }
 
@@ -95,12 +95,12 @@ public final class GalleryPosts {
      * <p>중첩 대신 평평하게 두는 이유는 저장이 그렇기 때문이다 —
      * {@code gallery_comment} 는 행 하나에 {@code parent_ordinal} 하나를 갖는다.
      */
-    private static List<CommentLine> readComments(JsonNode array) {
+    private static List<GalleryComment> readComments(JsonNode array) {
         if (!array.isArray()) {
             return List.of();
         }
 
-        List<CommentLine> out = new ArrayList<>();
+        List<GalleryComment> out = new ArrayList<>();
         for (JsonNode node : array) {
             if (out.size() >= MAX_COMMENTS) {
                 break;
@@ -111,7 +111,8 @@ public final class GalleryPosts {
             }
 
             int parentOrdinal = out.size() + 1;                                 // 1. 이 원댓글의 순번 (1부터)
-            out.add(new CommentLine(JsonSalvage.text(node, "author"), body, null));
+            out.add(new GalleryComment(JsonSalvage.text(node, "author"), body, null,
+                    JsonSalvage.text(node, "date")));
 
             JsonNode replies = node.path("sub_comments");                       // 2. 대댓글은 부모 순번을 들고 붙는다
             if (!replies.isArray()) {
@@ -126,7 +127,8 @@ public final class GalleryPosts {
                 if (replyBody.isBlank()) {
                     continue;
                 }
-                out.add(new CommentLine(JsonSalvage.text(reply, "author"), replyBody, parentOrdinal));
+                out.add(new GalleryComment(JsonSalvage.text(reply, "author"), replyBody, parentOrdinal,
+                        JsonSalvage.text(reply, "date")));
                 added++;
             }
         }

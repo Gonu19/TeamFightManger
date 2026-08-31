@@ -40,17 +40,26 @@ public class HttpStoryClient implements StoryClient {
     /**
      * 429 재시도 횟수.
      *
-     * <p>둘이다. 무료 티어의 한도가 <b>분당 토큰</b>이라 몇 초만 기다리면 창이 다시 열리고,
-     * 그래도 안 되면 요청 자체가 한도보다 큰 것이라 몇 번을 더 보내도 같다.
-     * 기사 한 편이 호출 두 번이므로(기사·댓글) 둘째 호출이 첫째 때문에 걸리는 경우가 가장 흔하다.
+     * <p>다섯이다. 원래 둘이었는데 <b>갤러리가 그 값을 뒤집었다</b>(D73) — 페이지 하나가
+     * 호출 다섯이고 합이 분당 한도(8,000)의 두 배를 넘는다. 뒤 조각은 걸리는 것이 예외가
+     * 아니라 <b>정상</b>이고, 둘 만에 포기하면 그 조각이 통째로 빈다.
+     *
+     * <p>그래도 무한은 아니다. 다섯 번을 다 쓰고도 429 면 요청 자체가 한도보다 큰 것이라
+     * 더 보내도 같다 — 그때는 조각 하나를 포기하고 나머지로 페이지를 만든다.
      */
-    private static final int RETRIES = 2;
+    private static final int RETRIES = 5;
 
     /** 서버가 아무 말도 안 했을 때 기다릴 시간. */
     private static final Duration DEFAULT_RETRY_WAIT = Duration.ofSeconds(5);
 
-    /** 아무리 길어도 이만큼만 기다린다. 더 길면 멈춘 것처럼 보인다. */
-    private static final Duration MAX_RETRY_WAIT = Duration.ofSeconds(20);
+    /**
+     * 아무리 길어도 이만큼만 기다린다.
+     *
+     * <p>원래 20초였다. "더 길면 멈춘 것처럼 보인다" 가 이유였는데, 이제 화면이 단계를
+     * 그리므로 멈춘 것처럼 보이지 않는다({@code GalleryJobs}). 분당 한도가 리셋되는 데
+     * 실제로 그만큼 걸리는 일이 있어 40초로 올린다.
+     */
+    private static final Duration MAX_RETRY_WAIT = Duration.ofSeconds(40);
 
     /** {@code "Please try again in 2.79s"} — Groq 이 본문에 넣어주는 남은 시간. */
     private static final Pattern RETRY_HINT =

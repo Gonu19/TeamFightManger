@@ -3,6 +3,8 @@ package com.teamfighter.tfm.story;
 import com.teamfighter.tfm.ingest.watcher.TfmProperties;
 import com.teamfighter.tfm.story.dao.ArticleDao;
 import com.teamfighter.tfm.story.dao.GalleryDao;
+import com.teamfighter.tfm.story.gallery.GalleryGenerator;
+import com.teamfighter.tfm.story.gallery.GalleryJobs;
 import com.teamfighter.tfm.story.gallery.GalleryWriter;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -54,6 +56,28 @@ public class StoryConfiguration {
         return new GalleryWriter(client, galleries, properties);
     }
 
+    /** 갤러리 트리거의 알맹이. 매치를 고르고 세이브를 다시 읽는다 (D73). */
+    @ConditionalOnProperty(prefix = "tfm.story", name = "enabled", havingValue = "true")
+    @Bean
+    public GalleryGenerator galleryGenerator(GalleryWriter writer, GalleryDao galleries,
+                                             ArticleDao articles, StoryReferenceDao references,
+                                             TfmProperties properties) {
+        return new GalleryGenerator(writer, galleries, articles, references, properties);
+    }
+
+    /**
+     * 갤러리 생성을 요청 밖에서 돌린다.
+     *
+     * <p>이것도 플래그 뒤에 둔다. 꺼진 설치에 작업 큐만 떠 있으면 화면이 "시작할 수 있다"
+     * 고 믿게 되고, 눌러야 비로소 "생성이 꺼져 있다" 를 알게 된다 — 눌러야 알 수 있는
+     * 버튼은 버튼이 아니다.
+     */
+    @ConditionalOnProperty(prefix = "tfm.story", name = "enabled", havingValue = "true")
+    @Bean
+    public GalleryJobs galleryJobs(GalleryGenerator generator) {
+        return new GalleryJobs(generator);
+    }
+
     /**
      * 수동 트리거의 알맹이. 화면의 버튼이 이걸 부른다.
      *
@@ -63,9 +87,8 @@ public class StoryConfiguration {
      */
     @ConditionalOnProperty(prefix = "tfm.story", name = "enabled", havingValue = "true")
     @Bean
-    public StoryGenerator storyGenerator(ArticleWriter writer, GalleryWriter galleryWriter,
-                                         ArticleDao articles, GalleryDao galleries,
+    public StoryGenerator storyGenerator(ArticleWriter writer, ArticleDao articles,
                                          StoryReferenceDao references, TfmProperties properties) {
-        return new StoryGenerator(writer, galleryWriter, articles, galleries, references, properties);
+        return new StoryGenerator(writer, articles, references, properties);
     }
 }

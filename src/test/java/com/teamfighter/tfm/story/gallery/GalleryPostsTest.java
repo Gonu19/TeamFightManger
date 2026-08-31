@@ -24,7 +24,7 @@ class GalleryPostsTest {
                 [
                   {"kind": "LIVE", "title": "3세트 그 한타 뭐냐", "author": "ㅇㅇ(112.47)",
                    "content": "실시간으로 봤는데 손이 떨림", "views": 1420, "likes": 51,
-                   "is_concept": false, "image_desc": "멍때리는 감독.jpg",
+                   "is_concept": false, "image_desc": "멍때리는 감독.jpg", "date": "16:40",
                    "comments": [
                      {"author": "ㅇㅇ(220.76)", "content": "ㄹㅇ 미쳤더라",
                       "sub_comments": [{"author": "ㅇㅇ(112.47)", "content": "@ㅇㅇ 그니까"}]}
@@ -41,6 +41,7 @@ class GalleryPostsTest {
         assertThat(post.views()).isEqualTo(1420);
         assertThat(post.likes()).isEqualTo(51);
         assertThat(post.imageDesc()).isEqualTo("멍때리는 감독.jpg");
+        assertThat(post.postedAt()).isEqualTo("16:40");
         assertThat(post.comments()).hasSize(2);
         assertThat(post.comments().get(1).parentOrdinal()).isEqualTo(1);
     }

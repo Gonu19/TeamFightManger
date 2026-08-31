@@ -76,26 +76,31 @@ A:\project\TeamFighter\
 │   │   ├─ StoryComments · JsonSalvage      깨진 JSON 배열을 건진다 (댓글·게시글 공용)
 │   │   ├─ StoryGenerator                   수동 트리거 셋. 기사 · 총평 · 갤러리
 │   │   ├─ StoryConfiguration               플래그를 켜야 빈이 생긴다 (D61)
-│   │   ├─ gallery/     게시판 (D72). 기사가 모드의 [이슈] 자리에 들어간다
+│   │   ├─ gallery/     게시판 (D72 · D73). 기사와 독립이다
 │   │   │    ├─ GalleryPostKind             유형 10종 — 할당량과 짝인 ENUM
 │   │   │    ├─ GalleryChunk                조각 4 × 글 5 = 20. 갤의 시간 순서
-│   │   │    ├─ GalleryPrompts              모드의 GAME_IDENTITY 이식
+│   │   │    ├─ GalleryIssue · GalleryIssues 사이드바 뉴스 6건 (모드의 [이슈])
+│   │   │    ├─ GalleryComment              댓글 — 기사 것과 달리 작성 시각이 있다
+│   │   │    ├─ GalleryPrompts              모드의 GAME_IDENTITY · defaultPromptBase 이식
 │   │   │    ├─ GalleryPosts                항목 단위 복구 — 하나 깨져도 나머지는 산다
-│   │   │    └─ GalleryWriter               호출 넷. 조각 실패를 밖으로 안 내보낸다
+│   │   │    ├─ GalleryWriter               호출 다섯. 단계 실패를 밖으로 안 내보낸다
+│   │   │    ├─ GalleryGenerator            매치를 고른다. 세이브를 다시 읽는다
+│   │   │    └─ GalleryJobs                 요청 밖에서 돈다 + 진행 상황 (D73)
 │   │   └─ dao/         ArticleDao          업서트 — 재생성이 갱신이 된다
 │   │                    ArticleView · ArticleCard    상세용 · 목록용
 │   │                    StoryReference · StoryReferenceDao  이름표 (NameBook 구현)
 │   │                    ArticleKey          매치 신원 — 이미 쓴 것 판정
 │   │                    GalleryDao          쌓는다 (업서트 아님, D72 결정 5)
-│   │                    GalleryView · GalleryAnchor  게시판용 · 매달릴 기사
+│   │                    GalleryView · GalleryBatch   게시판용 · 저장할 머리말
 │   ├─ draft/           밴픽 시뮬            (banpick.md)
 │   │   ├─ DraftStateMachine · DraftSessionService · EvidenceGate
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
 │   │   └─ dao/
 │   ├─ web/
 │   │   ├─ StoryController                  / · /story · /story/{id}
-│   │   │                                    /story/{id}/gallery  게시판 (D72)
-│   │   │                                    POST /story/generate · -round · -gallery
+│   │   │                                    POST /story/generate · -round
+│   │   ├─ GalleryController                 /gallery · /gallery/status (JSON)
+│   │   │                                    POST /gallery/generate (비동기, D73)
 │   │   ├─ 컨트롤러: Tier · Champion · Synergy · Gaps · Draft · Slot
 │   │   ├─ sse/                             실시간 갱신
 │   │   └─ view/                            서버가 계산해 내려보내는 표시 모델
@@ -113,10 +118,11 @@ A:\project\TeamFighter\
 │   │   ├─ V8__article.sql                article · comment · finding (D61)
 │   │   ├─ V9__comment_author_and_replies.sql  닉네임 · 대댓글 (D69)
 │   │   ├─ V10__article_kind.sql           기사 종류 · NULLS NOT DISTINCT (D70)
-│   │   └─ V11__gallery.sql                batch · post · comment (D71 · D72)
+│   │   ├─ V11__gallery.sql                batch · post · comment (D71 · D72)
+│   │   └─ V12__gallery_standalone_and_issues.sql  기사에서 뗀다 · 이슈 (D73)
 │   ├─ templates/story/                    list.html · detail.html · gallery.html
 │   ├─ templates/ + templates/fragments/    (통계 화면은 아직)
-│   └─ static/css/tfm.css · static/js
+│   └─ static/css/tfm.css · gallery.css · static/js/gallery.js
 │
 └─ src/test/java/...                        main 과 거울 구조
 ```
@@ -173,10 +179,10 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 `performance/` 는 티어·픽률·밴률까지 만들지만 **경기력 z값과 티어 등급은 비워 둔다** —
 둘 다 근거가 아직 없다 (D50).
 
-`story/` 는 파서에서 화면까지 이어졌다 — 목록·상세·수동 생성이 돈다. 그 위에
-`story/gallery/` 가 게시판을 얹는다: 기사 하나가 갤러가 읽은 [이슈] 자리에 들어가고,
-그 아래 짧은 글 20편이 유형 할당제로 붙는다 (D72). 세트 나열을 프롬프트가 아니라
-구조로 푼 것이 이 계층의 존재 이유다.
+`story/` 는 파서에서 화면까지 이어졌다 — 목록·상세·수동 생성이 돈다. 그 옆에
+`story/gallery/` 가 게시판을 세운다: 매치 하나에 짧은 글 20편이 유형 할당제로 붙고
+이슈 6건이 사이드바에 뜬다 (D72 · D73). 세트 나열을 프롬프트가 아니라 구조로 푼 것이
+이 계층의 존재 이유다. **기사와 독립이라** 둘 중 하나만 있어도 된다.
 `web/` 에 있는 것은 연대기와 갤러리뿐이고 통계 화면(`/tier` · `/champion` · `/gaps` · `/teams`)과
 `draft/` 는 아직 없다. 상단 탭도 통계 화면이 생길 때 붙인다 — 갈 곳이 하나뿐인 탭은
 탭으로 안 읽힌다.

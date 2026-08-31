@@ -1,0 +1,391 @@
+/*
+ * 갤러리 — 레퍼런스 모드(TFA2_gallery.html)의 스타일을 옮긴 것이다.
+ *
+ * tfm.css 와 따로 두는 이유: 저쪽은 연대기(기사)의 것이고 이쪽은 게시판의 것이다.
+ * 둘은 같은 앱 안에 있지만 완전히 다른 화면이고, 한 파일에 합치면 한쪽을 손볼 때마다
+ * 다른 쪽이 흔들린다. 실제로 두 화면은 글꼴 크기부터 다르다 —
+ * 게시판은 12px 이 기본이고(디시가 그렇다) 연대기는 읽는 화면이라 더 크다.
+ *
+ * 다크 모드는 body.dark 로 갈린다. 모드와 같은 방식이고, 색값도 그대로 가져왔다.
+ */
+
+body {
+    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
+    font-size: 12px;
+    color: #333;
+    margin: 0;
+    padding: 0;
+    background-color: #f2f2f2;
+}
+
+/* ===== 레이아웃: 가운데 게시판 + 오른쪽 이슈 ===== */
+
+.layout-wrap {
+    width: 1240px;
+    max-width: 100%;
+    margin: 0 auto;
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+}
+
+.main-col { width: 950px; max-width: 100%; flex-shrink: 1; min-width: 0; }
+
+.gallery-title {
+    background-color: #fff;
+    padding: 15px 20px;
+    margin: 20px 0 10px;
+    box-sizing: border-box;
+    border-bottom: 2px solid #3b4890;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.gallery-title h2 { margin: 0; font-size: 18px; color: #333; display: flex; align-items: center; }
+.gallery-title span { font-size: 11px; color: #666; margin-left: 10px; }
+
+main {
+    background-color: #fff;
+    min-height: 700px;
+    padding: 20px;
+    box-sizing: border-box;
+    position: relative;
+}
+
+.settings-btn {
+    background: #3b4890;
+    color: #fff;
+    border: none;
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 3px;
+    font-size: 11px;
+    font-weight: bold;
+    font-family: inherit;
+    text-decoration: none;
+    display: inline-block;
+}
+
+.settings-btn:hover { background: #2f3a75; }
+
+/* ===== 머리말 · 버튼 ===== */
+
+.action-bar {
+    margin-bottom: 10px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.tournament-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+
+.tour-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    background: #eef1fb;
+    border: 1px solid #c4cdf0;
+    color: #3b4890;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 5px 12px;
+    border-radius: 4px;
+}
+
+.tour-badge .league { color: #2f3a75; }
+.tour-badge .stage { background: #3b4890; color: #fff; padding: 1px 8px; border-radius: 3px; font-size: 11px; }
+.tour-link { font-size: 11px; color: #3b4890; }
+
+.btn-refresh {
+    background-color: #ff5e5e;
+    color: #fff;
+    border: none;
+    padding: 8px 16px;
+    cursor: pointer;
+    font-weight: bold;
+    border-radius: 2px;
+    font-family: inherit;
+    font-size: 12px;
+}
+
+.btn-refresh:hover { background-color: #e94b4b; }
+.btn-refresh:disabled { background-color: #bbb; cursor: default; }
+
+.notice {
+    background: #f4f4f0;
+    border-left: 3px solid #999;
+    padding: 8px 12px;
+    margin: 0 0 12px;
+    word-break: break-word;
+}
+
+/* ===== 진행 막대 =====
+   생성이 요청 밖에서 돌기 때문에 이 화면이 단계를 그린다. 이게 없으면 몇 분 동안
+   아무 신호가 없고, 그건 사용자에게 "멈췄다" 와 구분되지 않는다. */
+
+.progress-box {
+    background: #f7f8fc;
+    border: 1px solid #c4cdf0;
+    border-radius: 4px;
+    padding: 12px 14px;
+    margin-bottom: 14px;
+}
+
+.progress-step { font-size: 12px; font-weight: bold; color: #3b4890; margin-bottom: 8px; }
+.progress-track { height: 6px; background: #dfe3f5; border-radius: 3px; overflow: hidden; }
+
+.progress-fill {
+    height: 100%;
+    width: 0;
+    background: #3b4890;
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+.progress-note { font-size: 11px; color: #777; margin-top: 8px; line-height: 1.5; }
+
+/* ===== 정렬 · 목록 ===== */
+
+.sort-bar { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 8px; font-size: 11px; color: #666; }
+.sort-link { cursor: pointer; user-select: none; }
+.sort-link.active { font-weight: bold; color: #3b4890; text-decoration: underline; }
+
+.board-list { width: 100%; border-collapse: collapse; margin-top: 5px; table-layout: fixed; }
+
+.board-list th {
+    background-color: #f9f9fa;
+    border-top: 1px solid #3b4890;
+    border-bottom: 1px solid #ddd;
+    padding: 8px;
+    font-weight: bold;
+    color: #333;
+}
+
+.board-list td { border-bottom: 1px solid #eee; padding: 8px; text-align: center; }
+.board-list .title-td { text-align: left; padding-left: 15px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-list .title-td:hover { text-decoration: underline; color: #3b4890; }
+.board-list .concept-row { background: #fff9f9; }
+.board-list .concept-row .title-td { font-weight: bold; }
+.board-list .num-concept { color: #ff5e5e; font-weight: bold; }
+.board-list .cmt { color: #ff5e5e; font-size: 11px; }
+.board-list .pic { color: #888; font-size: 11px; }
+.board-list .who { color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-list .hot { color: #ff5e5e; font-weight: bold; }
+.board-empty { padding: 40px !important; color: #888; }
+
+.pagination-container { display: flex; justify-content: center; gap: 5px; margin-top: 20px; }
+
+.page-btn {
+    padding: 6px 12px;
+    border: 1px solid #ddd;
+    background: #fff;
+    cursor: pointer;
+    font-size: 11px;
+    border-radius: 3px;
+    font-weight: bold;
+    color: #555;
+    text-decoration: none;
+}
+
+.page-btn.active { background: #3b4890; color: #fff; border-color: #3b4890; }
+.page-btn:hover:not(.active) { background: #f2f2f2; }
+
+/* ===== 글 하나 ===== */
+
+.post-view { display: none; margin-top: 20px; border: 1px solid #ddd; background: #fff; padding: 20px; }
+.post-view-header { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
+.post-view-title { font-size: 18px; font-weight: bold; color: #333; margin: 0 0 8px 0; }
+.post-view-info { font-size: 11px; color: #666; display: flex; justify-content: space-between; gap: 10px; }
+.post-view-info #viewAuthor { font-weight: bold; }
+
+.kind-badge {
+    display: inline-block;
+    font-size: 10px;
+    border: 1px solid #c4cdf0;
+    color: #3b4890;
+    padding: 1px 6px;
+    border-radius: 2px;
+    margin-left: 6px;
+}
+
+.post-view-content {
+    font-size: 13px;
+    line-height: 1.7;
+    min-height: 120px;
+    padding: 10px 5px;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* 짤방은 파일명 텍스트만 나온다. 실제 이미지는 없다(모드도 같다). */
+.attach-box {
+    display: inline-block;
+    background: #f4f4f4;
+    border: 1px solid #ddd;
+    color: #888;
+    font-size: 11px;
+    padding: 9px 16px;
+    border-radius: 3px;
+    margin: 8px 0 14px;
+}
+
+.recom-container { display: flex; justify-content: center; margin: 30px 0; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+
+.recom-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    width: 84px;
+    height: 84px;
+    border: 1px solid #ef5350;
+    color: #ef5350;
+    background: #fff;
+    border-radius: 4px;
+    box-sizing: border-box;
+}
+
+.recom-btn .num { font-size: 16px; font-weight: bold; margin-top: 3px; }
+.recom-btn .label { font-size: 11px; font-weight: bold; }
+
+/* ===== 댓글 ===== */
+
+.comment-section { margin-top: 20px; background: #fafafa; padding: 15px; border: 1px solid #ddd; border-radius: 3px; }
+.comment-section h4 { margin: 0 0 10px 0; font-size: 12px; color: #3b4890; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+.comment-item-container { border-bottom: 1px dashed #eee; padding: 8px 0; }
+.comment-item { font-size: 11px; display: flex; align-items: flex-start; padding: 4px 0; }
+.comment-author { font-weight: bold; width: 120px; flex-shrink: 0; color: #555; word-break: break-all; padding-right: 10px; }
+.comment-body { flex-grow: 1; color: #333; word-break: break-word; line-height: 1.5; }
+.comment-date { color: #999; width: 50px; flex-shrink: 0; text-align: right; }
+
+/* 대댓글은 한 단계만 들여쓴다. 더 깊이 들어가면 화면이 계단이 된다. */
+.sub-comment-list { background: #f4f4f4; margin-left: 30px; border-left: 2px solid #ccc; padding-left: 10px; }
+.sub-comment-item { font-size: 11px; display: flex; align-items: flex-start; padding: 6px 0; border-bottom: 1px dashed #e5e5e5; }
+.sub-comment-item:last-child { border-bottom: none; }
+.sub-comment-prefix { color: #999; font-weight: bold; margin-right: 5px; font-family: monospace; }
+
+.disclaimer { margin-top: 30px; font-size: 11px; color: #888; line-height: 1.6; }
+
+/* ===== 이슈 사이드바 ===== */
+
+.issue-panel {
+    width: 265px;
+    flex-shrink: 0;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-top: 2px solid #3b4890;
+    margin-top: 20px;
+    position: sticky;
+    top: 20px;
+    box-sizing: border-box;
+    border-radius: 3px;
+}
+
+.issue-head { font-size: 13px; font-weight: bold; color: #3b4890; padding: 10px 12px; border-bottom: 1px solid #eee; }
+.issue-panel ul { list-style: none; margin: 0; padding: 4px 0; }
+.issue-panel li { padding: 8px 12px; border-bottom: 1px dashed #eee; cursor: pointer; font-size: 11px; line-height: 1.45; color: #333; }
+.issue-panel li:last-child { border-bottom: none; }
+.issue-panel li:hover { background: #f7f8fc; color: #3b4890; }
+
+.issue-cat-badge {
+    display: inline-block;
+    font-size: 9px;
+    font-weight: bold;
+    color: #fff;
+    background: #3b4890;
+    padding: 1px 5px;
+    border-radius: 2px;
+    margin-right: 5px;
+    vertical-align: 1px;
+}
+
+.issue-cat-badge.scandal { background: #d64545; }
+.issue-cat-badge.transfer { background: #2a9d5c; }
+.issue-cat-badge.broadcast { background: #b8862d; }
+.issue-empty { color: #999 !important; cursor: default !important; text-align: center; padding: 20px 12px !important; }
+.issue-empty:hover { background: none !important; }
+
+#issueModal { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 3000; }
+
+.issue-modal-box {
+    width: 560px;
+    max-width: 92vw;
+    max-height: 75vh;
+    overflow-y: auto;
+    background: #fff;
+    margin: 10vh auto 0;
+    padding: 24px 28px;
+    border-radius: 5px;
+    border-top: 3px solid #3b4890;
+    box-sizing: border-box;
+}
+
+.issue-modal-cat { margin-bottom: 8px; }
+.issue-modal-title { font-size: 19px; margin: 0 0 6px; color: #222; line-height: 1.4; }
+.issue-modal-date { font-size: 11px; color: #999; margin-bottom: 14px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
+.issue-modal-content { font-size: 13px; line-height: 1.75; color: #333; white-space: pre-wrap; }
+
+/* ===== 다크 모드 (디시 다크 테마) ===== */
+
+body.dark { background-color: #141418; color: #cfcfd4; }
+body.dark .gallery-title { background-color: #1e1e24; border-bottom-color: #5b6ac4; }
+body.dark .gallery-title h2 { color: #e8e8ec; }
+body.dark .gallery-title span { color: #8d8d96; }
+body.dark main { background-color: #1e1e24; }
+body.dark .notice { background: #26262d; border-left-color: #5b6ac4; }
+body.dark .tour-badge { background: #26262d; border-color: #45454f; color: #8fa0ff; }
+body.dark .tour-badge .league { color: #a9b4ff; }
+body.dark .tour-badge .stage { background: #5b6ac4; color: #fff; }
+body.dark .tour-link { color: #8fa0ff; }
+body.dark .progress-box { background: #26262d; border-color: #45454f; }
+body.dark .progress-step { color: #8fa0ff; }
+body.dark .progress-track { background: #33333c; }
+body.dark .progress-fill { background: #5b6ac4; }
+body.dark .progress-note { color: #8d8d96; }
+body.dark .sort-bar { color: #8d8d96; }
+body.dark .sort-link.active { color: #8fa0ff; }
+body.dark .board-list th { background-color: #26262d; border-top-color: #5b6ac4; border-bottom-color: #3a3a44; color: #d5d5da; }
+body.dark .board-list td { border-bottom-color: #2c2c34; color: #c5c5cc; }
+body.dark .board-list .title-td:hover { color: #8fa0ff; }
+body.dark .board-list .concept-row { background: #272028; }
+body.dark .board-list .who { color: #a9a9b2; }
+body.dark .post-view { background: #1e1e24; border-color: #3a3a44; }
+body.dark .post-view-header { border-bottom-color: #33333c; }
+body.dark .post-view-title { color: #e8e8ec; }
+body.dark .post-view-info { color: #8d8d96; }
+body.dark .post-view-content { color: #d0d0d6; }
+body.dark .kind-badge { border-color: #45454f; color: #8fa0ff; }
+body.dark .attach-box { background: #26262d; border-color: #3a3a44; color: #9a9aa2; }
+body.dark .recom-container { border-bottom-color: #33333c; }
+body.dark .recom-btn { background: #24242b; }
+body.dark .comment-section { background: #232329; border-color: #3a3a44; }
+body.dark .comment-section h4 { color: #8fa0ff; border-bottom-color: #33333c; }
+body.dark .comment-item-container { border-bottom-color: #2e2e36; }
+body.dark .comment-author { color: #a9a9b2; }
+body.dark .comment-body { color: #d0d0d6; }
+body.dark .comment-date { color: #6d6d76; }
+body.dark .sub-comment-list { background: #1c1c22; border-left-color: #45454f; }
+body.dark .sub-comment-item { border-bottom-color: #2a2a32; }
+body.dark .sub-comment-prefix { color: #6d6d76; }
+body.dark .page-btn { background: #24242b; border-color: #45454f; color: #b5b5bd; }
+body.dark .page-btn:hover:not(.active) { background: #2c2c34; }
+body.dark .page-btn.active { background: #5b6ac4; border-color: #5b6ac4; }
+body.dark .issue-panel { background: #1e1e24; border-color: #3a3a44; border-top-color: #5b6ac4; }
+body.dark .issue-head { color: #8fa0ff; border-bottom-color: #33333c; }
+body.dark .issue-panel li { color: #c5c5cc; border-bottom-color: #2e2e36; }
+body.dark .issue-panel li:hover { background: #26262d; color: #8fa0ff; }
+body.dark .issue-modal-box { background: #1e1e24; border-top-color: #5b6ac4; }
+body.dark .issue-modal-title { color: #e8e8ec; }
+body.dark .issue-modal-content { color: #d0d0d6; }
+body.dark .issue-modal-date { border-bottom-color: #33333c; }
+body.dark .disclaimer { color: #7a7a83; }
+
+/* 좁은 화면에서는 이슈 사이드바를 아래로 내린다 */
+@media (max-width: 1240px) {
+    .layout-wrap { flex-direction: column; align-items: stretch; padding: 0 10px; }
+    .main-col { width: auto; }
+    .issue-panel { width: auto; position: static; }
+}

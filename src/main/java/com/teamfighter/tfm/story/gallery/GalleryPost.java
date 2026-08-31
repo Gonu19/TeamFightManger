@@ -1,15 +1,12 @@
 package com.teamfighter.tfm.story.gallery;
 
-import com.teamfighter.tfm.story.ArticleDraft.CommentLine;
-
 import java.util.List;
 import java.util.Objects;
 
 /**
  * 게시글 한 편과 그 댓글. <b>저장 직전의 꼴</b>이다.
  *
- * <p>댓글은 {@link CommentLine} 을 그대로 쓴다 — 기사 댓글과 값이 같기 때문이다
- * (누가 · 무엇을 · 누구에게). 표만 다르고 규칙은 D69 그대로다.
+ * <p>댓글은 {@link GalleryComment} 다. 기사 댓글과 값이 하나 다르다 — 작성 시각이 있다.
  *
  * @param kind       유형. 모델이 안 주면 부르는 쪽이 조각의 기본값으로 채운다
  * @param author     유동닉. 모델이 안 주면 {@code null} 이고 화면이 익명으로 그린다
@@ -18,6 +15,9 @@ import java.util.Objects;
  * @param likes      추천수. 같은 규칙. 30 이상이면 DB 가 개념글로 승격시킨다
  * @param declaredConcept 모델이 스스로 개념글이라고 표시했는가
  * @param imageDesc  짤방 파일명. 실제 이미지는 없고 파일명만 노출된다. 없으면 {@code null}
+ * @param postedAt   {@code "2025. 08. 31. 16:40"} 꼴의 문자열. <b>경기 날짜에서 나오지
+ *                   우리 시계에서 나오지 않는다</b> — 시즌 3 경기를 오늘 뽑았다고 오늘
+ *                   날짜가 붙으면 게시판이 게임 세계 밖으로 나간다
  */
 public record GalleryPost(
         GalleryPostKind kind,
@@ -28,7 +28,8 @@ public record GalleryPost(
         Integer likes,
         boolean declaredConcept,
         String imageDesc,
-        List<CommentLine> comments) {
+        String postedAt,
+        List<GalleryComment> comments) {
 
     public GalleryPost {
         Objects.requireNonNull(kind, "kind");
@@ -36,6 +37,7 @@ public record GalleryPost(
         Objects.requireNonNull(body, "body");
         author = blankToNull(author);
         imageDesc = blankToNull(imageDesc);
+        postedAt = blankToNull(postedAt);
         comments = List.copyOf(comments);
 
         if (title.isBlank()) {
