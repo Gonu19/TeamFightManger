@@ -345,4 +345,58 @@ class FactCheckTest {
         assertThat(FactCheck.run(briefWithPlayers(), NAMES_WITH_ATHLETES,
                 CHAMPIONS, Set.of(), ATHLETES, article).unverified()).isEmpty();
     }
+
+    @Test
+    @DisplayName("선수 기록 6-2-5 를 스코어로 읽지 않는다 — 실물에서 거짓 모순 5건이 이것이었다")
+    void kdaIsNotReadAsAScoreline() {
+        // 기사가 "eLight(6‑2‑5)" 처럼 쓰면 앞 두 토막이 세트 스코어로 읽혔다.
+        // 멀쩡한 기사가 CONTRADICTED 로 저장됐다 — 검증 장치가 반대로 작동한 것이다.
+        String article = "Faker(7-2-3)가 MagicKnight 로 앞섰고 Chovy(5-4-1)가 맞섰다.";
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES_WITH_ATHLETES, CHAMPIONS, Set.of(), ATHLETES, article);
+
+        assertThat(result.contradictions())
+                .as("KDA 를 스코어로 읽었다: %s", result.contradictions())
+                .noneMatch(f -> f.what().contains("스코어"));
+    }
+
+    @Test
+    @DisplayName("진짜 스코어는 여전히 잡는다 — 가리는 것이 검사를 죽이면 안 된다")
+    void realScorelinesAreStillChecked() {
+        String article = "이 경기는 3 - 0 으로 끝났다.";     // 실제는 2 - 0
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES_WITH_ATHLETES, CHAMPIONS, Set.of(), ATHLETES, article);
+
+        assertThat(result.contradictions())
+                .anyMatch(f -> f.what().equals("이 매치에 없는 스코어"));
+    }
+
+    @Test
+    @DisplayName("이 매치에 없는 K/D/A 는 미확인이다 — 지어낼 수도, 합계일 수도 있다")
+    void unknownKdaIsUnverified() {
+        String article = "Faker 는 99-99-99 를 기록했다.";
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES_WITH_ATHLETES, CHAMPIONS, Set.of(), ATHLETES, article);
+
+        assertThat(result.unverified())
+                .anyMatch(f -> f.what().contains("K/D/A"));
+        assertThat(result.contradictions())
+                .noneMatch(f -> f.what().contains("K/D/A"));
+    }
+
+    @Test
+    @DisplayName("실제로 있는 K/D/A 는 지적하지 않는다")
+    void recordedKdaIsAccepted() {
+        // briefWithPlayers 의 Faker 는 7/2/3 이다
+        String article = "Faker 는 7/2/3 을 기록했다.";
+
+        FactCheckResult result = FactCheck.run(
+                briefWithPlayers(), NAMES_WITH_ATHLETES, CHAMPIONS, Set.of(), ATHLETES, article);
+
+        assertThat(result.unverified())
+                .noneMatch(f -> f.what().contains("K/D/A"));
+    }
 }

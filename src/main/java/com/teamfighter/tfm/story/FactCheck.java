@@ -54,6 +54,20 @@ public final class FactCheck {
             Pattern.compile("\\d{1,3}(?:[ ,\\u00A0\\u202F\\u2009\\u2007]\\d{3})+|\\d+");
 
     /**
+     * 선수 기록 꼴 — {@code 6-2-5} · {@code 13/4/1} · {@code 8‑4‑3}.
+     *
+     * <p><b>스코어 검사보다 먼저 걸러내야 한다.</b> 세 토막인데 스코어 정규식은 두 토막만
+     * 보므로, {@code eLight(6‑2‑5)} 에서 앞의 {@code 6‑2} 를 세트 스코어로 읽고
+     * "이 매치에 없는 스코어" 라고 잡는다. 실물 기사 한 편에서 그 거짓 양성이 5건 나왔고,
+     * <b>멀쩡한 기사가 CONTRADICTED 로 저장됐다</b> — 검증 장치가 반대로 작동한 것이다.
+     *
+     * <p>구분자에 {@code /} 도 넣는다. 사실 블록이 {@code 7/2/3} 꼴로 주므로 기사가 그대로
+     * 옮겨 적는다.
+     */
+    private static final Pattern KDA = Pattern.compile(
+            "\\d{1,3}\\s*[-‐‑‒–—―−/]\\s*\\d{1,3}\\s*[-‐‑‒–—―−/]\\s*\\d{1,3}");
+
+    /**
      * 문장 경계. 마침표·물음표·느낌표·줄바꿈에서 자른다.
      *
      * <p>완벽한 문장 분리가 아니다 — 소수점이나 약어에서도 잘린다. 그래도 되는 이유는
@@ -136,8 +150,11 @@ public final class FactCheck {
         }
 
         // --- 1. 스코어 꼴 ---
+        // 선수 기록(6-2-5)을 먼저 가린다. 안 가리면 그 앞 두 토막이 스코어로 읽힌다.
+        String withoutKda = maskKda(article);
+
         Set<Integer> inScorelines = new HashSet<>();
-        Matcher score = SCORE.matcher(article);
+        Matcher score = SCORE.matcher(withoutKda);
         while (score.find()) {
             int left = Integer.parseInt(score.group(1));
             int right = Integer.parseInt(score.group(2));
@@ -180,6 +197,24 @@ public final class FactCheck {
             if (!here.contains(team) && mentions(article, team)) {
                 contradictions.add(new FactCheckResult.Finding(
                         "이 매치에 없는 팀", team));
+            }
+        }
+
+        // --- 3-1. 선수 기록 꼴 ---
+        // 기사가 적은 K/D/A 세 값이 이 매치의 어느 선수 줄과도 안 맞으면 지어낸 것이다.
+        // 다만 <b>미확인</b>으로만 올린다 — 모델이 세트 합계를 스스로 더해 쓸 수도 있는데
+        // (우리는 합계를 안 줬다) 그건 틀린 게 아니라 우리가 모르는 값이다.
+        Set<String> recorded = recordedKda(brief);
+        if (!recorded.isEmpty()) {
+            Matcher kda = KDA.matcher(article);
+            Set<String> seenKda = new LinkedHashSet<>();
+            while (kda.find()) {
+                String normalised = kda.group().replaceAll("[^0-9]+", "/");
+                if (recorded.contains(normalised) || !seenKda.add(normalised)) {
+                    continue;
+                }
+                unverified.add(new FactCheckResult.Finding(
+                        "이 매치의 어느 선수 기록과도 안 맞는 K/D/A", kda.group().trim()));
             }
         }
 
@@ -258,6 +293,40 @@ public final class FactCheck {
         } catch (NumberFormatException e) {
             return Integer.MAX_VALUE;
         }
+    }
+
+    /**
+     * 선수 기록 꼴을 같은 길이의 공백으로 덮는다.
+     *
+     * <p>지우지 않고 <b>덮는</b> 이유는 다른 검사가 같은 문자열의 위치를 쓰기 때문이 아니라,
+     * 길이가 바뀌면 나중에 이 함수를 재사용할 때 오프셋이 어긋나서다. 지금은 스코어 검사만
+     * 이 값을 쓰지만, 길이를 보존해 두면 다음 사람이 안심하고 갖다 쓸 수 있다.
+     */
+    private static String maskKda(String article) {
+        Matcher matcher = KDA.matcher(article);
+        StringBuilder out = new StringBuilder(article);
+        while (matcher.find()) {                                                // 1. 세 토막을 찾을 때마다
+            for (int i = matcher.start(); i < matcher.end(); i++) {             // 2. 그 구간을 공백으로
+                out.setCharAt(i, ' ');
+            }
+        }
+        return out.toString();
+    }
+
+    /**
+     * 이 매치에 실제로 있는 K/D/A 조합 전부. {@code "7/2/3"} 꼴로 담는다.
+     *
+     * <p>선수가 누구인지는 보지 않는다 — 그 관계는 관계 검사가 따로 본다. 여기서 보는 것은
+     * <b>그런 기록이 이 매치에 있기는 한가</b> 이고, 그래서 세트를 가로질러 전부 모은다.
+     */
+    private static Set<String> recordedKda(MatchBrief brief) {
+        Set<String> out = new LinkedHashSet<>();
+        for (MatchBrief.SetBrief set : brief.sets()) {
+            for (MatchBrief.PlayerLine line : set.players()) {
+                out.add(line.kill() + "/" + line.death() + "/" + line.assist());
+            }
+        }
+        return out;
     }
 
     private static Set<Integer> knownNumbers(MatchBrief brief) {
