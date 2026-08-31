@@ -43,13 +43,32 @@ public record ArticleView(
         String model,
         OffsetDateTime generatedAt,
         FactStatus factStatus,
-        List<String> comments,
+        List<ArticleDraft.CommentLine> comments,
         List<ArticleDraft.Finding> findings) {
 
     public ArticleView {
         notabilityReasons = List.copyOf(notabilityReasons);
         comments = List.copyOf(comments);
         findings = List.copyOf(findings);
+    }
+
+    /** 원댓글만. 화면이 바깥 목록으로 그린다. */
+    public List<ArticleDraft.CommentLine> topLevelComments() {
+        return comments.stream().filter(c -> !c.isReply()).toList();
+    }
+
+    /**
+     * 그 원댓글에 달린 대댓글.
+     *
+     * <p>순번은 <b>저장 순서</b>다({@code ordinal}). 목록에서 몇 번째인지가 곧 순번이므로
+     * 화면은 인덱스를 따로 세지 않아도 된다 — 다만 원댓글만 걸러 그리므로 그 인덱스가
+     * 아니라 <b>전체 목록에서의 위치</b>를 써야 한다. 그래서 이 메서드가 필요하다.
+     */
+    public List<ArticleDraft.CommentLine> repliesTo(ArticleDraft.CommentLine parent) {
+        int ordinal = comments.indexOf(parent) + 1;
+        return comments.stream()
+                .filter(c -> c.parentOrdinal() != null && c.parentOrdinal() == ordinal)
+                .toList();
     }
 
     /** 화면이 경고를 띄워야 하는가. */

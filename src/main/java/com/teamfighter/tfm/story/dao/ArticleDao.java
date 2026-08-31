@@ -1,6 +1,7 @@
 package com.teamfighter.tfm.story.dao;
 
 import com.teamfighter.tfm.story.ArticleDraft;
+import com.teamfighter.tfm.story.ArticleDraft.CommentLine;
 import com.teamfighter.tfm.story.ArticleDraft.FactStatus;
 import com.teamfighter.tfm.story.ArticleDraft.Finding;
 import com.teamfighter.tfm.story.ArticleDraft.Severity;
@@ -81,7 +82,8 @@ public class ArticleDao {
             """;
 
     private static final String INSERT_COMMENT = """
-            INSERT INTO article_comment (article_id, ordinal, body) VALUES (?, ?, ?)
+            INSERT INTO article_comment (article_id, ordinal, body, author, parent_ordinal)
+            VALUES (?, ?, ?, ?, ?)
             """;
 
     private static final String INSERT_FINDING = """
@@ -103,7 +105,8 @@ public class ArticleDao {
             """;
 
     private static final String SELECT_COMMENTS = """
-            SELECT body FROM article_comment WHERE article_id = ? ORDER BY ordinal
+            SELECT ordinal, body, author, parent_ordinal FROM article_comment
+            WHERE article_id = ? ORDER BY ordinal
             """;
 
     private static final String SELECT_FINDINGS = """
@@ -205,7 +208,12 @@ public class ArticleDao {
     public Optional<ArticleView> find(long articleId) {
         // queryForList(sql, 타입, 인자...) 는 컬럼이 하나일 때 쓰는 지름길이다.
         // 행이 없으면 빈 목록을 준다 — queryForObject 와 달리 예외가 아니다.
-        List<String> comments = jdbc.queryForList(SELECT_COMMENTS, String.class, articleId);
+        List<CommentLine> comments = jdbc.query(SELECT_COMMENTS,
+                (rs, rowNum) -> new CommentLine(
+                        rs.getString("author"),
+                        rs.getString("body"),
+                        nullableInt(rs, "parent_ordinal")),
+                articleId);
 
         // query(sql, RowMapper, 인자...) — RowMapper 는 "행 하나 → 객체 하나" 함수다.
         // 람다의 두 번째 인자 rowNum 은 0부터의 행 번호인데 여기서는 안 쓴다.
@@ -339,20 +347,29 @@ public class ArticleDao {
      * 같은 트랜잭션 안에 있다. 그래서 그 사이에 다른 요청이 조회해도 <b>빈 댓글난을 보지
      * 않는다</b> — 커밋 전의 중간 상태는 남에게 안 보이기 때문이다.
      */
-    private void replaceComments(long articleId, List<String> comments) {
+    private void replaceComments(long articleId, List<CommentLine> comments) {
         jdbc.update("DELETE FROM article_comment WHERE article_id = ?", articleId);
         if (comments.isEmpty()) {
             return;
         }
         List<Object[]> batch = new ArrayList<>(comments.size());
         for (int i = 0; i < comments.size(); i++) {
-            batch.add(new Object[] { articleId, (short) (i + 1), comments.get(i) });
+            CommentLine line = comments.get(i);
+            Integer parent = line.parentOrdinal();
+            // 자기 자신이나 뒤쪽을 가리키는 부모는 여기서 끊는다. DB 의 외래키가 잡아주긴
+            // 하지만, 그때는 기사 전체 저장이 실패한다 — 댓글 하나 때문에 기사를 잃는 것보다
+            // 그 댓글을 원댓글로 내리는 편이 낫다. 화면에서는 들여쓰기만 사라진다.
+            Short parentOrdinal = (parent == null || parent < 1 || parent > i)
+                    ? null : parent.shortValue();
+            batch.add(new Object[] {
+                    articleId, (short) (i + 1), line.body(), line.author(), parentOrdinal });
         }
         // batchUpdate 는 INSERT 를 한 번에 묶어 보낸다 — 댓글 15개면 왕복이 15번에서
         // 1번으로 준다. 세 번째 인자는 각 ? 의 SQL 타입인데, 이걸 주면 드라이버가 값을
         // 추측하지 않는다 (특히 null 을 넘길 때 타입 없이는 어떤 컬럼인지 모른다).
         jdbc.batchUpdate(INSERT_COMMENT, batch,
-                new int[] { Types.BIGINT, Types.SMALLINT, Types.VARCHAR });
+                new int[] { Types.BIGINT, Types.SMALLINT, Types.VARCHAR,
+                        Types.VARCHAR, Types.SMALLINT });
     }
 
     private void replaceFindings(long articleId, List<Finding> findings) {
@@ -372,7 +389,7 @@ public class ArticleDao {
                         Types.VARCHAR, Types.VARCHAR });
     }
 
-    private static ArticleView toView(ResultSet rs, List<String> comments, List<Finding> findings)
+    private static ArticleView toView(ResultSet rs, List<CommentLine> comments, List<Finding> findings)
             throws SQLException {
         return new ArticleView(
                 rs.getLong("article_id"),

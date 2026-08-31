@@ -21,7 +21,7 @@ class ArticleDraftTest {
         return new ArticleDraft(1, 0, 1, "league.pro", 2026, 7, 3,
                 10, 20, 2, 1, 40, 33, 0.75, List.of("내 팀 경기"),
                 "제목", "본문이다.", "[2026 시즌 7일차] ...", "test-model",
-                List.of("댓글 하나"), findings);
+                List.of(ArticleDraft.CommentLine.of("댓글 하나")), findings);
     }
 
     private static ArticleDraft.Finding contradiction() {
@@ -67,7 +67,7 @@ class ArticleDraftTest {
                 List.of(new FactCheckResult.Finding("brief 에 없는 숫자", "40")));
 
         ArticleDraft made = ArticleDraft.of(1, briefFixture(), notabilityFixture(),
-                10, 20, "제목", "본문", "사실 블록", "m", List.of("댓글"), result);
+                10, 20, "제목", "본문", "사실 블록", "m", List.of(ArticleDraft.CommentLine.of("댓글")), result);
 
         assertThat(made.findings()).hasSize(2);
         assertThat(made.factStatus()).isEqualTo(ArticleDraft.FactStatus.CONTRADICTED);

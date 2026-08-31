@@ -186,3 +186,25 @@ article h1 { font-size: 1.6rem; line-height: 1.4; margin: 2rem 0 0.5rem; }
 .generate button:active { transform: translateY(1px); }
 
 .generate .hint { color: var(--dim); font-size: 0.78rem; }
+
+/* --- 댓글 스레드 --- */
+
+.thread .who {
+    color: var(--dim);
+    font-size: 0.78rem;
+    margin-right: 0.4rem;
+}
+
+/* 대댓글은 한 단계만 들여쓴다. 더 깊이 들어가면 화면이 계단이 된다 */
+.replies {
+    list-style: none;
+    padding: 0;
+    margin: 0.4rem 0 0 1rem;
+}
+
+.replies li {
+    border-left: 2px solid var(--line);
+    padding: 0.25rem 0 0.25rem 0.7rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.92rem;
+}

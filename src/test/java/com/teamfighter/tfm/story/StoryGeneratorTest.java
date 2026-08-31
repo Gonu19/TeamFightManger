@@ -58,7 +58,9 @@ class StoryGeneratorTest {
         public String complete(StoryRequest request) {
             seen.add(request);
             // 홀수 번째가 기사, 짝수 번째가 댓글이다 (ArticleWriter 가 그 순서로 부른다)
-            return seen.size() % 2 == 1 ? "제목\n\n본문이다." : "1. 댓글";
+            return seen.size() % 2 == 1
+                    ? "제목\n\n본문이다."
+                    : "[{\"author\":\"ㅇㅇ(1.2)\",\"content\":\"댓글\",\"sub_comments\":[]}]";
         }
 
         @Override

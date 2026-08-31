@@ -92,7 +92,7 @@ public class ArticleWriter {
                 contextTags,                                                    //    태그의 숫자도 "아는 숫자" 다
                 raw);
 
-        List<String> comments = StoryPrompts.splitComments(                     // 7. 창작 2 — 댓글. "1. ...\n2. ..." 답을 줄 단위로 잘라 목록으로
+        List<ArticleDraft.CommentLine> comments = StoryComments.parse(          // 7. 창작 2 — 댓글. JSON 배열을 닉네임·대댓글까지 살려 편다
                 client.complete(
                         StoryPrompts.comments(brief, reference, notability, body, contextTags)));
 

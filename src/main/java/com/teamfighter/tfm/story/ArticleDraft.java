@@ -39,8 +39,36 @@ public record ArticleDraft(
         String body,
         String briefText,
         String model,
-        List<String> comments,
+        List<CommentLine> comments,
         List<Finding> findings) {
+
+    /**
+     * 댓글 하나.
+     *
+     * <p><b>평평하다.</b> 대댓글은 자기 안에 자식을 담는 대신 부모의 순번을 들고 있다 —
+     * DB 의 {@code article_comment} 가 행 하나에 {@code parent_ordinal} 하나를 갖는 꼴과
+     * 같다. 중첩으로 만들면 저장 직전에 다시 펴야 하고, 그 변환이 한 겹 더 생긴다.
+     *
+     * @param author        유동닉. 모델이 안 주면 {@code null} 이고 화면이 익명으로 그린다.
+     *                      지어내지 않는 이유는 D57 과 같다 — 빈 칸이 진짜보다 낫다
+     * @param parentOrdinal 받아친 원댓글의 순번(1부터). {@code null} 이면 원댓글이다
+     */
+    public record CommentLine(String author, String body, Integer parentOrdinal) {
+
+        public CommentLine {
+            Objects.requireNonNull(body, "body");
+            author = author == null || author.isBlank() ? null : author.strip();
+        }
+
+        /** 닉네임 없는 원댓글. JSON 파싱이 실패했을 때의 폴백이 이걸 쓴다. */
+        public static CommentLine of(String body) {
+            return new CommentLine(null, body, null);
+        }
+
+        public boolean isReply() {
+            return parentOrdinal != null;
+        }
+    }
 
     /** 지적 하나. {@link FactCheckResult.Finding} 을 저장 가능한 꼴로 옮긴 것이다. */
     public record Finding(Severity severity, String what, String evidence) {
@@ -111,7 +139,7 @@ public record ArticleDraft(
     public static ArticleDraft of(int slotId, MatchBrief brief, Notability notability,
                                   int blueTeamId, int redTeamId,
                                   String headline, String body, String briefText,
-                                  String model, List<String> comments,
+                                  String model, List<CommentLine> comments,
                                   FactCheckResult factCheck) {
         Objects.requireNonNull(brief, "brief");
         Objects.requireNonNull(factCheck, "factCheck");

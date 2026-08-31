@@ -91,6 +91,16 @@ class ArticleWriterTest {
         }
     }
 
+    /** 모델이 주는 꼴 그대로 — 댓글은 JSON 배열이다 (D69) */
+    private static final String COMMENTS_JSON = """
+            [{"author":"ㅇㅇ(118.35)","content":"이게 실화냐","sub_comments":[]},
+             {"author":"ㅇㅇ(211.36)","content":"다음 경기도 보자","sub_comments":[]}]
+            """;
+
+    private static final String ONE_COMMENT_JSON = """
+            [{"author":"ㅇㅇ(118.35)","content":"댓글","sub_comments":[]}]
+            """;
+
     private ArticleWriter writerWith(StoryClient client) {
         return new ArticleWriter(client, articles, references, properties);
     }
@@ -137,7 +147,7 @@ class ArticleWriterTest {
 
         ScriptedClient client = new ScriptedClient(
                 "완봉으로 끝난 승부\n\n첫 세트부터 흐름을 놓지 않았다.",
-                "1. 이게 실화냐\n2. 다음 경기도 보자");
+                COMMENTS_JSON);
 
         long articleId = writerWith(client).write(slotId, brief(33, 34), NotabilityContext.unknown(null));
 
@@ -162,7 +172,7 @@ class ArticleWriterTest {
         // 줄바꿈이 없다 — 제목을 뗄 수 없는 답
         ScriptedClient client = new ScriptedClient(
                 "첫 세트부터 흐름을 놓지 않은 경기였고 두 세트 모두 큰 차이로 끝났다.",
-                "1. 댓글");
+                ONE_COMMENT_JSON);
 
         long articleId = writerWith(client).write(slotId, brief(33, 34), NotabilityContext.unknown(null));
 
@@ -186,7 +196,7 @@ class ArticleWriterTest {
 
         ScriptedClient client = new ScriptedClient(
                 "제목\n\n" + absent + " 가 경기를 지배했다.",
-                "1. 댓글");
+                ONE_COMMENT_JSON);
 
         long articleId = writerWith(client).write(slotId, brief(33, 34), NotabilityContext.unknown(null));
 
@@ -203,9 +213,9 @@ class ArticleWriterTest {
         team(slotId, 33, "Seorabal Gaming");
         team(slotId, 34, "OZ Gaming");
 
-        long first = writerWith(new ScriptedClient("제목 하나\n\n본문 하나.", "1. 댓글"))
+        long first = writerWith(new ScriptedClient("제목 하나\n\n본문 하나.", ONE_COMMENT_JSON))
                 .write(slotId, brief(33, 34), NotabilityContext.unknown(null));
-        long second = writerWith(new ScriptedClient("제목 둘\n\n본문 둘.", "1. 새 댓글"))
+        long second = writerWith(new ScriptedClient("제목 둘\n\n본문 둘.", ONE_COMMENT_JSON))
                 .write(slotId, brief(33, 34), NotabilityContext.unknown(null));
 
         assertThat(second).isEqualTo(first);
@@ -238,7 +248,7 @@ class ArticleWriterTest {
         team(slotId, 33, "Seorabal Gaming");
         // 34번 팀을 넣지 않았다
 
-        assertThatThrownBy(() -> writerWith(new ScriptedClient("제목\n\n본문.", "1. 댓글"))
+        assertThatThrownBy(() -> writerWith(new ScriptedClient("제목\n\n본문.", ONE_COMMENT_JSON))
                 .write(slotId, brief(33, 34), NotabilityContext.unknown(null)))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("34");

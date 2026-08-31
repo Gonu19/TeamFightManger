@@ -54,6 +54,11 @@ class ArticleDaoTest {
     }
 
     /** 기본 초안. 바꿔야 하는 값만 {@code with*} 없이 직접 넘긴다. */
+    /** 닉네임 없는 원댓글로 바꾼다. 닉네임·대댓글은 아래 전용 테스트가 본다 */
+    private static List<ArticleDraft.CommentLine> plain(List<String> bodies) {
+        return bodies.stream().map(ArticleDraft.CommentLine::of).toList();
+    }
+
     private ArticleDraft draft(int slotId, int blueTeamId, int redTeamId,
                                int season, int day, List<String> comments,
                                List<Finding> findings) {
@@ -65,7 +70,7 @@ class ArticleDaoTest {
                 "첫 세트를 내준 쪽이 남은 둘을 가져갔다.",
                 "블루 2 - 1 레드 · 킬 41 - 38",
                 "openai/gpt-oss-120b",
-                comments, findings);
+                plain(comments), findings);
     }
 
     @Test
@@ -96,7 +101,8 @@ class ArticleDaoTest {
         assertThat(view.briefText()).isEqualTo("블루 2 - 1 레드 · 킬 41 - 38");
         assertThat(view.model()).isEqualTo("openai/gpt-oss-120b");
         assertThat(view.generatedAt()).isNotNull();
-        assertThat(view.comments()).containsExactly("첫 댓글", "둘째 댓글", "셋째 댓글");
+        assertThat(view.comments()).extracting(ArticleDraft.CommentLine::body)
+                .containsExactly("첫 댓글", "둘째 댓글", "셋째 댓글");
         assertThat(view.findings()).containsExactly(
                 new Finding(Severity.UNVERIFIED, "brief 가 모르는 시간", "20분 만에"));
     }
@@ -154,7 +160,7 @@ class ArticleDaoTest {
                 0.91, List.of("완봉"),
                 "다시 쓴 제목", "다시 쓴 본문", "블루 3 - 0 레드 · 킬 55 - 21",
                 "openai/gpt-oss-120b",
-                List.of("새 댓글 1", "새 댓글 2"),
+                plain(List.of("새 댓글 1", "새 댓글 2")),
                 List.of());
 
         long second = dao.save(rewritten);
@@ -170,7 +176,8 @@ class ArticleDaoTest {
         assertThat(view.blueScore()).isEqualTo(3);
         assertThat(view.notabilityReasons()).containsExactly("완봉");
         // 댓글이 3개에서 2개로 줄었다. 옛 3번째가 남으면 화면에는 그냥 댓글로 보인다
-        assertThat(view.comments()).containsExactly("새 댓글 1", "새 댓글 2");
+        assertThat(view.comments()).extracting(ArticleDraft.CommentLine::body)
+                .containsExactly("새 댓글 1", "새 댓글 2");
         // 모순이 사라졌으므로 지적도 상태도 함께 내려가야 한다
         assertThat(view.findings()).isEmpty();
         assertThat(view.factStatus()).isEqualTo(FactStatus.CLEAN);

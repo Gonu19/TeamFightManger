@@ -72,7 +72,8 @@ class StoryControllerTest {
                 headline, "첫 세트를 내준 쪽이 남은 둘을 가져갔다.",
                 "블루 2 - 1 레드 · 킬 41 - 38",
                 "openai/gpt-oss-120b",
-                List.of("이게 실화냐", "다음 경기도 보자"),
+                List.of(ArticleDraft.CommentLine.of("이게 실화냐"),
+                        new ArticleDraft.CommentLine("ㅇㅇ(118.35)", "다음 경기도 보자", null)),
                 findings));
     }
 
