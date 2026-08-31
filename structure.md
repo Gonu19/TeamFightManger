@@ -98,7 +98,8 @@ A:\project\TeamFighter\
 │   ├─ web/
 │   │   ├─ StoryController                  / · /story · /story/{id}
 │   │   │                                    POST /story/generate · -round
-│   │   ├─ GalleryController                 /gallery · /gallery/status (JSON)
+│   │   ├─ GalleryController                 /gallery(?batch= 로 신원 열기, D75)
+│   │   │                                    /gallery/status (JSON)
 │   │   │                                    POST /gallery/generate (비동기, D73)
 │   │   ├─ 컨트롤러: Tier · Champion · Synergy · Gaps · Draft · Slot
 │   │   ├─ sse/                             실시간 갱신

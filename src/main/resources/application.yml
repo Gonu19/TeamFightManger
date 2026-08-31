@@ -9,6 +9,23 @@ spring:
   config:
     import: optional:file:.env[.properties]
 
+  # 정적 파일 이름에 내용 해시를 붙인다 (/js/gallery.js → /js/gallery-a1b2c3.js).
+  #
+  # 왜 필요한가: 브라우저가 옛 gallery.js 를 캐시해 두면 화면 로직만 과거에 머문다.
+  # 서버는 고쳐졌는데 화면은 옛날 코드로 도는 상태이고, 그 증상은 "고쳤는데 그대로다" 라
+  # 원인을 찾기가 아주 나쁘다. 실제로 갤러리 새로고침 루프를 고칠 때 이것이 진짜 원인인지
+  # 아닌지를 한참 가려야 했다.
+  #
+  # 내용이 바뀌면 이름이 바뀌므로 캐시가 옛것을 줄 방법 자체가 없어진다.
+  # Thymeleaf 의 @{...} 가 그 이름으로 자동으로 바뀐다.
+  web:
+    resources:
+      chain:
+        strategy:
+          content:
+            enabled: true
+            paths: /**
+
   datasource:
     url: jdbc:postgresql://localhost:5432/${TFM_DB_NAME:tfm}
     username: ${TFM_DB_USER:postgres}

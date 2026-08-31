@@ -21,6 +21,16 @@
     /** "내가 시작한 작업을 기다리는 중" 을 POST 왕복 너머로 나르는 열쇠. */
     var AWAIT_KEY = 'tfm_gallery_awaiting';
 
+    /**
+     * 이미 결과로 넘어간 배치 번호.
+     *
+     * <b>같은 배치로 두 번 넘어가지 않는다.</b> 아래 새로고침이 어떤 이유로든 그 배치를
+     * 못 그리면(주소가 틀렸거나, 페이지가 밀렸거나) 화면은 다시 "아직 그 배치가 아니네"
+     * 하고 또 넘어간다 — 그게 무한 루프다. 한 번 넘어간 번호를 기억해 두면 그 고리가
+     * 구조적으로 끊긴다. 페이지 번호 계산이 틀려도 루프는 안 돈다.
+     */
+    var LANDED_KEY = 'tfm_gallery_landed';
+
     var board = null;      // { batchId, posts[] }
     var sortKey = 'date';
     var slot = null;
@@ -214,6 +224,7 @@
             showProgress('시작하는 중…', 0);
             setButtonEnabled(false);
             markAwaiting(true);                // 이 브라우저가 시작한 작업이라는 표시
+            remember(LANDED_KEY, null);        // 새 작업이므로 지난 배치 기억을 지운다
         });
     }
 
@@ -228,22 +239,38 @@
      * 함께 사라져야 하기 때문이다.
      */
     function markAwaiting(value) {
-        try {
-            if (value) {
-                sessionStorage.setItem(AWAIT_KEY, '1');
-            } else {
-                sessionStorage.removeItem(AWAIT_KEY);
-            }
-        } catch (e) {
-            // 사생활 보호 모드에서 던진다. 그때는 아래 batchId 비교만으로 판단한다.
-        }
+        remember(AWAIT_KEY, value ? '1' : null);
     }
 
     function isAwaiting() {
+        return recall(AWAIT_KEY) === '1';
+    }
+
+    /** 이번 탭에서 이미 결과로 넘어간 배치 번호. 없으면 0. */
+    function landedOn() {
+        return Number(recall(LANDED_KEY) || '0');
+    }
+
+    /**
+     * sessionStorage 는 사생활 보호 모드에서 던진다. 그때는 이 표식들이 전부 비므로
+     * <b>새로고침을 아예 안 하게</b> 된다 — 결과를 못 보는 것은 불편하지만,
+     * 루프가 도는 것보다는 낫다. 실패 방향을 안전한 쪽으로 둔다.
+     */
+    function remember(key, value) {
         try {
-            return sessionStorage.getItem(AWAIT_KEY) === '1';
+            if (value === null) {
+                sessionStorage.removeItem(key);
+            } else {
+                sessionStorage.setItem(key, value);
+            }
+        } catch (e) { /* 위 설명대로 넘어간다 */ }
+    }
+
+    function recall(key) {
+        try {
+            return sessionStorage.getItem(key);
         } catch (e) {
-            return false;
+            return null;
         }
     }
 
@@ -280,12 +307,19 @@
                     return;
                 }
                 if (status.state === 'DONE') {
-                    if (isAwaiting() && status.batchId && status.batchId !== shownBatchId()) {
+                    if (isAwaiting() && status.batchId
+                            && status.batchId !== shownBatchId()
+                            && status.batchId !== landedOn()) {
                         // 새 페이지가 생겼다. 서버에서 다시 받아 온다 — 여기서 직접
                         // 그리지 않는 이유는 페이지 목록(번호)도 함께 바뀌기 때문이다.
+                        //
+                        // 페이지 번호가 아니라 <b>배치 번호</b>로 연다. 새로 만든 갤러리는
+                        // 첫 페이지가 아니다 — 생성기가 고르는 것은 "갤러리가 아직 없는
+                        // 매치 중 최근" 이고 그건 이미 갤러리가 있는 매치보다 과거다.
                         showProgress('다 됐다. 새로 불러온다…', 100);
+                        remember(LANDED_KEY, String(status.batchId));
                         leaving = true;
-                        window.location = '/gallery?slot=' + slot;
+                        window.location = '/gallery?slot=' + slot + '&batch=' + status.batchId;
                         return;
                     }
                     // 이미 그 페이지를 보고 있거나, 내가 시작한 작업이 아니다.

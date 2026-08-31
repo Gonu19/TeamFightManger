@@ -66,18 +66,21 @@ public class GalleryController {
      * @param slot 커리어. 없으면 <b>갤러리가 있는</b> 첫 슬롯을 고른다. 하나도 없으면
      *             적재된 커리어로 물러선다 — 그러지 않으면 고를 커리어가 없어
      *             <b>첫 갤러리를 영영 못 뽑는다</b> (기사 목록이 겪었던 순환과 같다)
-     * @param page  0 이 가장 최근 페이지다
+     * @param page  0 이 가장 최근 <b>경기</b>의 페이지다
+     * @param batch 페이지 번호 대신 <b>배치 번호</b>로 여는 길. 방금 만든 갤러리로
+     *              곧장 가는 데 쓴다 — 아래 주석이 왜 필요한지 적어 뒀다
      */
     @GetMapping("/gallery")
     public String board(@RequestParam(required = false) Integer slot,
                         @RequestParam(defaultValue = "0") int page,
+                        @RequestParam(required = false) Long batch,
                         Model model) {
         List<Integer> withGalleries = galleries.slotsWithGalleries();
         List<Integer> slotIds = withGalleries.isEmpty() ? slots.slotIds() : withGalleries;
         Integer selected = slot != null ? slot : (slotIds.isEmpty() ? null : slotIds.get(0));
 
         List<GalleryView> pages = selected == null ? List.of() : galleries.pages(selected);
-        int index = Math.max(0, Math.min(page, pages.size() - 1));
+        int index = indexOf(pages, batch, page);
 
         // 머리말만 담은 목록으로 페이지 번호를 그리고, 지금 볼 페이지만 통째로 다시 읽는다.
         // 열 페이지의 글을 한꺼번에 끌어오면 화면 하나가 수 MB 를 읽는다.
@@ -96,6 +99,36 @@ public class GalleryController {
         // 끝나야 모드와 같은 손맛이 나오고, 그러려면 브라우저가 데이터를 들고 있어야 한다.
         model.addAttribute("boardJson", current.map(this::toJson).orElse("null"));
         return "story/gallery";
+    }
+
+    /**
+     * 몇 번째 페이지를 그릴까.
+     *
+     * <h2>배치 번호로 여는 길이 왜 필요한가</h2>
+     *
+     * 페이지는 <b>경기 시점 순</b>이다(최근 경기가 첫 페이지). 그런데 생성기는
+     * <b>갤러리가 아직 없는</b> 매치 중 최근 것을 고른다 — 그건 이미 갤러리가 있는
+     * 매치보다 <b>과거</b>다. 그래서 방금 만든 갤러리는 첫 페이지가 아니라 뒤쪽에 생긴다.
+     *
+     * <p>이걸 모르고 "다 됐으니 첫 페이지로" 를 보내면 두 가지가 한꺼번에 깨진다:
+     * 새로 만든 글이 안 보이고, 화면이 "아직 그 배치가 아니네" 하며 <b>영원히
+     * 새로고침</b>한다. 실물에서 정확히 그렇게 돌았다 — 배치는 멀쩡히 저장돼 있었는데
+     * 사용자는 끝내 그것을 못 봤다.
+     *
+     * <p>그래서 끝난 뒤에는 <b>번호가 아니라 신원</b>으로 연다.
+     *
+     * @param batch 배치 번호. 목록에 없으면 무시하고 {@code page} 를 쓴다 —
+     *              지워졌거나 다른 커리어의 것이다
+     */
+    private static int indexOf(List<GalleryView> pages, Long batch, int page) {
+        if (batch != null) {
+            for (int i = 0; i < pages.size(); i++) {
+                if (pages.get(i).batchId() == batch) {
+                    return i;
+                }
+            }
+        }
+        return Math.max(0, Math.min(page, pages.size() - 1));
     }
 
     /**
