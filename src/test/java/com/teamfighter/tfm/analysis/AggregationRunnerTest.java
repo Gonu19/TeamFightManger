@@ -58,7 +58,7 @@ class AggregationRunnerTest {
     @DisplayName("run() 은 집계 서비스에 위임한다")
     void run_delegatesToService() {
         AggregationService service = mock(AggregationService.class);
-        when(service.run()).thenReturn(new AggregationService.Result(7L, 100, 20));
+        when(service.run()).thenReturn(new AggregationService.Result(7L, 100, 20, 0));
 
         new AggregationRunner(service).run(new DefaultApplicationArguments());
 

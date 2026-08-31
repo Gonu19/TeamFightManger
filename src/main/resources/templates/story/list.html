@@ -52,6 +52,8 @@
     </form>
 </header>
 
+<div th:replace="~{fragments/nav :: tabs('story')}"></div>
+
 <main>
     <!--
       flash 메시지. POST /story/generate 가 리다이렉트하면서 한 번만 실어 보낸 값이라,

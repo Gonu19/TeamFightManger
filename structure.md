@@ -60,9 +60,17 @@ A:\project\TeamFighter\
 │   │   │                CounterCalculator   BT 기대승률 · 1단 축소 · 상성 이득
 │   │   ├─ performance/ ChampionTallyAggregator   챔피언별 출전 누적
 │   │   │                PerformanceCalculator     티어 — 강도 보정 없음 (D50)
-│   │   ├─ synergy/                          아직 없음
+│   │   ├─ pair/       출력 기반 쌍 효과 (D63~D65 · D76)
+│   │   │    ├─ PairObservation             한 관측 = 경기에 나온 챔피언 하나
+│   │   │    ├─ Standardizer                챔피언별 z — 주효과를 0 으로
+│   │   │    ├─ DesignMatrix                팀·동료·상대·역할군 특성
+│   │   │    ├─ RidgeFit                    좌표하강. 이진 특성이라 나눗셈 한 번
+│   │   │    ├─ PerfMetric                  딜·탱·힐·킬·데스·어시 — 묶음으로 본다
+│   │   │    └─ PairEffectCalculator        역할군 통제 후 방향 있는 쌍
+│   │   ├─ synergy/                          승률 기반. 비어 있다 (D63 이 강등)
 │   │   └─ dao/         MatchObservationDao · AnalysisConfigDao (D46: 행만 꺼낸다)
 │   │                    CounterWriter · PerformanceWriter · AggRunRecorder
+│   │                    PairObservationDao · PairEffectWriter · ChampionRoleDao
 │   ├─ story/           기사·댓글 (D61). 집계와 링크로 잇지 않는다
 │   │   ├─ MatchBrief                       사실 — 세트 합 = 스케줄 스코어를 강제
 │   │   ├─ Notability · NotabilityContext   해석 — 아는 축만으로 분량을 정한다
@@ -96,14 +104,16 @@ A:\project\TeamFighter\
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
 │   │   └─ dao/
 │   ├─ web/
-│   │   ├─ StoryController                  / · /story · /story/{id}
+│   │   ├─ StatsController                  /tier · /champion/{code}  (D76)
+│   │   ├─ StoryController                  / → /tier · /story · /story/{id}
 │   │   │                                    POST /story/generate · -round
 │   │   ├─ GalleryController                 /gallery(?batch= 로 신원 열기, D75)
 │   │   │                                    /gallery/status (JSON)
 │   │   │                                    POST /gallery/generate (비동기, D73)
-│   │   ├─ 컨트롤러: Tier · Champion · Synergy · Gaps · Draft · Slot
+│   │   ├─ 아직 없는 컨트롤러: Gaps · Draft · Slot
 │   │   ├─ sse/                             실시간 갱신
-│   │   └─ view/                            서버가 계산해 내려보내는 표시 모델
+│   │   ├─ dao/StatsDao                     화면은 계산하지 않는다. 정렬만 한다
+│   │   └─ view/TierRow · PairRow           표시 모델 (서명 문구가 여기 있다)
 │   └─ common/
 │
 ├─ src/main/resources/
@@ -120,7 +130,10 @@ A:\project\TeamFighter\
 │   │   ├─ V10__article_kind.sql           기사 종류 · NULLS NOT DISTINCT (D70)
 │   │   ├─ V11__gallery.sql                batch · post · comment (D71 · D72)
 │   │   ├─ V12__gallery_standalone_and_issues.sql  기사에서 뗀다 · 이슈 (D73)
-│   │   └─ V13__drop_gallery_issues.sql    이슈를 도로 걷어낸다 (D74)
+│   │   ├─ V13__drop_gallery_issues.sql    이슈를 도로 걷어낸다 (D74)
+│   │   └─ V14__champion_pair_effect.sql   방향 있는 쌍 × 지표 (D63~D65 · D76)
+│   ├─ templates/stats/                    tier.html · champion.html
+│   ├─ templates/fragments/nav.html         상단 탭 — 두 세계가 만나는 유일한 자리
 │   ├─ templates/story/                    list.html · detail.html · gallery.html
 │   ├─ templates/ + templates/fragments/    (통계 화면은 아직)
 │   └─ static/css/tfm.css · gallery.css · static/js/gallery.js
@@ -175,8 +188,9 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 전체다 — 순수 계산 계층(`decay/` · `shrink/` · `strength/` · `counter/`)과 조회·쓰기(`dao/`),
 그리고 진입점(`AggregationService`) — 이제 티어(`performance/`)도 같은 바퀴에서 만든다.
 
-`analysis/` 에서 아직 없는 것은 `synergy/`(2·3인 조합 · 역할군 4인)와, 2단 축소를 실제로
-쓰는 패치별 집계다. 지금 저장하는 것은 1단(전체 누적, `patch_id IS NULL`)뿐이다.
+`analysis/` 의 `pair/` 가 시너지·카운터를 낸다 — 승률이 아니라 **출력**에서(D63~D65 · D76).
+`synergy/`(승률 기반 2·3인 조합)는 비어 있고, D63 이 그것을 교차검증용으로 강등했다.
+아직 없는 것은 2단 축소를 실제로 쓰는 패치별 집계다. 지금 저장하는 것은 1단(전체 누적, `patch_id IS NULL`)뿐이다.
 `performance/` 는 티어·픽률·밴률까지 만들지만 **경기력 z값과 티어 등급은 비워 둔다** —
 둘 다 근거가 아직 없다 (D50).
 
@@ -184,9 +198,8 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 `story/gallery/` 가 게시판을 세운다: 매치 하나에 짧은 글 20편이 유형 할당제로 붙는다
 (D72~D74). 세트 나열을 프롬프트가 아니라 구조로 푼 것이 이 계층의 존재 이유다.
 **기사와 독립이라** 둘 중 하나만 있어도 된다.
-`web/` 에 있는 것은 연대기와 갤러리뿐이고 통계 화면(`/tier` · `/champion` · `/gaps` · `/teams`)과
-`draft/` 는 아직 없다. 상단 탭도 통계 화면이 생길 때 붙인다 — 갈 곳이 하나뿐인 탭은
-탭으로 안 읽힌다.
+`web/` 에는 티어 · 챔피언 · 연대기 · 갤러리가 있다. 상단 탭이 그 넷을 잇고, 그 탭이
+**통계와 창작이 만나는 유일한 자리**다 (D61). `/gaps` · `/teams` 와 `draft/` 는 아직 없다.
 
 ---
 

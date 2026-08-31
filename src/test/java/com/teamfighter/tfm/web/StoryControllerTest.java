@@ -177,12 +177,14 @@ class StoryControllerTest {
     }
 
     @Test
-    @DisplayName("루트는 연대기로 보낸다 — 404 Whitelabel 이 아니다")
-    void rootRedirectsToStory() throws Exception {
+    @DisplayName("루트는 티어로 보낸다 — 404 Whitelabel 이 아니다")
+    void rootRedirectsToTier() throws Exception {
+        // 통계 화면이 생기기 전에는 /story 였다. 시작 화면은 "지금 무엇이 센가" 가
+        // 맞으므로 목적지를 옮겼다 — 그 메서드의 주석이 예고해 둔 그대로다.
         mvc().perform(get("/"))
                 .andExpect(status().is3xxRedirection())
                 .andExpect(org.springframework.test.web.servlet.result.MockMvcResultMatchers
-                        .redirectedUrl("/story"));
+                        .redirectedUrl("/tier"));
     }
 
     @Test

@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<!--
+  상단 탭. 두 세계가 만나는 <b>유일한 자리</b>다 (D61).
+
+  통계(티어·챔피언)와 창작(연대기·갤러리)은 서로에게 링크를 걸지 않는다. 챔피언 이름을
+  눌러 갤러리로 가는 길이 생기면 D61 이 물리적으로 끊어둔 경계가 다시 이어진다.
+  여기서만 오갈 수 있게 두면 그 경계가 화면에서도 보인다.
+
+  이 탭이 이제야 생긴 이유: 갈 곳이 하나뿐인 탭은 탭으로 안 읽힌다. 통계 화면이
+  생기면서 처음으로 둘 이상이 됐다.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<body>
+
+<nav class="tabs" th:fragment="tabs(active)">
+    <a th:href="@{/tier}" th:classappend="${active == 'tier'} ? 'on' : ''">티어</a>
+    <a th:href="@{/story}" th:classappend="${active == 'story'} ? 'on' : ''">연대기</a>
+    <a th:href="@{/gallery}" th:classappend="${active == 'gallery'} ? 'on' : ''">갤러리</a>
+</nav>
+
+</body>
+</html>

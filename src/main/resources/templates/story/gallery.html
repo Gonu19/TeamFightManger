@@ -31,6 +31,7 @@
                       th:text="'시즌 ' + ${gallery.season} + ' · ' + ${gallery.day} + '일차'">시점</span>
             </h2>
             <div>
+                <a class="settings-btn" th:href="@{/tier}">📊 티어</a>
                 <a class="settings-btn" th:href="@{/story(slot=${selectedSlot})}">📰 연대기</a>
                 <button class="settings-btn" type="button" onclick="toggleTheme()">🌓 테마</button>
             </div>

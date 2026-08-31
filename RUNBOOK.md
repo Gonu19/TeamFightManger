@@ -26,7 +26,7 @@ $env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat test
 
 ```powershell
 $env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat bootRun   # http://127.0.0.1:8088
-# 화면: /story · /gallery
+# 화면: /tier · /champion/{code} · /story · /gallery
 $env:TFM_STORY_ENABLED = 'true'; .\gradlew.bat bootRun   # 생성 버튼 셋 (키 필요)
 # 갤러리 한 페이지는 호출 2회 · 1분 남짓. 진행 막대가 뜬다 (D74)
 .\gradlew.bat bootRun --args="--tfm.reingest-on-start=true"   # 수리용

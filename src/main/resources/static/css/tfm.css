@@ -225,3 +225,72 @@ article h1 { font-size: 1.6rem; line-height: 1.4; margin: 2rem 0 0.5rem; }
 
 .go-gallery a { font-size: 1rem; font-weight: 600; color: #3b4890; }
 .go-gallery .hint { display: block; margin-top: 0.3rem; color: var(--dim); font-size: 0.78rem; }
+
+/* --- 상단 탭 (D61: 두 세계가 만나는 유일한 자리) --- */
+
+.tabs {
+    display: flex;
+    gap: 1.2rem;
+    padding: 0.9rem 1.2rem;
+    border-bottom: 1px solid var(--line);
+    margin-bottom: 1.5rem;
+}
+
+.tabs a { color: var(--dim); font-size: 0.92rem; text-decoration: none; }
+.tabs a:hover { color: var(--ink); }
+.tabs a.on { color: var(--ink); font-weight: 600; border-bottom: 2px solid var(--ink); }
+
+/* --- 통계 표 --- */
+
+.stat-table { width: 100%; border-collapse: collapse; margin-top: 0.8rem; font-size: 0.9rem; }
+.stat-table th {
+    text-align: left;
+    border-top: 1px solid var(--ink);
+    border-bottom: 1px solid var(--line);
+    padding: 0.5rem 0.4rem;
+    font-size: 0.78rem;
+    color: var(--dim);
+}
+.stat-table td { border-bottom: 1px solid var(--line); padding: 0.5rem 0.4rem; }
+.stat-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.stat-table .strong { font-weight: 600; }
+.stat-table .dim { color: var(--dim); }
+.stat-table .code { color: var(--dim); font-size: 0.76rem; margin-left: 0.4rem; }
+
+/* 출전이 없는 챔피언. 목록에서 빼지 않는 이유는 "어디 갔지" 를 만들지 않기 위해서다 */
+.stat-table tr.unplayed td { color: var(--dim); }
+
+/*
+ * 효과의 방향. 문턱 0.15σ 는 PairRow 의 서명 판정과 같은 값이다 —
+ * 화면의 색과 문장이 다른 기준을 쓰면 "빨간데 아무 말도 없는" 줄이 생긴다.
+ */
+.stat-table .up { color: #b03a2e; }
+.stat-table .down { color: #1f6f8b; }
+.stat-table .flat { color: var(--dim); }
+.stat-table .hint { color: var(--dim); font-size: 0.78rem; }
+.stat-table tr.warn-row { background: #fff8f6; }
+
+.meta a.on { font-weight: 600; text-decoration: underline; }
+
+/* --- 역시너지 경고 (D65 결정 2: 1급 기능) --- */
+
+.warn-box {
+    border: 1px solid #e6b7ae;
+    background: #fff8f6;
+    border-radius: 4px;
+    padding: 0.9rem 1.1rem;
+    margin: 1.5rem 0;
+}
+
+.warn-box h2 { margin: 0 0 0.6rem; font-size: 1rem; color: #b03a2e; }
+.warn-box ul { margin: 0; padding-left: 1.1rem; }
+.warn-box li { margin-bottom: 0.3rem; font-size: 0.9rem; }
+.warn-box .note { margin: 0.6rem 0 0; }
+
+.pairs { margin-top: 2rem; }
+.pairs h2 { font-size: 1rem; margin-bottom: 0.2rem; }
+
+.reading { margin-top: 2.5rem; border-top: 1px solid var(--line); padding-top: 1rem; }
+.reading h2 { font-size: 0.95rem; }
+.reading ul { padding-left: 1.1rem; color: var(--dim); font-size: 0.85rem; line-height: 1.7; }
+.reading b { color: var(--ink); }

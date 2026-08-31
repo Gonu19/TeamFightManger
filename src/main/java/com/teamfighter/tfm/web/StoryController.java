@@ -81,14 +81,14 @@ public class StoryController {
      * (Whitelabel Error Page)이다. 앱이 뜬 것도 안 뜬 것도 아닌 상태로 보이므로,
      * 갈 곳이 하나라도 있으면 그리로 보내는 편이 낫다.
      *
-     * <p>통계 화면이 생기면 여기는 {@code /tier} 로 바뀐다 — 시작 화면은 "지금 무엇이 센가"
-     * 가 맞다. 그때 이 메서드를 지우는 게 아니라 목적지만 바꾼다.
+     * <p><b>통계 화면이 생겨서 목적지를 바꿨다.</b> 시작 화면은 "지금 무엇이 센가" 가
+     * 맞다 — 예고한 대로 메서드를 지우지 않고 목적지만 옮겼다.
      */
     @GetMapping("/")
     public String home() {
         // redirect: 접두사는 뷰 이름이 아니라 302 응답을 뜻한다. forward 로 하면
         // 주소창이 "/" 로 남아서, 사용자가 새로고침할 때 어디에 있는지 알 수 없다.
-        return "redirect:/story";
+        return "redirect:/tier";
     }
 
     /**

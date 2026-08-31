@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<!--
+  티어 — 지금 무엇이 센가.
+
+  등급 칸이 비어 있는 것은 미완성이 아니라 <b>결론</b>이다. 실측에서 40명의 기저 승률
+  표준편차가 3.32%p 인데 표본 오차만으로 ±3.4%p 가 흩어진다 — 관측된 흩어짐의 상당
+  부분이 잡음일 수 있다는 뜻이다 (D51 · decisions/OPEN.md). 근거 없는 S/A/B 를 찍는
+  것보다 "미정" 이 정직하다.
+
+  그래서 정렬은 추정 승률로 한다 (D50). 그 값은 표본이 얇으면 전체 평균 쪽으로 당겨져
+  있고(D15), 얼마나 당겨졌는지는 옆의 날것 승률과 출전 수로 읽는다.
+-->
+<html xmlns:th="http://www.thymeleaf.org" lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <title>티어 — 팀파이트 매니저</title>
+    <link rel="stylesheet" th:href="@{/css/tfm.css}">
+</head>
+<body>
+
+<div th:replace="~{fragments/nav :: tabs('tier')}"></div>
+
+<main>
+    <h1>티어</h1>
+
+    <p class="meta">
+        커리어
+        <span th:each="s : ${slots}">
+            <a th:href="@{/tier(slot=${s}, scrim=${scrim})}"
+               th:text="${s}"
+               th:classappend="${s == selectedSlot} ? 'on' : ''">1</a>
+        </span>
+        ·
+        <!-- 스크림 포함/제외 두 벌이 미리 만들어져 있다 (D47). 켜고 끄는 데 재계산이 없다 -->
+        <a th:href="@{/tier(slot=${selectedSlot}, scrim=${!scrim})}"
+           th:text="${scrim} ? '스크림 제외하기' : '스크림 포함하기'">스크림</a>
+    </p>
+
+    <p class="empty" th:if="${rows.isEmpty()}">
+        아직 집계된 것이 없다. 세이브를 적재하고 집계를 돌린다.
+    </p>
+
+    <table class="stat-table" th:unless="${rows.isEmpty()}">
+        <thead>
+        <tr>
+            <th>챔피언</th>
+            <th>역할군</th>
+            <th class="num">추정 승률</th>
+            <th class="num">승률</th>
+            <th class="num">출전</th>
+            <th class="num">픽률</th>
+            <th class="num">밴률</th>
+            <th>등급</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr th:each="row : ${rows}" th:classappend="${row.games == 0} ? 'unplayed' : ''">
+            <td>
+                <a th:href="@{'/champion/' + ${row.code}(slot=${selectedSlot})}"
+                   th:text="${row.nameKo}">이름</a>
+                <span class="code" th:text="${row.code}">Code</span>
+            </td>
+            <td th:text="${row.category}">역할군</td>
+
+            <!--
+              T(...) 는 자바 클래스를 부르는 Thymeleaf 문법이다. 백분율 변환을 뷰 모델의
+              정적 메서드에 두는 이유는 null 을 0 으로 바꾸지 않기 위해서다 —
+              "출전이 없다" 와 "승률 0%" 는 다른 뜻이다.
+            -->
+            <td class="num strong"
+                th:text="${row.adjustedWinRate == null} ? '—'
+                         : ${T(com.teamfighter.tfm.web.view.TierRow).percent(row.adjustedWinRate)} + '%'">—</td>
+            <td class="num dim"
+                th:text="${row.winRate == null} ? '—'
+                         : ${T(com.teamfighter.tfm.web.view.TierRow).percent(row.winRate)} + '%'">—</td>
+            <td class="num" th:text="${row.games}">0</td>
+            <td class="num dim"
+                th:text="${row.pickRate == null} ? '—'
+                         : ${T(com.teamfighter.tfm.web.view.TierRow).percent(row.pickRate)} + '%'">—</td>
+            <td class="num dim"
+                th:text="${row.banRate == null} ? '—'
+                         : ${T(com.teamfighter.tfm.web.view.TierRow).percent(row.banRate)} + '%'">—</td>
+            <td class="dim" th:text="${row.hasNoGrade()} ? '미정' : ${row.tierGrade}">미정</td>
+        </tr>
+        </tbody>
+    </table>
+
+    <p class="note">
+        <b>등급은 아직 정하지 않았다.</b> 기저 승률의 흩어짐(표준편차 3.3%p)이 표본 오차
+        (±3.4%p)와 비슷해서, 지금 컷을 그으면 잡음에 등급을 매기는 것이 된다 (D51).
+        그때까지 <b>추정 승률로 정렬</b>한다 — 그 값은 출전이 적을수록 평균 쪽으로
+        당겨져 있다(D15). 옆의 날것 승률과 얼마나 다른지가 그 당겨진 양이다.
+    </p>
+</main>
+</body>
+</html>

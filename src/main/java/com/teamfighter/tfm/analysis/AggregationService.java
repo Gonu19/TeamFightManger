@@ -4,6 +4,13 @@ import com.teamfighter.tfm.analysis.counter.CounterCalculator;
 import com.teamfighter.tfm.analysis.counter.MatchupAggregate;
 import com.teamfighter.tfm.analysis.counter.MatchupAggregator;
 import com.teamfighter.tfm.analysis.dao.AggRunRecorder;
+import com.teamfighter.tfm.analysis.dao.ChampionRoleDao;
+import com.teamfighter.tfm.analysis.dao.PairEffectWriter;
+import com.teamfighter.tfm.analysis.dao.PairObservationDao;
+import com.teamfighter.tfm.analysis.pair.PairEffectCalculator;
+import com.teamfighter.tfm.analysis.pair.PairEffectCalculator.Effect;
+import com.teamfighter.tfm.analysis.pair.PairObservation;
+import com.teamfighter.tfm.analysis.pair.PerfMetric;
 import com.teamfighter.tfm.analysis.dao.AnalysisConfigDao;
 import com.teamfighter.tfm.analysis.dao.CounterWriter;
 import com.teamfighter.tfm.analysis.dao.MatchObservationDao;
@@ -54,22 +61,31 @@ public class AggregationService {
     private final CounterWriter counterWriter;
     private final PerformanceWriter performanceWriter;
     private final AggRunRecorder runs;
+    private final PairObservationDao pairObservations;
+    private final PairEffectWriter pairWriter;
+    private final ChampionRoleDao roles;
 
     public AggregationService(
             AnalysisConfigDao configDao,
             MatchObservationDao observations,
             CounterWriter counterWriter,
             PerformanceWriter performanceWriter,
-            AggRunRecorder runs) {
+            AggRunRecorder runs,
+            PairObservationDao pairObservations,
+            PairEffectWriter pairWriter,
+            ChampionRoleDao roles) {
         this.configDao = configDao;
         this.observations = observations;
         this.counterWriter = counterWriter;
         this.performanceWriter = performanceWriter;
         this.runs = runs;
+        this.pairObservations = pairObservations;
+        this.pairWriter = pairWriter;
+        this.roles = roles;
     }
 
     /** 한 번의 집계가 무엇을 썼는지. */
-    public record Result(long aggRunId, int counterRows, int performanceRows) {
+    public record Result(long aggRunId, int counterRows, int performanceRows, int pairRows) {
     }
 
     @Transactional
@@ -103,10 +119,44 @@ public class AggregationService {
             }
         }
 
+        int pairRows = 0;
+        for (SlotData slot : slots) {
+            pairRows += writePairEffects(slot.slotId());
+        }
+
         runs.finish(runId);
-        log.info("집계 완료 run={} — 카운터 {}행 · 티어 {}행 (슬롯 {}개)",
-                runId, counterRows, performanceRows, slots.size());
-        return new Result(runId, counterRows, performanceRows);
+        log.info("집계 완료 run={} — 카운터 {}행 · 티어 {}행 · 쌍 효과 {}행 (슬롯 {}개)",
+                runId, counterRows, performanceRows, pairRows, slots.size());
+        return new Result(runId, counterRows, performanceRows, pairRows);
+    }
+
+    /**
+     * 출력 기반 쌍 효과 (D63~D65).
+     *
+     * <h2>왜 위 반복문 안이 아닌가</h2>
+     *
+     * 위쪽은 <b>스크림 포함/제외 두 벌</b>을 만든다(D47). 쌍 효과는 공식전만 본다 —
+     * D63~D65 의 측정이 공식전으로 이뤄졌고, 스크림은 팀 식별이 없어(D54) 팀 강도 항이
+     * 아예 안 켜진다. 모형의 모양이 다른 것을 같은 반복문에 넣으면 그 차이가 안 보인다.
+     *
+     * <h2>지표마다 한 번씩 적합한다</h2>
+     *
+     * 여섯 지표가 각자 다른 모형이다. 관측은 한 번만 읽고 지표별로 나눠 쓴다.
+     */
+    private int writePairEffects(int slotId) {
+        Map<Integer, Integer> roleByChampion = roles.load();
+        Map<PerfMetric, List<PairObservation>> byMetric = pairObservations.load(slotId);
+
+        int written = 0;
+        for (Map.Entry<PerfMetric, List<PairObservation>> entry : byMetric.entrySet()) {
+            List<Effect> effects = PairEffectCalculator.effects(
+                    entry.getValue(), roleByChampion::get);
+            pairWriter.replace(slotId, entry.getKey(), false, effects);
+            written += effects.size();
+            log.debug("슬롯 {} 지표 {} — 관측 {}행 → 쌍 {}개",
+                    slotId, entry.getKey(), entry.getValue().size(), effects.size());
+        }
+        return written;
     }
 
     private SlotData loadSlot(int slotId) {
