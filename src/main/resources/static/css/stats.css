@@ -1,0 +1,405 @@
+/*
+ * 통계 화면 — 티어 · 챔피언.
+ *
+ * 연대기·갤러리가 쓰는 tfm.css 와 따로 두는 이유는 취향이 아니라 하는 일이 달라서다.
+ * 기사 화면은 글을 읽히는 곳이라 여백이 넓고 색이 셋뿐이다. 여기는 40여 줄 × 8칸을
+ * 한눈에 <b>비교</b>하게 하는 곳이고, 그러려면 줄이 촘촘하고 값이 색과 길이로 읽혀야
+ * 한다. 한 파일에 두 규칙을 넣으면 한쪽을 고칠 때마다 다른 쪽이 깨진다.
+ *
+ * 색은 lol.ps 계열이다: 어두운 바탕에 값만 밝고, 좋고 나쁨을 초록·빨강으로 가른다.
+ *
+ * 색이 뜻을 지는 자리가 여기서는 둘뿐이다 — 승률의 높낮이, 효과의 부호. 그 둘 다
+ * 숫자가 옆에 그대로 있다. 색은 <b>먼저 눈에 띄게</b> 할 뿐, 색만 봐야 알 수 있는
+ * 것은 화면에 없다.
+ */
+
+:root {
+    --bg: #0f121a;
+    --panel: #171b27;
+    --panel-2: #1c2130;
+    --line: #262c3b;
+    --ink: #dfe3ec;
+    --dim: #8992a6;
+    --faint: #5a6274;
+    --gold: #c8a962;
+    --good: #2fbf9b;
+    --bad: #e5595f;
+    --flat: #6f7789;
+}
+
+* { box-sizing: border-box; }
+
+body {
+    margin: 0;
+    padding: 0 1rem 5rem;
+    background: var(--bg);
+    color: var(--ink);
+    font: 14px/1.6 "Malgun Gothic", "맑은 고딕", system-ui, sans-serif;
+}
+
+main { max-width: 62rem; margin: 0 auto; }
+
+a { color: inherit; }
+
+h1 { font-size: 1.35rem; font-weight: 600; margin: 1.5rem 0 0.25rem; }
+h2 { font-size: 0.95rem; font-weight: 600; margin: 0; }
+
+.tabs {
+    max-width: 62rem;
+    margin: 0 auto;
+    display: flex;
+    gap: 0.25rem;
+    border-bottom: 1px solid var(--line);
+}
+
+.tabs a {
+    padding: 0.7rem 1.1rem;
+    color: var(--dim);
+    text-decoration: none;
+    font-size: 0.9rem;
+    border-bottom: 2px solid transparent;
+}
+
+.tabs a:hover { color: var(--ink); }
+.tabs a.on { color: var(--gold); border-bottom-color: var(--gold); }
+
+/* --- 거르개 (커리어 · 스크림 · 역할군) --- */
+
+.filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem 1.25rem;
+    margin: 1rem 0;
+    padding: 0.6rem 0.85rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.filters .label { color: var(--faint); margin-right: 0.15rem; }
+
+.chip {
+    display: inline-block;
+    padding: 0.2rem 0.65rem;
+    color: var(--dim);
+    text-decoration: none;
+    border: 1px solid transparent;
+    border-radius: 3px;
+}
+
+.chip:hover { color: var(--ink); background: var(--panel-2); }
+.chip.on { color: var(--gold); border-color: var(--gold); background: transparent; }
+
+/* --- 티어 표 --- */
+
+/*
+ * 표가 좁은 화면에서 페이지를 밀지 않게, 자기 상자 안에서만 옆으로 흐른다.
+ * 밖으로 밀면 본문 전체가 가로로 흔들리고 순위 칸이 화면 밖으로 나간다.
+ */
+.tier-scroll {
+    overflow-x: auto;
+    border: 1px solid var(--line);
+    border-radius: 4px;
+}
+
+.tier-table {
+    width: 100%;
+    min-width: 46rem;          /* 이보다 좁아지면 막대가 0 이 된다 — 그때는 흐른다 */
+    border-collapse: collapse;
+    background: var(--panel);
+}
+
+.tier-table th {
+    padding: 0.55rem 0.6rem;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--faint);
+    text-align: left;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--line);
+    white-space: nowrap;
+}
+
+.tier-table td {
+    padding: 0.5rem 0.6rem;
+    border-bottom: 1px solid var(--line);
+    vertical-align: middle;
+}
+
+.tier-table tbody tr:hover { background: var(--panel-2); }
+.tier-table tbody tr:last-child td { border-bottom: none; }
+
+.num { text-align: right; font-variant-numeric: tabular-nums; }
+.dim { color: var(--dim); }
+.faint { color: var(--faint); }
+
+/* 순위 — 등급 칸을 대신한다 (D51). 위 셋만 금색이다 */
+.rank { width: 3rem; text-align: center; color: var(--dim); font-variant-numeric: tabular-nums; }
+.rank.top { color: var(--gold); font-weight: 700; }
+
+.champ { font-weight: 600; text-decoration: none; }
+.champ:hover { color: var(--gold); }
+.code { color: var(--faint); font-size: 0.75rem; margin-left: 0.35rem; }
+
+/* 출전이 없는 줄. 지우지 않고 눕혀 둔다 — 목록에서 빠지면 어디 갔는지 알 수 없다 */
+.unplayed td { opacity: 0.45; }
+
+/*
+ * 승률 막대. 눈금은 40~60% 다 — 실제 흩어짐이 3.3%p 뿐이라 0~100 으로 그리면
+ * 모든 막대가 절반쯤에서 똑같아 보인다. 잘린다는 사실은 표 아래 주석이 말한다.
+ */
+/*
+ * 숫자는 막대 <b>밖</b>이다. 안에 겹쳐 놓으면 막대가 짧을 때와 길 때 글자 배경이
+ * 달라져서 같은 숫자가 줄마다 다른 밝기로 읽힌다 — 값이 아니라 길이가 가독성을
+ * 정하게 된다.
+ */
+.bar-cell { width: 11rem; }
+
+.bar-wrap { display: flex; align-items: center; gap: 0.5rem; }
+
+.bar {
+    position: relative;
+    flex: 1;
+    height: 0.85rem;
+    background: var(--panel-2);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.bar > span {
+    position: absolute;
+    inset: 0 auto 0 0;
+    background: linear-gradient(90deg, #2f5f7d, #4d9ac4);
+    border-radius: 2px;
+}
+
+/* 50% 기준선. 이기는 쪽인지 지는 쪽인지를 막대가 말하게 한다 */
+.bar::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 1px;
+    background: rgba(255, 255, 255, 0.22);
+}
+
+.bar-wrap > b {
+    width: 3.4rem;
+    text-align: right;
+    font-size: 0.85rem;
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+}
+
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+
+/* --- 챔피언 머리 --- */
+
+.champ-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: 1.5rem;
+    margin: 1rem 0 1.25rem;
+    padding: 1rem 1.1rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+}
+
+.champ-head h1 { margin: 0; }
+
+.stat { display: flex; flex-direction: column; gap: 0.1rem; }
+.stat .k { font-size: 0.72rem; color: var(--faint); }
+.stat .v { font-size: 1.15rem; font-weight: 700; font-variant-numeric: tabular-nums; }
+.stat .v.gold { color: var(--gold); }
+
+/* --- 세 묶음 --- */
+
+.buckets {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 0.75rem;
+    margin: 1.25rem 0;
+}
+
+@media (max-width: 900px) {
+    .buckets { grid-template-columns: 1fr; }
+}
+
+.bucket {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    overflow: hidden;
+}
+
+.bucket > header {
+    padding: 0.6rem 0.85rem;
+    background: var(--panel-2);
+    border-bottom: 1px solid var(--line);
+}
+
+.bucket > header .sub { display: block; font-size: 0.75rem; color: var(--faint); font-weight: 400; }
+
+.bucket.hard > header h2 { color: var(--bad); }
+.bucket.easy > header h2 { color: var(--good); }
+.bucket.duo > header h2 { color: var(--gold); }
+
+/*
+ * 한 줄: 이름 | σ 막대 | σ | 관측.
+ * lol.ps 는 여기에 승률을 놓지만 우리는 σ 다 (D63 결정 5) — "덜 죽는다" 를
+ * "이긴다" 로 바꾸는 회귀식이 아직 없다(D19 미결). 바뀐 것은 숫자가 아니라
+ * 그것을 읽는 법이다.
+ */
+.pair {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 3.5rem 4rem 3.2rem;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 0.85rem;
+    border-bottom: 1px solid var(--line);
+    color: inherit;
+    text-decoration: none;
+}
+
+.pair:last-child { border-bottom: none; }
+.pair:hover { background: var(--panel-2); }
+
+.pair .name { text-decoration: none; font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pair .name:hover { color: var(--gold); }
+.pair .role { color: var(--faint); font-size: 0.72rem; margin-left: 0.3rem; }
+
+.sigma {
+    position: relative;
+    height: 1rem;
+    background: var(--panel-2);
+    border-radius: 2px;
+    overflow: hidden;
+}
+
+.sigma > span { position: absolute; inset: 0 auto 0 0; border-radius: 2px; }
+.sigma.up > span { background: var(--bad); }
+.sigma.down > span { background: var(--good); }
+.sigma.flat > span { background: var(--flat); }
+
+/* 상대 묶음에서는 부호의 뜻이 뒤집힌다 — 내가 덜 죽는 것이 좋은 것이다 */
+.bucket.easy .sigma.down > span { background: var(--good); }
+.bucket.hard .sigma.up > span { background: var(--bad); }
+
+.pair .val { text-align: right; font-weight: 600; font-variant-numeric: tabular-nums; font-size: 0.85rem; }
+.pair .obs { text-align: right; color: var(--faint); font-size: 0.75rem; }
+
+.bucket .empty { padding: 1.2rem 0.85rem; color: var(--faint); font-size: 0.82rem; text-align: center; }
+
+/*
+ * 문턱 아래로 채운 줄.
+ *
+ * 목록에 그냥 이어 붙이면 안 된다 — 그러면 "확실한 것" 과 "그럴지도 모르는 것" 이
+ * 같은 무게로 읽히고, 문턱을 아예 없앤 것과 같아진다. 그래서 경계선을 긋고, 왜
+ * 흐린지 한 줄로 말하고, 값의 색을 뺀다(초록·빨강은 확실한 줄에만 쓴다).
+ */
+.faint-note {
+    margin: 0;
+    padding: 0.4rem 0.85rem;
+    background: var(--panel-2);
+    border-top: 1px solid var(--line);
+    border-bottom: 1px solid var(--line);
+    color: var(--faint);
+    font-size: 0.72rem;
+}
+
+.pair.weak { opacity: 0.62; }
+.pair.weak .val { color: var(--dim); }
+
+/* --- 역시너지 경고 --- */
+
+.warn-box {
+    margin: 1.25rem 0;
+    padding: 0.85rem 1rem;
+    background: rgba(229, 89, 95, 0.08);
+    border: 1px solid rgba(229, 89, 95, 0.45);
+    border-radius: 4px;
+}
+
+.warn-box h2 { color: var(--bad); margin-bottom: 0.5rem; }
+.warn-box ul { list-style: none; padding: 0; margin: 0; }
+.warn-box li { padding: 0.2rem 0; font-size: 0.88rem; }
+.warn-box .note { margin: 0.5rem 0 0; }
+
+/* --- 펼쳐 보는 지표 벡터 --- */
+
+details.vectors { margin: 1.25rem 0; }
+
+details.vectors > summary {
+    cursor: pointer;
+    padding: 0.55rem 0.85rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+    color: var(--dim);
+    font-size: 0.85rem;
+}
+
+details.vectors[open] > summary { border-radius: 4px 4px 0 0; border-bottom: none; }
+
+/* 표가 좁은 화면에서 페이지를 밀지 않게, 자기 상자 안에서만 옆으로 흐른다 */
+.vector-scroll { overflow-x: auto; border: 1px solid var(--line); border-top: none;
+                 border-radius: 0 0 4px 4px; }
+
+.vector-table { width: 100%; border-collapse: collapse; background: var(--panel); }
+.vector-table th { padding: 0.45rem 0.6rem; font-size: 0.75rem; font-weight: 500;
+                   color: var(--faint); text-align: left; background: var(--panel-2);
+                   border-bottom: 1px solid var(--line); white-space: nowrap; }
+.vector-table td { padding: 0.4rem 0.6rem; border-bottom: 1px solid var(--line);
+                   font-size: 0.82rem; white-space: nowrap; }
+.vector-table tbody tr:last-child td { border-bottom: none; }
+
+/*
+ * 여기서는 초록·빨강을 안 쓴다.
+ *
+ * 묶음 목록은 지표가 하나로 정해져 있어 "좋다/나쁘다" 를 색으로 말할 수 있다.
+ * 이 표는 아니다 — 같은 +0.5 라도 가한피해면 좋고 데스면 나쁘다. 편까지 다르면
+ * 또 뒤집힌다(D64 결정 3). 좋고 나쁨을 아는 것은 여섯 칸을 다 본 사람뿐이고,
+ * 그게 이 표가 있는 이유다.
+ *
+ * 그래서 색은 <b>방향만</b> 말한다: 올랐나 내렸나. 좋은지는 읽는 사람이 정한다.
+ */
+.vector-table .up { color: #d8a657; }     /* 올랐다 */
+.vector-table .down { color: #7aa2d6; }   /* 내렸다 */
+.vector-table .flat { color: var(--flat); }
+/* 서명은 안 접는다. 접으면 그 한 줄 때문에 표 전체가 세 배로 높아진다 —
+   상자가 이미 옆으로 흐르므로 넓히는 쪽이 싸다 */
+.vector-table .hint { color: var(--dim); font-size: 0.78rem; }
+.vector-table td a { text-decoration: none; }
+.vector-table td a:hover { color: var(--gold); }
+.vector-table tr.warn-row { background: rgba(229, 89, 95, 0.07); }
+
+/* --- 주석 --- */
+
+.note, .reading { color: var(--dim); font-size: 0.82rem; line-height: 1.7; }
+.note b, .reading b { color: var(--ink); }
+.note .up { color: #d8a657; }
+.note .down { color: #7aa2d6; }
+
+.reading {
+    margin: 2rem 0 0;
+    padding: 0.85rem 1rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+}
+
+.reading h2 { color: var(--faint); font-weight: 500; margin-bottom: 0.5rem; }
+.reading ul { margin: 0; padding-left: 1.1rem; }
+.reading li { margin-bottom: 0.4rem; }
+
+.empty { color: var(--faint); margin: 3rem 0; text-align: center; }
+
+.crumb { margin: 1rem 0 0; font-size: 0.85rem; }
+.crumb a { color: var(--dim); text-decoration: none; }
+.crumb a:hover { color: var(--gold); }

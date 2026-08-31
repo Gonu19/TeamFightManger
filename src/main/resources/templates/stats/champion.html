@@ -1,37 +1,88 @@
 <!DOCTYPE html>
 <!--
-  챔피언 하나 — 시너지와 카운터를 한 화면에.
+  챔피언 하나 — 세 묶음.
 
-  둘을 나누지 않는 이유는 밴픽에서 묻는 것이 "이 챔피언 동료로 뭐가 좋고 누가 무서운가"
-  한 덩어리이기 때문이다. 화면을 오가야 비교되는 구조는 그 질문에 답하지 못한다.
+    상대하기 어려움   맞은편에 있으면 내가 더 죽는다
+    상대하기 쉬움     맞은편에 있으면 내가 덜 죽는다
+    듀오 시너지       같은 팀이면 덜 죽거나 더 때린다
 
-  값은 전부 <b>σ</b> 다. 승률이 아니다 (D63 결정 5) — "딜이 오른다" 는 "이긴다" 가
-  아니고, 그 변환에는 아직 없는 회귀식이 필요하다(D19 미결).
+  전에는 동료·상대 두 표에 여섯 지표를 그대로 늘어놓았다. 숫자는 맞았지만 "그래서
+  이 챔피언을 뽑아도 되나" 에 답을 안 해 줬다 — 답하려면 읽는 사람이 여섯 개의 σ 를
+  머릿속에서 합쳐야 했다. 그 합치는 일을 화면이 한다.
 
-  지표를 하나로 줄이지 않는 것이 이 화면의 핵심이다 (D65 결정 1). 같은 죽음 증가라도
-  함께 오는 값이 다르면 다른 현상이다. 그래서 한 줄에 다섯 지표를 나란히 놓는다.
+  가르는 축은 DEATH 다 (D64 결정 3). DEALING 으로 가르면 정확히 거꾸로 읽힌다 —
+  상대 쪽 딜 상승은 "내가 강하다" 가 아니라 "저쪽이 내 딜을 받아낸다" 는 뜻이다.
+
+  값은 여전히 σ 다. 승률이 아니다 (D63 결정 5) — "덜 죽는다" 를 "이긴다" 로 바꾸는
+  회귀식이 아직 없다(D19 미결). 바뀐 것은 숫자가 아니라 그것을 읽는 법이다:
+  막대 · 색 · 묶음.
+
+  여섯 지표는 사라지지 않는다 (D65 결정 1). 맨 아래 "지표를 전부 펼쳐 본다" 안에 있다.
 -->
 <html xmlns:th="http://www.thymeleaf.org" lang="ko">
 <head>
     <meta charset="UTF-8">
     <title th:text="${champion.nameKo} + ' — 팀파이트 매니저'">챔피언</title>
-    <link rel="stylesheet" th:href="@{/css/tfm.css}">
+    <link rel="stylesheet" th:href="@{/css/stats.css}">
 </head>
 <body>
 
 <div th:replace="~{fragments/nav :: tabs('tier')}"></div>
 
 <main>
-    <p class="meta"><a th:href="@{/tier(slot=${selectedSlot})}">← 티어</a></p>
+    <p class="crumb"><a th:href="@{/tier(slot=${selectedSlot}, category=${champion.category})}">← 챔피언 랭킹</a></p>
 
-    <h1>
-        <span th:text="${champion.nameKo}">이름</span>
-        <span class="code" th:text="${champion.code}">Code</span>
-        <span class="code" th:text="${champion.category}">역할군</span>
-    </h1>
+    <header class="champ-head">
+        <div>
+            <h1 th:text="${champion.nameKo}">이름</h1>
+            <span class="code" th:text="${champion.code}">Code</span>
+            <span class="code" th:text="${champion.categoryLabel()}">역할군</span>
+        </div>
+
+        <!-- 순위는 역할군 안에서다. 라벨이 그 말을 해야 전체 순위와 안 헷갈린다 -->
+        <div class="stat" th:if="${champion.isRanked()}">
+            <span class="k" th:text="${champion.categoryLabel()} + ' 중'">역할군 중</span>
+            <span class="v gold" th:text="${champion.rank} + '위'">1위</span>
+        </div>
+
+        <div class="stat"
+             th:with="pct=${T(com.teamfighter.tfm.web.view.TierRow).sortPercent(champion.adjustedWinRate)}">
+            <span class="k">추정 승률</span>
+            <span class="v" th:if="${pct == null}">—</span>
+            <span class="v" th:unless="${pct == null}"
+                  th:classappend="${pct.doubleValue() >= 50} ? 'good' : 'bad'"
+                  th:text="${pct} + '%'">50.0%</span>
+        </div>
+
+        <div class="stat">
+            <span class="k">승률</span>
+            <span class="v dim"
+                  th:text="${champion.winRate == null} ? '—'
+                           : ${T(com.teamfighter.tfm.web.view.TierRow).percent(champion.winRate)} + '%'">—</span>
+        </div>
+
+        <div class="stat">
+            <span class="k">출전</span>
+            <span class="v dim" th:text="${champion.games}">0</span>
+        </div>
+
+        <div class="stat">
+            <span class="k">픽률</span>
+            <span class="v dim"
+                  th:text="${champion.pickRate == null} ? '—'
+                           : ${T(com.teamfighter.tfm.web.view.TierRow).percent(champion.pickRate)} + '%'">—</span>
+        </div>
+
+        <div class="stat">
+            <span class="k">밴률</span>
+            <span class="v dim"
+                  th:text="${champion.banRate == null} ? '—'
+                           : ${T(com.teamfighter.tfm.web.view.TierRow).percent(champion.banRate)} + '%'">—</span>
+        </div>
+    </header>
 
     <!--
-      역시너지 경고를 목록에 섞지 않고 위로 뽑는다 (D65 결정 2).
+      역시너지 경고를 묶음에 섞지 않고 위로 뽑는다 (D65 결정 2).
       좋은 조합은 여럿이지만 지뢰는 밟으면 그 판이 끝난다.
     -->
     <section class="warn-box" th:if="${!warnings.isEmpty()}">
@@ -39,70 +90,192 @@
         <ul>
             <li th:each="w : ${warnings}">
                 <b th:text="${w.nameKo}">이름</b>
-                — 딜 <span th:text="${w.effect(T(com.teamfighter.tfm.analysis.pair.PerfMetric).DEALING)}">0</span>σ ·
-                죽음 <span th:text="${w.effect(T(com.teamfighter.tfm.analysis.pair.PerfMetric).DEATH)}">0</span>σ
-                <span class="dim" th:text="'(' + ${w.observations} + '경기)'">(0경기)</span>
+                — 딜 <span class="bad" th:text="${w.effect(T(com.teamfighter.tfm.analysis.pair.PerfMetric).DEALING)}">0</span>σ ·
+                죽음 <span class="bad" th:text="${w.effect(T(com.teamfighter.tfm.analysis.pair.PerfMetric).DEATH)}">0</span>σ
+                <span class="faint" th:text="'(' + ${w.observations} + '경기)'">(0경기)</span>
             </li>
         </ul>
         <p class="note">딜은 줄고 죽음은 느는 조합이다. 둘 다 나빠지면 서로 방해하고 있다는 뜻이다.</p>
     </section>
 
     <!--
-      th:block 은 화면에 아무 태그도 안 남기는 묶음이다. 같은 표를 두 번 그리려고
-      쓴다 — 동료와 상대는 읽는 법만 다르고 모양이 같다.
-    -->
-    <th:block th:each="pair : ${ {
-            {'동료 — 같은 팀에 있을 때 이 챔피언의 출력 변화', allies, '시너지'},
-            {'상대 — 맞은편에 있을 때 이 챔피언의 출력 변화', foes, '카운터'} } }">
-        <section class="pairs">
-            <h2 th:text="${pair[0]}">제목</h2>
+      세 칸은 읽는 법만 다르고 모양이 같아서 한 번만 적는다 — 셋을 따로 적으면
+      하나를 고칠 때 둘이 뒤처진다.
 
-            <p class="empty" th:if="${pair[1].isEmpty()}">
-                아직 관측이 모자란다. 한 쌍이
-                <span th:text="${minObservations}">20</span>경기는 함께 나와야 값을 낸다.
+      칸마다 다섯 줄까지 채우되 목록을 둘로 나눈다 (D77 결정 6-1). 문턱을 넘은 줄과
+      모자란 만큼 끌어온 줄을 한 덩어리로 합치면, 확실한 것과 그럴지도 모르는 것이
+      같은 무게로 읽히고 그건 문턱을 아예 없앤 것과 같다.
+
+      빈 칸도 두 가지다. "아직 잴 수가 없다"(함께 나온 경기가 20을 못 채움) 와
+      "쟀는데 이쪽으로 기운 것이 없다" 는 다른 상태이고, 같은 문장으로 그리면
+      데이터가 없는 앱처럼 보인다.
+    -->
+    <section class="buckets">
+        <div class="bucket" th:each="b : ${buckets}" th:classappend="${b.css}">
+
+            <header>
+                <h2 th:text="${b.title}">제목</h2>
+                <span class="sub" th:text="${b.subtitle}">부제</span>
+            </header>
+
+            <!-- 잴 것 자체가 없는 칸. "문턱 아래" 와 다른 상태다 -->
+            <p class="empty" th:if="${b.isEmpty()}">
+                <span th:if="${b.isUnmeasured()}">아직 잴 수가 없다.<br>
+                    <span th:text="'한 쌍이 ' + ${minObservations} + '경기는 함께 나와야 값이 나온다.'">
+                        한 쌍이 20경기는 함께 나와야 값이 나온다.</span></span>
+                <span th:unless="${b.isUnmeasured()}"
+                      th:text="${b.measured} + '쌍을 쟀는데 이쪽으로 기운 것이 없다.'">0쌍</span>
             </p>
 
-            <table class="stat-table" th:unless="${pair[1].isEmpty()}">
-                <thead>
-                <tr>
-                    <th>챔피언</th>
-                    <th class="num" th:each="m : ${metrics}" th:text="${m.label()}">지표</th>
-                    <th class="num">관측</th>
-                    <th>읽는 법</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr th:each="row : ${pair[1]}" th:classappend="${row.isWarning()} ? 'warn-row' : ''">
+            <!--
+              두 목록을 한 덩어리로 합치지 않는다. 합치면 "확실한 것" 과 "그럴지도
+              모르는 것" 이 같은 무게로 읽히고, 그건 문턱을 아예 없앤 것과 같다.
+              나눠 놓으면 칸은 차는데 어디까지가 근거인지가 화면에 남는다.
+            -->
+            <a class="pair"
+               th:each="row : ${b.rows}"
+               th:href="@{'/champion/' + ${row.code}(slot=${selectedSlot})}">
+
+                <span class="name">
+                    <span th:text="${row.nameKo}">이름</span>
+                    <span class="role" th:text="${row.categoryLabel()}">역할군</span>
+                </span>
+
+                <!--
+                  막대의 색은 부호가 아니라 <b>이 챔피언에게 좋은가</b>를 따른다.
+                  죽음 −0.3σ 는 좋은 것이고 딜 −0.3σ 는 나쁜 것인데 둘 다 음수다.
+                -->
+                <span class="sigma"
+                      th:classappend="${row.isFavourable()} ? 'down' : 'up'"
+                      th:title="${row.leadMetric().label()} + ' ' + ${row.leadEffect()} + 'σ'">
+                    <span th:style="'width:' + ${T(com.teamfighter.tfm.web.view.PairRow).barWidth(row.leadEffect())} + '%'"></span>
+                </span>
+
+                <span class="val"
+                      th:classappend="${row.isFavourable()} ? 'good' : 'bad'"
+                      th:text="${row.leadEffect()} + 'σ'">0σ</span>
+
+                <span class="obs" th:text="${row.observations} + '경기'">0경기</span>
+            </a>
+
+            <!-- 문턱 아래로 채운 줄. 흐리게, 그리고 왜 흐린지를 말하고 나서 그린다 -->
+            <p class="faint-note" th:if="${!b.faint.isEmpty()}"
+               th:text="${b.hasNoConfidentRows()}
+                        ? '문턱(' + ${#numbers.formatDecimal(T(com.teamfighter.tfm.web.view.PairRow).SIGNAL, 1, 2)} + 'σ) 을 넘은 것은 없다. 방향이 맞는 것만 아래에.'
+                        : '여기부터는 문턱(' + ${#numbers.formatDecimal(T(com.teamfighter.tfm.web.view.PairRow).SIGNAL, 1, 2)} + 'σ) 아래다.'">문턱 아래</p>
+
+            <a class="pair weak"
+               th:each="row : ${b.faint}"
+               th:href="@{'/champion/' + ${row.code}(slot=${selectedSlot})}">
+
+                <span class="name">
+                    <span th:text="${row.nameKo}">이름</span>
+                    <span class="role" th:text="${row.categoryLabel()}">역할군</span>
+                </span>
+
+                <!-- 이 줄은 NEUTRAL 이라 자기에게 물으면 언제나 데스가 나온다.
+                     이 칸이 무엇으로 끌어왔는지를 물어야 맞는 숫자가 뜬다 -->
+                <span class="sigma flat"
+                      th:with="v=${row.leadEffect(b.kind)}"
+                      th:title="${row.leadMetric(b.kind).label()} + ' ' + ${v} + 'σ'">
+                    <span th:style="'width:' + ${T(com.teamfighter.tfm.web.view.PairRow).barWidth(v)} + '%'"></span>
+                </span>
+
+                <span class="val" th:text="${row.leadEffect(b.kind)} + 'σ'">0σ</span>
+                <span class="obs" th:text="${row.observations} + '경기'">0경기</span>
+            </a>
+        </div>
+    </section>
+
+    <p class="note">
+        묶음 안의 숫자는 그 칸을 가른 지표다 — 상대는 <b>데스</b>, 듀오는 죽음과 딜 중
+        실제로 문턱을 넘은 쪽이다. 마우스를 올리면 어느 지표인지 뜬다.
+        <b>나머지 지표는 아래에서 전부 볼 수 있다.</b>
+        <br>
+        칸마다 <b>다섯 줄까지</b> 채운다. 문턱
+        (<span th:text="${#numbers.formatDecimal(T(com.teamfighter.tfm.web.view.PairRow).SIGNAL, 1, 2)} + 'σ'">0.10σ</span>)을
+        넘은 것이 모자라면 방향이 맞는 다음 줄을 <b>흐리게</b> 붙인다 — 칸을 채우려고
+        문턱을 없애면 확실한 것과 그렇지 않은 것이 같은 무게로 읽힌다.
+    </p>
+
+    <!--
+      여섯 지표를 접어 둔다. 지우는 것이 아니다 (D65 결정 1) — 같은 죽음 증가라도
+      함께 오는 값이 다르면 다른 현상이고, 그 구분은 여기서만 보인다.
+    -->
+    <details class="vectors">
+        <summary>지표를 전부 펼쳐 본다 — 딜 · 죽음 · 탱 · 킬 · 힐</summary>
+
+        <!--
+          색은 좋고 나쁨이 아니라 방향만 말한다. 같은 +0.5 라도 가한피해면 좋고
+          데스면 나쁘고, 편이 바뀌면 또 뒤집힌다 (D64 결정 3). 좋은지 나쁜지는
+          여섯 칸을 다 본 사람이 정하는 것이고, 그게 이 표가 있는 이유다.
+        -->
+        <div class="vector-scroll">
+        <table class="vector-table">
+            <thead>
+            <tr>
+                <th>챔피언</th>
+                <th>편</th>
+                <th class="num" th:each="m : ${metrics}" th:text="${m.label()}">지표</th>
+                <th class="num">관측</th>
+                <th>읽는 법</th>
+            </tr>
+            </thead>
+            <tbody>
+            <!-- 동료 먼저, 상대 다음. 편 칸이 있어야 같은 숫자를 반대로 읽지 않는다 -->
+            <th:block th:each="group : ${ { {'동료', allies}, {'상대', foes} } }">
+                <tr th:each="row : ${group[1]}"
+                    th:classappend="${row.isWarning()} ? 'warn-row' : ''">
                     <td>
                         <a th:href="@{'/champion/' + ${row.code}(slot=${selectedSlot})}"
                            th:text="${row.nameKo}">이름</a>
                     </td>
+                    <td class="faint" th:text="${group[0]}">동료</td>
                     <td class="num" th:each="m : ${metrics}"
                         th:with="v=${row.effect(m)}"
                         th:classappend="${v == null} ? '' : (${v.doubleValue() > 0.15} ? 'up'
                                         : (${v.doubleValue() < -0.15} ? 'down' : 'flat'))"
                         th:text="${v == null} ? '—' : ${v}">—</td>
-                    <td class="num dim" th:text="${row.observations}">0</td>
+                    <td class="num faint" th:text="${row.observations}">0</td>
                     <!-- 서명은 힌트다. 네 서명은 세 쌍에서 읽어낸 초안이라 단정하지 않는다 (D65) -->
                     <td class="hint" th:text="${row.signature()} ?: ''"></td>
                 </tr>
-                </tbody>
-            </table>
-        </section>
-    </th:block>
+            </th:block>
+            <tr th:if="${allies.isEmpty() and foes.isEmpty()}">
+                <td colspan="9" class="faint" style="text-align:center; padding:1.2rem">
+                    아직 관측이 모자란다. 한 쌍이
+                    <span th:text="${minObservations}">20</span>경기는 함께 나와야 값을 낸다.
+                </td>
+            </tr>
+            </tbody>
+        </table>
+        </div>
+
+        <p class="note">
+            색은 <b>방향만</b> 말한다 — <span class="up">올랐다</span> ·
+            <span class="down">내렸다</span>. 좋고 나쁨을 색으로 칠하지 않는 이유는
+            같은 +0.5 라도 가한피해면 좋고 데스면 나쁘고, 편이 바뀌면 또 뒤집히기
+            때문이다 (D64 결정 3).
+        </p>
+    </details>
 
     <section class="reading">
         <h2>이 숫자를 읽는 법</h2>
         <ul>
             <li><b>단위는 σ 다.</b> 그 챔피언의 그 지표 표준편차 몇 배만큼 달라지는가.
                 승률이 아니다 — 딜이 오르는 것과 이기는 것은 다른 말이다 (D63).</li>
+            <li><b>세 묶음을 가른 것은 데스다.</b> 카운터의 뜻에 맞는 지표가 그것이기
+                때문이다 (D64 결정 3). 가한피해의 상대 효과가 양수인 것은 "그 상대가 내
+                딜을 받아낸다" 는 뜻이지 "내가 강하다" 가 아니다.</li>
             <li><b>지표 하나만 보지 않는다.</b> 딜↓·죽음↑ 이 양쪽에 다 나오면 역시너지,
-                한쪽만이면 카운터다. 죽음↓·탱↓ 은 동료가 대신 맞아주는 것이다 (D65).</li>
-            <li><b>가한피해의 상대 효과는 뒤집어 읽어야 한다.</b> 양수는 "그 상대가 내 딜을
-                받아낸다" 는 뜻이지 "내가 강하다" 가 아니다. 카운터의 뜻에 맞는 지표는
-                <b>데스</b>다 (D64 결정 3).</li>
+                한쪽만이면 카운터다. 죽음↓·탱↓ 은 동료가 대신 맞아주는 것이다 (D65).
+                그 구분은 펼친 표에서만 보인다.</li>
             <li><b>관측 수를 함께 본다.</b> 교차검증은 "효과가 있다" 까지만 말했다.
                 개별 값의 크기는 표본이 얇으면 그만큼 흔들린다 (D13·D60).</li>
+            <li><b>여기에는 패치 감쇠가 안 걸려 있다.</b> 티어의 승률·픽률·밴률과 승률
+                기반 카운터는 오래된 패치를 가볍게 세지만, 이 σ 값들은 <b>공식전 전부를
+                같은 무게로</b> 본다. D52 가 "지금은 정할 수 없다" 로 닫아 둔 건이다 —
+                경기가 한 시즌에 몰려 있어 반감기를 어떻게 잡아도 순위가 거의 같았다.</li>
         </ul>
     </section>
 </main>

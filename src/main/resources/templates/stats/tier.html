@@ -2,74 +2,113 @@
 <!--
   티어 — 지금 무엇이 센가.
 
-  등급 칸이 비어 있는 것은 미완성이 아니라 <b>결론</b>이다. 실측에서 40명의 기저 승률
-  표준편차가 3.32%p 인데 표본 오차만으로 ±3.4%p 가 흩어진다 — 관측된 흩어짐의 상당
-  부분이 잡음일 수 있다는 뜻이다 (D51 · decisions/OPEN.md). 근거 없는 S/A/B 를 찍는
-  것보다 "미정" 이 정직하다.
+  등급 칸에 순위가 들어간다. 등급은 여전히 못 정한다 — 실측에서 40명의 기저 승률
+  표준편차가 3.32%p 인데 표본 오차만으로 ±3.4%p 가 흩어진다 (D51 · decisions/OPEN.md).
+  그런데 순위는 컷라인을 요구하지 않는다. "1등이 2등보다 위다" 는 경계를 긋지 않고도
+  말할 수 있는 사실이고, 빈 칸에 "미정" 을 그리는 것보다 읽는 사람에게 쓸모가 있다.
 
-  그래서 정렬은 추정 승률로 한다 (D50). 그 값은 표본이 얇으면 전체 평균 쪽으로 당겨져
-  있고(D15), 얼마나 당겨졌는지는 옆의 날것 승률과 출전 수로 읽는다.
+  정렬 기준은 그대로 추정 승률이다 (D50). 그 값은 표본이 얇으면 전체 평균 쪽으로
+  당겨져 있고(D15), 얼마나 당겨졌는지는 옆의 날것 승률과 출전 수로 읽는다.
+
+  막대는 숫자를 바꾸지 않는다. 40~60% 를 0~100 으로 늘려 그릴 뿐이고, 그 눈금은
+  표 아래가 말한다. 차이가 3%p 대에서 나는데 0~100 으로 그리면 모든 막대가 똑같아진다.
 -->
 <html xmlns:th="http://www.thymeleaf.org" lang="ko">
 <head>
     <meta charset="UTF-8">
     <title>티어 — 팀파이트 매니저</title>
-    <link rel="stylesheet" th:href="@{/css/tfm.css}">
+    <link rel="stylesheet" th:href="@{/css/stats.css}">
 </head>
 <body>
 
 <div th:replace="~{fragments/nav :: tabs('tier')}"></div>
 
 <main>
-    <h1>티어</h1>
+    <h1>챔피언 랭킹</h1>
 
-    <p class="meta">
-        커리어
-        <span th:each="s : ${slots}">
-            <a th:href="@{/tier(slot=${s}, scrim=${scrim})}"
-               th:text="${s}"
-               th:classappend="${s == selectedSlot} ? 'on' : ''">1</a>
-        </span>
-        ·
+    <div class="filters">
+        <span class="label">커리어</span>
+        <a th:each="s : ${slots}"
+           class="chip"
+           th:href="@{/tier(slot=${s}, scrim=${scrim}, category=${selectedCategory})}"
+           th:text="'슬롯 ' + ${s}"
+           th:classappend="${s == selectedSlot} ? 'on' : ''">슬롯 1</a>
+
         <!-- 스크림 포함/제외 두 벌이 미리 만들어져 있다 (D47). 켜고 끄는 데 재계산이 없다 -->
-        <a th:href="@{/tier(slot=${selectedSlot}, scrim=${!scrim})}"
-           th:text="${scrim} ? '스크림 제외하기' : '스크림 포함하기'">스크림</a>
-    </p>
+        <span class="label">경기</span>
+        <a class="chip"
+           th:href="@{/tier(slot=${selectedSlot}, scrim=false, category=${selectedCategory})}"
+           th:classappend="${!scrim} ? 'on' : ''">공식전만</a>
+        <a class="chip"
+           th:href="@{/tier(slot=${selectedSlot}, scrim=true, category=${selectedCategory})}"
+           th:classappend="${scrim} ? 'on' : ''">스크림 포함</a>
+
+        <!--
+          역할군 탭. 순위도 이 안에서 다시 매겨진다 — 거른 목록에 전체 순위를 얹으면
+          "1위, 4위, 9위…" 가 되고 그건 순위가 아니라 구멍 난 목록으로 읽힌다.
+        -->
+        <span class="label">역할군</span>
+        <a class="chip"
+           th:href="@{/tier(slot=${selectedSlot}, scrim=${scrim})}"
+           th:classappend="${selectedCategory == null} ? 'on' : ''">전체</a>
+        <a th:each="c : ${categories}"
+           class="chip"
+           th:href="@{/tier(slot=${selectedSlot}, scrim=${scrim}, category=${c.name()})}"
+           th:text="${c.label()}"
+           th:classappend="${c.name() == selectedCategory} ? 'on' : ''">전사</a>
+    </div>
 
     <p class="empty" th:if="${rows.isEmpty()}">
         아직 집계된 것이 없다. 세이브를 적재하고 집계를 돌린다.
     </p>
 
-    <table class="stat-table" th:unless="${rows.isEmpty()}">
+    <div class="tier-scroll" th:unless="${rows.isEmpty()}">
+    <table class="tier-table">
         <thead>
         <tr>
+            <th class="rank">순위</th>
             <th>챔피언</th>
             <th>역할군</th>
-            <th class="num">추정 승률</th>
+            <th>추정 승률</th>
             <th class="num">승률</th>
             <th class="num">출전</th>
             <th class="num">픽률</th>
             <th class="num">밴률</th>
-            <th>등급</th>
         </tr>
         </thead>
         <tbody>
         <tr th:each="row : ${rows}" th:classappend="${row.games == 0} ? 'unplayed' : ''">
+
+            <!-- 위 셋만 금색이다. 넷째부터 금색이면 금색이 아무 말도 안 한다 -->
+            <td class="rank"
+                th:classappend="${row.isRanked() and row.rank <= 3} ? 'top' : ''"
+                th:text="${row.isRanked()} ? ${row.rank} : '—'">1</td>
+
             <td>
-                <a th:href="@{'/champion/' + ${row.code}(slot=${selectedSlot})}"
+                <a class="champ"
+                   th:href="@{'/champion/' + ${row.code}(slot=${selectedSlot})}"
                    th:text="${row.nameKo}">이름</a>
                 <span class="code" th:text="${row.code}">Code</span>
             </td>
-            <td th:text="${row.category}">역할군</td>
+
+            <td class="dim" th:text="${row.categoryLabel()}">역할군</td>
 
             <!--
-              T(...) 는 자바 클래스를 부르는 Thymeleaf 문법이다. 백분율 변환을 뷰 모델의
-              정적 메서드에 두는 이유는 null 을 0 으로 바꾸지 않기 위해서다 —
+              T(...) 는 자바 클래스를 부르는 Thymeleaf 문법이다. 백분율과 막대 길이를
+              뷰 모델의 정적 메서드에 두는 이유는 null 을 0 으로 바꾸지 않기 위해서다 —
               "출전이 없다" 와 "승률 0%" 는 다른 뜻이다.
             -->
-            <td class="num strong"
-                th:text="${row.adjustedWinRate == null} ? '—'
-                         : ${T(com.teamfighter.tfm.web.view.TierRow).percent(row.adjustedWinRate)} + '%'">—</td>
+            <td class="bar-cell"
+                th:with="pct=${T(com.teamfighter.tfm.web.view.TierRow).sortPercent(row.adjustedWinRate)},
+                         width=${T(com.teamfighter.tfm.web.view.TierRow).barWidth(row.adjustedWinRate)}">
+                <span class="faint" th:if="${pct == null}">—</span>
+                <div class="bar-wrap" th:unless="${pct == null}">
+                    <div class="bar"><span th:style="'width:' + ${width} + '%'"></span></div>
+                    <b th:classappend="${pct.doubleValue() >= 50} ? 'good' : 'bad'"
+                       th:text="${pct} + '%'">50.0%</b>
+                </div>
+            </td>
+
             <td class="num dim"
                 th:text="${row.winRate == null} ? '—'
                          : ${T(com.teamfighter.tfm.web.view.TierRow).percent(row.winRate)} + '%'">—</td>
@@ -80,16 +119,21 @@
             <td class="num dim"
                 th:text="${row.banRate == null} ? '—'
                          : ${T(com.teamfighter.tfm.web.view.TierRow).percent(row.banRate)} + '%'">—</td>
-            <td class="dim" th:text="${row.hasNoGrade()} ? '미정' : ${row.tierGrade}">미정</td>
         </tr>
         </tbody>
     </table>
+    </div>
 
-    <p class="note">
-        <b>등급은 아직 정하지 않았다.</b> 기저 승률의 흩어짐(표준편차 3.3%p)이 표본 오차
-        (±3.4%p)와 비슷해서, 지금 컷을 그으면 잡음에 등급을 매기는 것이 된다 (D51).
-        그때까지 <b>추정 승률로 정렬</b>한다 — 그 값은 출전이 적을수록 평균 쪽으로
-        당겨져 있다(D15). 옆의 날것 승률과 얼마나 다른지가 그 당겨진 양이다.
+    <p class="note" th:unless="${rows.isEmpty()}">
+        <b>순위는 추정 승률 순이다.</b> 등급(S·A·B)은 아직 안 매긴다 — 기저 승률의
+        흩어짐(표준편차 3.3%p)이 표본 오차(±3.4%p)와 비슷해서, 지금 컷을 그으면 잡음에
+        등급을 매기는 것이 된다 (D51). 순위는 컷라인 없이도 말할 수 있는 사실이라 대신 쓴다.
+        <br>
+        <b>추정 승률은 당겨진 값이다.</b> 출전이 적을수록 전체 평균 쪽으로 끌린다(D15).
+        옆의 날것 승률과 얼마나 다른지가 그 당겨진 양이다.
+        <br>
+        <b>막대의 눈금은 40~60% 다.</b> 실제 차이가 3%p 대에서 나기 때문이고, 그 밖은
+        양끝에 눕는다. 가운데 선이 50% 다.
     </p>
 </main>
 </body>

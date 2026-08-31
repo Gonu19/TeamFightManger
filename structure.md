@@ -104,7 +104,7 @@ A:\project\TeamFighter\
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
 │   │   └─ dao/
 │   ├─ web/
-│   │   ├─ StatsController                  /tier · /champion/{code}  (D76)
+│   │   ├─ StatsController                  /tier · /champion/{code}  (D76 · D77)
 │   │   ├─ StoryController                  / → /tier · /story · /story/{id}
 │   │   │                                    POST /story/generate · -round
 │   │   ├─ GalleryController                 /gallery(?batch= 로 신원 열기, D75)
@@ -113,7 +113,7 @@ A:\project\TeamFighter\
 │   │   ├─ 아직 없는 컨트롤러: Gaps · Draft · Slot
 │   │   ├─ sse/                             실시간 갱신
 │   │   ├─ dao/StatsDao                     화면은 계산하지 않는다. 정렬만 한다
-│   │   └─ view/TierRow · PairRow           표시 모델 (서명 문구가 여기 있다)
+│   │   └─ view/TierRow · PairRow · PairBucket  표시 모델 (문턱 · 묶음 · 서명 문구)
 │   └─ common/
 │
 ├─ src/main/resources/
@@ -132,11 +132,10 @@ A:\project\TeamFighter\
 │   │   ├─ V12__gallery_standalone_and_issues.sql  기사에서 뗀다 · 이슈 (D73)
 │   │   ├─ V13__drop_gallery_issues.sql    이슈를 도로 걷어낸다 (D74)
 │   │   └─ V14__champion_pair_effect.sql   방향 있는 쌍 × 지표 (D63~D65 · D76)
-│   ├─ templates/stats/                    tier.html · champion.html
+│   ├─ templates/stats/                    tier.html · champion.html   순위 · 세 묶음 (D77)
 │   ├─ templates/fragments/nav.html         상단 탭 — 두 세계가 만나는 유일한 자리
 │   ├─ templates/story/                    list.html · detail.html · gallery.html
-│   ├─ templates/ + templates/fragments/    (통계 화면은 아직)
-│   └─ static/css/tfm.css · gallery.css · static/js/gallery.js
+│   └─ static/css/tfm.css · stats.css · gallery.css · static/js/gallery.js
 │
 └─ src/test/java/...                        main 과 거울 구조
 ```

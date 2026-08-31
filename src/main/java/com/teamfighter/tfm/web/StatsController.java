@@ -2,7 +2,9 @@ package com.teamfighter.tfm.web;
 
 import com.teamfighter.tfm.analysis.pair.PairEffectCalculator;
 import com.teamfighter.tfm.analysis.pair.PairEffectCalculator.Side;
+import com.teamfighter.tfm.ingest.entity.ChampionCategory;
 import com.teamfighter.tfm.web.dao.StatsDao;
+import com.teamfighter.tfm.web.view.PairBucket;
 import com.teamfighter.tfm.web.view.PairRow;
 import com.teamfighter.tfm.web.view.TierRow;
 import org.springframework.http.HttpStatus;
@@ -13,7 +15,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * 통계 — {@code /tier} · {@code /champion/{code}}.
@@ -40,12 +44,13 @@ import java.util.List;
 public class StatsController {
 
     /**
-     * 챔피언 화면에 그리는 쌍의 수.
+     * 한 묶음에 그리는 쌍의 수.
      *
-     * <p>동료·상대 각각 이만큼이다. 다 보여주면 한 챔피언에 수백 줄이 되고,
-     * 그중 대부분은 릿지에 눌려 0 근처다 — 그건 목록이 아니라 잡음이다.
+     * <p>다 보여주면 한 챔피언에 수백 줄이 되고, 그중 대부분은 릿지에 눌려 0 근처다 —
+     * 그건 목록이 아니라 잡음이다. 묶음이 셋으로 늘면서 12 에서 10 으로 줄였다:
+     * 화면 하나에 30줄이면 세 묶음을 나란히 놓은 이점이 사라진다.
      */
-    private static final int PAIRS_SHOWN = 12;
+    private static final int PAIRS_SHOWN = 10;
 
     private final StatsDao stats;
 
@@ -56,29 +61,61 @@ public class StatsController {
     /**
      * 티어 목록. <b>루트가 여기로 온다</b> — 시작 화면은 "지금 무엇이 센가" 가 맞다.
      *
-     * @param scrim 스크림을 섞을 것인가. 두 벌이 미리 만들어져 있다 (D47)
+     * @param scrim    스크림을 섞을 것인가. 두 벌이 미리 만들어져 있다 (D47)
+     * @param category 역할군 탭. {@code null} 이면 전체다
      */
     @GetMapping("/tier")
     public String tier(@RequestParam(required = false) Integer slot,
                        @RequestParam(defaultValue = "false") boolean scrim,
+                       @RequestParam(required = false) String category,
                        Model model) {
         List<Integer> slots = stats.slots();
         Integer selected = slot != null ? slot : (slots.isEmpty() ? null : slots.get(0));
+        String tab = normalize(category);
 
         model.addAttribute("slots", slots);
         model.addAttribute("selectedSlot", selected);
         model.addAttribute("scrim", scrim);
-        model.addAttribute("rows", selected == null ? List.of() : stats.tier(selected, scrim));
+        model.addAttribute("categories", ChampionCategory.values());
+        model.addAttribute("selectedCategory", tab);
+        model.addAttribute("rows", selected == null ? List.of()
+                : stats.tier(selected, scrim, tab));
         model.addAttribute("tab", "tier");
         return "stats/tier";
     }
 
     /**
-     * 챔피언 하나 — <b>시너지와 카운터를 한 화면에</b>.
+     * 모르는 역할군은 전체로 떨어뜨린다.
      *
-     * <p>둘을 나누지 않는 이유는 밴픽에서 묻는 것이 "이 챔피언 동료로 뭐가 좋고 누가
-     * 무서운가" 한 덩어리이기 때문이다. 화면을 오가야 비교되는 구조는 그 질문에 답하지
-     * 못한다.
+     * <p>주소창에 손으로 친 {@code ?category=TOP} 이 500 이 되면 안 된다 — 탭 이름
+     * 하나 때문에 티어 화면을 통째로 못 보는 것은 손해가 이득보다 크다.
+     */
+    private static String normalize(String category) {
+        if (category == null || category.isBlank()) {
+            return null;
+        }
+        return Stream.of(ChampionCategory.values())
+                .map(Enum::name)
+                .filter(name -> name.equals(category))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
+     * 챔피언 하나 — <b>세 묶음</b>으로 보여준다.
+     *
+     * <pre>
+     *   상대하기 어려움   맞은편에 있으면 내가 더 죽는다
+     *   상대하기 쉬움     맞은편에 있으면 내가 덜 죽는다
+     *   듀오 시너지       같은 팀이면 덜 죽거나 더 때린다
+     * </pre>
+     *
+     * <p>가르는 축은 <b>{@code DEATH}</b> 다 (D64 결정 3). 동료·상대 두 표에 지표
+     * 벡터를 그대로 늘어놓던 것을 바꾼 이유는 그 표가 "그래서 이 챔피언 뽑아도 되나"
+     * 라는 질문에 답을 안 해 주기 때문이다. 벡터는 사라지지 않는다 — 줄을 펼치면 나온다.
+     *
+     * <p>역시너지는 묶음에 섞지 않고 위로 뽑는다 (D65 결정 2). 좋은 조합은 여럿이지만
+     * 지뢰는 밟으면 그 판이 끝난다.
      *
      * <p>없는 챔피언은 404 다. 빈 화면을 200 으로 돌려주면 주소를 잘못 친 것인지
      * 데이터가 없는 것인지 알 수 없다.
@@ -87,12 +124,12 @@ public class StatsController {
     public String champion(@PathVariable String code,
                            @RequestParam(required = false) Integer slot,
                            Model model) {
-        TierRow champion = stats.champion(code)
-                .orElseThrow(() -> new ResponseStatusException(
-                        HttpStatus.NOT_FOUND, "챔피언 " + code + " 이 없다"));
-
         List<Integer> slots = stats.slots();
         Integer selected = slot != null ? slot : (slots.isEmpty() ? null : slots.get(0));
+
+        TierRow champion = stats.champion(code, selected)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "챔피언 " + code + " 이 없다"));
 
         List<PairRow> allies = selected == null ? List.of()
                 : stats.pairs(selected, champion.championId(), Side.ALLY);
@@ -102,12 +139,25 @@ public class StatsController {
         model.addAttribute("champion", champion);
         model.addAttribute("slots", slots);
         model.addAttribute("selectedSlot", selected);
-        model.addAttribute("allies", allies.stream().limit(PAIRS_SHOWN).toList());
-        model.addAttribute("foes", foes.stream().limit(PAIRS_SHOWN).toList());
 
-        // 역시너지 경고는 1급 기능이다 (D65 결정 2). 좋은 조합은 여럿이지만
-        // 지뢰는 밟으면 그 판이 끝나므로, 목록에 섞지 않고 위로 뽑아 올린다.
-        model.addAttribute("warnings", allies.stream().filter(PairRow::isWarning).toList());
+        // 접힌 표가 쓰는 원본. 묶음은 여기서 잘라낸 것이고, 여섯 지표는 안 사라진다
+        // (D65 결정 1) — 첫눈에 보이는 것만 줄었다.
+        model.addAttribute("allies", allies);
+        model.addAttribute("foes", foes);
+
+        model.addAttribute("buckets", List.of(
+                PairBucket.of("상대하기 어려움", "맞은편에 있으면 더 죽는다", "hard",
+                        PairRow.Bucket.HARD_FOE, foes, PAIRS_SHOWN),
+                PairBucket.of("상대하기 쉬움", "맞은편에 있으면 덜 죽는다", "easy",
+                        PairRow.Bucket.EASY_FOE, foes, PAIRS_SHOWN),
+                PairBucket.of("듀오 시너지", "같은 팀이면 덜 죽거나 더 때린다", "duo",
+                        PairRow.Bucket.DUO, allies, PAIRS_SHOWN)));
+
+        // 경고는 잘라내지 않는다. 열 개를 넘는 지뢰밭이면 그 사실 자체가 정보다.
+        model.addAttribute("warnings",
+                allies.stream().filter(PairRow::isWarning)
+                        .sorted(Comparator.comparingDouble(PairRow::rankValue).reversed())
+                        .toList());
 
         model.addAttribute("metrics", PairRow.shown());
         model.addAttribute("minObservations", PairEffectCalculator.MIN_OBSERVATIONS);

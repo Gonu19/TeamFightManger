@@ -91,8 +91,28 @@ class PairRowTest {
     void smallEffectsGetNoSignature() {
         // 잡음만 있어도 쌍 1,000개 중 몇은 0.4 에 닿는다(PairEffectCalculatorTest).
         // 문턱이 낮으면 화면이 잡음마다 서명을 단다.
-        assertThat(row(Side.ALLY, -0.10, +0.10, +0.10).signature()).isNull();
-        assertThat(row(Side.FOE, -0.10, +0.10, +0.10).signature()).isNull();
+        assertThat(row(Side.ALLY, -0.05, +0.05, +0.05).signature()).isNull();
+        assertThat(row(Side.FOE, -0.05, +0.05, +0.05).signature()).isNull();
+    }
+
+    @Test
+    @DisplayName("서명 · 묶음 · 경고가 같은 문턱을 본다")
+    void oneThresholdGovernsEverything() {
+        // 셋이 다른 문턱을 쓰면 "경고는 떴는데 듀오 칸에는 없는" 줄이 생기고,
+        // 그건 읽는 사람이 화면을 못 믿게 만든다.
+        double justOver = PairRow.SIGNAL + 0.01;
+        PairRow ally = row(Side.ALLY, -justOver, +justOver, 0.0);
+
+        assertThat(ally.signature()).contains("역시너지");
+        assertThat(ally.bucket()).isEqualTo(PairRow.Bucket.ANTI_SYNERGY);
+        assertThat(ally.isWarning()).isTrue();
+
+        double justUnder = PairRow.SIGNAL - 0.01;
+        PairRow quiet = row(Side.ALLY, -justUnder, +justUnder, 0.0);
+
+        assertThat(quiet.signature()).isNull();
+        assertThat(quiet.bucket()).isEqualTo(PairRow.Bucket.NEUTRAL);
+        assertThat(quiet.isWarning()).isFalse();
     }
 
     @Test
@@ -112,5 +132,99 @@ class PairRowTest {
         // 힐은 t 가 다른 지표의 1/5 이라(D63) 그걸로 순위를 매기면 잡음이 위로 온다.
         assertThat(row(Side.ALLY, -0.42, +0.10, 0.0).magnitude()).isEqualTo(0.42);
         assertThat(row(Side.ALLY, -0.10, +0.37, 0.0).magnitude()).isEqualTo(0.37);
+    }
+
+    // --- 세 묶음 -------------------------------------------------------------
+
+    @Test
+    @DisplayName("묶음을 가르는 것은 데스다 — 딜이 아니다")
+    void bucketsSplitOnDeathNotDealing() {
+        // D64 결정 3 이 걸리는 자리다. 상대의 딜 상승은 "내가 강하다" 가 아니라
+        // "저쪽이 내 딜을 받아낸다" 이므로, 딜로 가르면 흡수해 주는 상대가
+        // "상대하기 쉬움" 이 아니라 엉뚱한 칸으로 간다.
+        assertThat(row(Side.FOE, +0.50, +0.30, 0.0).bucket())
+                .isEqualTo(PairRow.Bucket.HARD_FOE);   // 딜이 올라도 더 죽으면 어렵다
+        assertThat(row(Side.FOE, -0.50, -0.30, 0.0).bucket())
+                .isEqualTo(PairRow.Bucket.EASY_FOE);   // 딜이 줄어도 덜 죽으면 쉽다
+    }
+
+    @Test
+    @DisplayName("역시너지는 듀오 묶음에 안 섞인다 — 경고로 따로 나간다")
+    void antiSynergyIsNotADuo() {
+        PairRow mine = row(Side.ALLY, -0.20, +0.24, 0.0);
+
+        assertThat(mine.bucket()).isEqualTo(PairRow.Bucket.ANTI_SYNERGY);
+        assertThat(mine.isWarning()).isTrue();
+    }
+
+    @Test
+    @DisplayName("동료는 죽음이 줄거나 딜이 오르면 듀오다")
+    void duosAreEitherSaferOrStronger() {
+        assertThat(row(Side.ALLY, +0.02, -0.31, 0.0).bucket()).isEqualTo(PairRow.Bucket.DUO);
+        assertThat(row(Side.ALLY, +0.28, +0.02, 0.0).bucket()).isEqualTo(PairRow.Bucket.DUO);
+    }
+
+    @Test
+    @DisplayName("문턱을 못 넘은 줄은 어느 칸에도 안 들어간다")
+    void quietPairsAreShownNowhere() {
+        assertThat(row(Side.ALLY, +0.05, -0.05, 0.0).bucket()).isEqualTo(PairRow.Bucket.NEUTRAL);
+        assertThat(row(Side.FOE, +0.05, -0.05, 0.0).bucket()).isEqualTo(PairRow.Bucket.NEUTRAL);
+    }
+
+    @Test
+    @DisplayName("지표가 없으면 NEUTRAL 이다 — 없는 값을 0 으로 놓고 가르지 않는다")
+    void missingMetricsMeanNoBucket() {
+        Map<PerfMetric, BigDecimal> onlyDeath = Map.of(PerfMetric.DEATH, BigDecimal.valueOf(0.4));
+        PairRow partial = new PairRow(Side.FOE, "X", "엑스", "MELEE", 40, onlyDeath);
+
+        // "관측이 없다" 가 "효과가 없다" 로 바뀌어 화면에 나가면 안 된다.
+        assertThat(partial.bucket()).isEqualTo(PairRow.Bucket.NEUTRAL);
+    }
+
+    @Test
+    @DisplayName("묶음이 크게 그리는 지표는 그 칸을 가른 지표다")
+    void theHeadlineMetricIsTheOneThatSplitTheBucket() {
+        // 상대는 언제나 데스다.
+        assertThat(row(Side.FOE, +0.50, +0.30, 0.0).leadMetric()).isEqualTo(PerfMetric.DEATH);
+
+        // 동료는 실제로 문턱을 넘은 쪽. 죽음 −0.31 인 줄에 딜 0.02 를 그리면
+        // 읽는 사람은 이 줄이 왜 듀오 칸에 있는지 알 수 없다.
+        assertThat(row(Side.ALLY, +0.02, -0.31, 0.0).leadMetric()).isEqualTo(PerfMetric.DEATH);
+        assertThat(row(Side.ALLY, +0.28, +0.02, 0.0).leadMetric()).isEqualTo(PerfMetric.DEALING);
+    }
+
+    @Test
+    @DisplayName("막대 색은 부호가 아니라 '이 챔피언에게 좋은가' 를 따른다")
+    void barColourFollowsMeaningNotSign() {
+        // 둘 다 음수인데 뜻이 반대다. 부호로 색을 정하면 정확히 거꾸로 칠한다.
+        assertThat(row(Side.ALLY, +0.02, -0.31, 0.0).isFavourable()).isTrue();   // 죽음 ↓ 좋다
+        assertThat(row(Side.ALLY, -0.31, +0.02, 0.0).isFavourable()).isFalse();  // 딜  ↓ 나쁘다
+        assertThat(row(Side.FOE, 0.0, +0.30, 0.0).isFavourable()).isFalse();
+        assertThat(row(Side.FOE, 0.0, -0.30, 0.0).isFavourable()).isTrue();
+    }
+
+    @Test
+    @DisplayName("칸마다 '센 것' 의 뜻이 다르다")
+    void eachBucketRanksByItsOwnMeaning() {
+        // 어려운 상대는 죽음이 클수록 위, 쉬운 상대는 죽음이 작을수록 위다.
+        assertThat(row(Side.FOE, 0.0, +0.40, 0.0).rankValue())
+                .isGreaterThan(row(Side.FOE, 0.0, +0.20, 0.0).rankValue());
+        assertThat(row(Side.FOE, 0.0, -0.40, 0.0).rankValue())
+                .isGreaterThan(row(Side.FOE, 0.0, -0.20, 0.0).rankValue());
+
+        // 동료는 둘을 더한다 — 죽음만 보면 "안 죽지만 딜도 안 나오는" 조합이 1위가 된다.
+        assertThat(row(Side.ALLY, +0.30, -0.30, 0.0).rankValue())
+                .isGreaterThan(row(Side.ALLY, -0.10, -0.30, 0.0).rankValue());
+    }
+
+    @Test
+    @DisplayName("막대는 0.8σ 에서 가득 차고 그 위는 눕는다")
+    void barsSaturate() {
+        // 0.8 과 2.0 을 길이로 구분해 봐야 둘 다 "아주 크다" 이고, 눈금을 넓히면
+        // 정작 흔한 0.2σ 대가 전부 안 보이게 된다. 숫자는 막대 옆에 그대로 있다.
+        assertThat(PairRow.barWidth(BigDecimal.valueOf(0.4))).isEqualTo(50);
+        assertThat(PairRow.barWidth(BigDecimal.valueOf(-0.4))).isEqualTo(50);
+        assertThat(PairRow.barWidth(BigDecimal.valueOf(2.0))).isEqualTo(100);
+        assertThat(PairRow.barWidth(null)).isNull();
     }
 }
