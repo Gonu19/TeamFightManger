@@ -4,7 +4,6 @@ import com.teamfighter.tfm.story.dao.GalleryDao;
 import com.teamfighter.tfm.story.dao.GalleryView;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import com.teamfighter.tfm.story.gallery.GalleryComment;
-import com.teamfighter.tfm.story.gallery.GalleryIssue;
 import com.teamfighter.tfm.story.gallery.GalleryJobs;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
@@ -165,18 +164,8 @@ public class GalleryController {
     private String toJson(GalleryView gallery) {
         Map<String, Object> board = Map.of(
                 "batchId", gallery.batchId(),
-                "issues", gallery.issues().stream().map(GalleryController::issueJson).toList(),
                 "posts", gallery.posts().stream().map(GalleryController::postJson).toList());
         return mapper.writeValueAsString(board).replace("<", "\\u003c");
-    }
-
-    private static Map<String, Object> issueJson(GalleryIssue issue) {
-        return mapOf(
-                "category", issue.category().label(),
-                "badge", issue.category().badgeClass(),
-                "headline", issue.headline(),
-                "body", issue.body(),
-                "date", issue.issueDate());
     }
 
     private static Map<String, Object> postJson(GalleryView.Post post) {

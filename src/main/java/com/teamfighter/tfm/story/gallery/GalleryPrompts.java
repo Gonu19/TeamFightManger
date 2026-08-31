@@ -31,9 +31,9 @@ import java.util.Objects;
  * 없다.</b> 없는 값을 넘기는 대신 "연봉은 안 준다, 스탯만 근거로 삼아라" 를 명시한다 —
  * 안 그러면 모델이 연봉을 지어내고, 그건 D71 이 허용한 예외(조회수·추천수) 밖이다.
  *
- * <p>모드의 [이슈] 뉴스는 <b>가져왔다</b>(D73). D72 는 그 자리에 우리 매치 기사를 넣었지만,
- * 그러면 기사를 먼저 써야 갤러리를 만들 수 있어서 기사가 관문이 됐다. 이슈는 경기와 무관한
- * 리그 전체의 소문이라 매치 기사가 대신할 수 있는 것도 아니었다 — 둘은 다른 것이다.
+ * <p>모드의 [이슈] 뉴스도 안 만든다. 하루 동안 만들어 봤고 뺐다(D74) — 값이 아니라
+ * <b>값을 얻는 비용</b>이 문제였다. 호출 하나가 통째로 더 들고, 분당 한도 8,000 안에서
+ * 그 하나가 페이지 뜨는 시간을 배로 늘렸다. 게시판이 빨리 뜨는 것이 사이드바 여섯 줄보다 낫다.
  */
 public final class GalleryPrompts {
 
@@ -71,38 +71,21 @@ public final class GalleryPrompts {
             """;
 
     /**
-     * 게시글 하나에 잡는 출력 토큰. 본문 세 문단 + 댓글 대여섯 개가 그쯤이다.
+     * 게시글 하나에 잡는 출력 토큰.
+     *
+     * <p>800 이었다가 380 으로 내렸다(D74). 800 은 <b>넉넉해서 좋은 값이 아니라 느린 값</b>
+     * 이었다 — 분당 한도가 8,000 인데 페이지 하나가 20,000 을 쓰면 그 차이만큼 기다린다.
+     * 레퍼런스 모드도 20편을 8,192 에 담는다(글당 약 400). 갤 글은 원래 짧다.
      */
-    private static final int TOKENS_PER_POST = 800;
+    private static final int TOKENS_PER_POST = 380;
 
     /**
      * 조각 하나의 출력 하한.
      *
-     * <p>조각이 작을 때(글 다섯 개) 상한이 빠듯하면 추론 모델이 <b>생각으로만 다 쓰고</b>
-     * 본문이 빈 채로 돌아온다 — 실물에서 댓글 프롬프트가 그렇게 실패했다.
+     * <p>상한이 빠듯하면 추론 모델이 <b>생각으로만 다 쓰고</b> 본문이 빈 채로 돌아온다 —
+     * 실물에서 댓글 프롬프트가 그렇게 실패했다.
      */
     private static final int MIN_TOKENS = 2_000;
-
-    /** 이슈 본문 중 조각 프롬프트에 실어 보낼 앞머리 길이. 모드와 같은 120자다. */
-    private static final int ISSUE_DIGEST_CHARS = 120;
-
-    /** 이슈 여섯 개의 출력 상한. 본문이 8~15문장이라 넉넉히 잡는다. */
-    private static final int ISSUE_TOKENS = 4_000;
-
-    /**
-     * 이슈 취재 초점. 매번 하나를 골라 붙인다.
-     *
-     * <p>그냥 "이슈 6개" 를 시키면 모델은 매번 비슷한 것을 낸다 — 유형 할당이 없을 때
-     * 게시글이 같은 각도로 쏠리는 것과 같은 실패다. 모드의 {@code angles} 를 옮겼다.
-     */
-    public static final List<String> ISSUE_ANGLES = List.of(
-            "이번엔 이적시장과 FA 관련 이슈에 무게를 실어라",
-            "이번엔 신인·유망주와 세대교체 관련 이슈를 부각하라",
-            "이번엔 감독·코칭스태프와 프런트 관련 이슈를 부각하라",
-            "이번엔 선수 개인의 방송·예능·사생활 관련 이슈를 부각하라",
-            "이번엔 팀 간 라이벌 구도와 대회 판도 관련 이슈를 부각하라",
-            "이번엔 메타·패치·밴픽 트렌드 관련 분석 이슈를 부각하라",
-            "이번엔 하위권 팀의 반등이나 상위권 팀의 위기를 부각하라");
 
     private GalleryPrompts() {
     }
@@ -110,17 +93,14 @@ public final class GalleryPrompts {
     /**
      * 조각 하나를 부르는 요청.
      *
-     * @param chunk  이번에 뽑을 유형과 개수. 이것이 "다양하게 써라" 를 대신한다
-     * @param issues 이 페이지의 이슈. SCRAP 유형이 이걸 퍼온다. 비어 있어도 된다
-     * @param earlier 앞 조각들이 이미 쓴 제목. 겹침을 막고 흐름을 잇는다
+     * @param chunk   이번에 뽑을 유형과 개수. 이것이 "다양하게 써라" 를 대신한다
+     * @param earlier 앞 조각이 이미 쓴 제목. 겹침을 막고 흐름을 잇는다
      */
     public static StoryRequest chunk(GalleryChunk chunk, MatchBrief brief, NameBook names,
-                                     List<GalleryIssue> issues,
                                      List<String> contextTags, List<String> earlier) {
         Objects.requireNonNull(chunk, "chunk");
         Objects.requireNonNull(brief, "brief");
         Objects.requireNonNull(names, "names");
-        Objects.requireNonNull(issues, "issues");
         Objects.requireNonNull(contextTags, "contextTags");
         Objects.requireNonNull(earlier, "earlier");
 
@@ -135,7 +115,7 @@ public final class GalleryPrompts {
                 %s
                 --- 경기 결과 (틀리면 안 되는 것) ---
                 %s %d - %d %s
-                %s%s%s
+                %s%s
                 --- 선수 성적 (숫자를 쓸 거면 여기서만 가져와라) ---
                 %s""".formatted(
                 chunk.mood(),
@@ -144,7 +124,6 @@ public final class GalleryPrompts {
                 StoryPrompts.teamName(brief.blueTeamId(), names), brief.blueScore(),
                 brief.redScore(), StoryPrompts.teamName(brief.redTeamId(), names),
                 block("이 경기의 맥락", contextTags),
-                issueBlock(issues),
                 block("이미 올라온 글 (제목이 겹치면 안 된다. 이어지는 흐름으로 써라)", earlier),
                 StoryPrompts.playerTotals(brief, names));
 
@@ -152,104 +131,6 @@ public final class GalleryPrompts {
         // 더 올리면 JSON 형식 자체가 흔들려 파싱 실패가 는다.
         return new StoryRequest(system, user,
                 Math.max(chunk.size() * TOKENS_PER_POST, MIN_TOKENS), 1.1);
-    }
-
-    /**
-     * 이 페이지의 이슈를 프롬프트에 넣는다. SCRAP 유형이 이걸 퍼와서 반응글을 쓴다.
-     *
-     * <p>본문은 <b>앞머리만</b> 넘긴다. 이슈 여섯 개의 본문을 통째로 넣으면 조각마다
-     * 그만큼이 다시 실려 나가는데, 갤러가 스크랩할 때 필요한 것은 헤드라인과 대강의
-     * 내용이지 기사 전문이 아니다. 모드도 120자만 넘긴다.
-     */
-    private static String issueBlock(List<GalleryIssue> issues) {
-        if (issues.isEmpty()) {
-            return "";
-        }
-        StringBuilder out = new StringBuilder(
-                "\n--- 현재 팀파 이슈 (갤러가 이걸 스크랩해 반응글을 쓴다) ---\n");
-        for (GalleryIssue issue : issues) {
-            String body = issue.body();
-            out.append("- [").append(issue.category().label()).append("] ")
-                    .append(issue.headline()).append(" :: ")
-                    .append(body.length() <= ISSUE_DIGEST_CHARS
-                            ? body : body.substring(0, ISSUE_DIGEST_CHARS) + "...")
-                    .append('\n');
-        }
-        return out.toString();
-    }
-
-    /**
-     * 이슈 여섯 개를 만드는 요청. 모드의 {@code generateIssues} 를 옮겼다.
-     *
-     * <h2>이 호출만 경기 밖을 본다</h2>
-     *
-     * 갤 글은 전부 이 경기의 선수별 표에 묶여 있다. 이슈는 그렇지 않다 — 이적설·감독
-     * 경질·스캔들은 리그 전체의 소문이고 세이브에 대응하는 값이 없다. <b>전부 지어낸 것</b>이고,
-     * 화면이 그렇게 말한다.
-     *
-     * <h2>매번 다른 각도를 강제한다</h2>
-     *
-     * 그냥 "이슈 6개" 를 시키면 모델은 매번 비슷한 것을 낸다. 모드는 취재 초점을
-     * 무작위로 하나 골라 붙이는데, 그 장치를 그대로 가져왔다 — 이것도 유형 할당과 같은
-     * 수법이다. <b>다양성을 부탁하지 않고 배분한다.</b>
-     *
-     * @param focus  이번 취재 초점. {@link #ISSUE_ANGLES} 중 하나
-     * @param recent 이미 나온 헤드라인. 겹치면 안 된다
-     */
-    public static StoryRequest issues(MatchBrief brief, NameBook names,
-                                      String focus, List<String> recent) {
-        Objects.requireNonNull(brief, "brief");
-        Objects.requireNonNull(names, "names");
-        Objects.requireNonNull(recent, "recent");
-
-        String system = IDENTITY + """
-
-                너는 e스포츠 전문 매체 기자 겸 커뮤니티 이슈 큐레이터다. 이 리그에서 지금
-                가장 임팩트 있고 화제성 높은 이슈 딱 6개만 엄선해 만든다.
-
-                [규칙]
-                - 6개는 분류가 겹치지 않게 다양하게: 경기 결과 분석, 이적설/FA 루머,
-                  감독-선수 불화, 선수 방송 출연, 파워랭킹/전력분석, 팬덤 사건사고를 섞어라.
-                - 사소한 소식보다 판을 흔드는 대형 이슈 우선(대형 이적, 우승, 감독 경질,
-                  대형 스캔들, 신인 돌풍).
-                - headline 은 실제 기사처럼 써라. "[단독]" "[오피셜]" "[루머]" 말머리를
-                  적극 활용하고, 어그로성 제목을 환영한다.
-                - content 는 8~15문장의 기사 본문이다. 기자 문체로 쓰되 익명 관계자 인용
-                  ("팀 사정에 정통한 관계자에 따르면...")과 커뮤니티 여론 인용
-                  ("커뮤니티에서는 ~라는 반응이 지배적이다")을 섞어 현실감을 살려라.
-                - <b>확정 사실과 루머를 구분하라.</b> 루머는 "~인 것으로 알려졌다",
-                  "~라는 후문이다" 로 쓴다. 경기 결과는 단정해도 된다.
-                - 전력분석·리그 기사는 <b>아래 선수 성적 표의 실제 수치</b>를 근거로 삼아라.
-                  표에 없는 선수 이름과 수치는 만들지 마라.
-                - 연봉·계약금·이적료의 <b>구체적 금액</b>은 쓰지 마라. 우리가 그 값을 모른다.
-
-                [출력 형식 — JSON 배열만. 앞뒤에 다른 말을 붙이지 마라]
-                [{"category": "TRANSFER", "headline": "제목", "content": "본문", "date": "08.14"}]
-                - category 는 다음 중 하나다:
-                  LEAGUE(리그) · TRANSFER(이적설) · SCANDAL(스캔들) ·
-                  BROADCAST(방송) · ANALYSIS(전력분석) · RUMOR(루머)
-                - date 는 "MM.DD" 다. 아래 경기 날짜 언저리로 잡아라.
-                - 딱 6개만 낸다.
-                """;
-
-        String user = """
-                [이번 취재 초점] %s
-
-                --- 방금 끝난 경기 ---
-                %s %d - %d %s (시즌 %d · %d일차)
-                %s
-                --- 선수 성적 (수치를 쓸 거면 여기서만 가져와라) ---
-                %s""".formatted(
-                focus,
-                StoryPrompts.teamName(brief.blueTeamId(), names), brief.blueScore(),
-                brief.redScore(), StoryPrompts.teamName(brief.redTeamId(), names),
-                brief.season(), brief.day(),
-                block("이미 나온 이슈 (제목·소재가 겹치면 안 된다. 후속 전개만 허용)", recent),
-                StoryPrompts.playerTotals(brief, names));
-
-        // 온도 0.95 — 모드와 같다. 이슈는 사실에 묶일 의무가 거의 없어 높여도 잃을 것이 적지만,
-        // 기사 문체를 유지해야 하므로 댓글(1.15)만큼 올리지는 않는다.
-        return new StoryRequest(system, user, ISSUE_TOKENS, 0.95);
     }
 
     /** 값이 있을 때만 붙는 블록. 비면 빈 문자열이라 프롬프트에 빈 제목만 남지 않는다. */

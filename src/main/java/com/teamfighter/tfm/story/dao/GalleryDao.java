@@ -1,8 +1,6 @@
 package com.teamfighter.tfm.story.dao;
 
 import com.teamfighter.tfm.story.gallery.GalleryComment;
-import com.teamfighter.tfm.story.gallery.GalleryIssue;
-import com.teamfighter.tfm.story.gallery.GalleryIssue.GalleryIssueCategory;
 import com.teamfighter.tfm.story.gallery.GalleryPost;
 import com.teamfighter.tfm.story.gallery.GalleryPostKind;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -44,11 +42,6 @@ public class GalleryDao {
                 (slot_id, article_id, season, day, blue_team_id, red_team_id,
                  blue_score, red_score, model, chunks)
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?) RETURNING batch_id
-            """;
-
-    private static final String INSERT_ISSUE = """
-            INSERT INTO gallery_issue (batch_id, ordinal, category, headline, body, issue_date)
-            VALUES (?, ?, CAST(? AS gallery_issue_category), ?, ?, ?)
             """;
 
     /**
@@ -115,11 +108,6 @@ public class GalleryDao {
             ORDER BY c.post_id, c.ordinal
             """;
 
-    private static final String SELECT_ISSUES = """
-            SELECT category, headline, body, issue_date FROM gallery_issue
-            WHERE batch_id = ? ORDER BY ordinal
-            """;
-
     /** 갤러리가 이미 있는 매치. 생성기가 "다음에 뽑을 매치" 를 고를 때 쓴다. */
     private static final String SELECT_KEYS = """
             SELECT DISTINCT season, day, blue_team_id, red_team_id
@@ -131,16 +119,6 @@ public class GalleryDao {
             SELECT DISTINCT slot_id FROM gallery_batch ORDER BY slot_id
             """;
 
-    /** 최근 이슈 헤드라인. 다음 이슈가 이것들과 겹치지 않게 프롬프트에 넘긴다. */
-    private static final String SELECT_RECENT_HEADLINES = """
-            SELECT i.headline
-            FROM gallery_issue i
-            JOIN gallery_batch g ON g.batch_id = i.batch_id
-            WHERE g.slot_id = ?
-            ORDER BY g.generated_at DESC, i.ordinal
-            LIMIT ?
-            """;
-
     private final JdbcTemplate jdbc;
 
     public GalleryDao(JdbcTemplate jdbc) {
@@ -150,15 +128,14 @@ public class GalleryDao {
     /**
      * 페이지 하나를 통째로 저장한다.
      *
-     * <p>배치·이슈·글·댓글이 <b>한 트랜잭션</b>이다. 갈리면 글은 있는데 댓글이 없는
+     * <p>배치·글·댓글이 <b>한 트랜잭션</b>이다. 갈리면 글은 있는데 댓글이 없는
      * 페이지가 화면에 뜨고, 그건 예외 없이 조용히 일어난다.
      *
      * @return 저장된 {@code batch_id}
      */
     @Transactional
-    public long save(GalleryBatch batch, List<GalleryIssue> issues, List<GalleryPost> posts) {
+    public long save(GalleryBatch batch, List<GalleryPost> posts) {
         Objects.requireNonNull(batch, "batch");
-        Objects.requireNonNull(issues, "issues");
         Objects.requireNonNull(posts, "posts");
         if (posts.isEmpty()) {
             throw new IllegalArgumentException("글이 하나도 없는 페이지는 저장하지 않는다");
@@ -170,12 +147,6 @@ public class GalleryDao {
                 batch.model(), batch.chunks());
         if (batchId == null) {
             throw new IllegalStateException("배치를 넣었는데 batch_id 가 안 나왔다");
-        }
-
-        int issueOrdinal = 1;
-        for (GalleryIssue issue : issues) {
-            jdbc.update(INSERT_ISSUE, batchId, issueOrdinal++, issue.category().name(),
-                    issue.headline(), issue.body(), issue.issueDate());
         }
 
         int ordinal = 1;
@@ -193,7 +164,7 @@ public class GalleryDao {
     @Transactional(readOnly = true)
     public List<GalleryView> pages(int slotId) {
         return jdbc.query(SELECT_BATCHES,
-                (rs, rowNum) -> readBatch(rs, List.of(), List.of()), slotId);
+                (rs, rowNum) -> readBatch(rs, List.of()), slotId);
     }
 
     /** 페이지 하나를 통째로. 없으면 {@link Optional#empty()} — 예외가 아니다. */
@@ -201,19 +172,12 @@ public class GalleryDao {
     public Optional<GalleryView> find(long batchId) {
         // 자식 행을 RowMapper 밖에서 먼저 읽는다. 매퍼 안에서 또 조회하면 열린 ResultSet
         // 위에 같은 연결로 질의를 얹게 된다 (ArticleDao 와 같은 이유).
-        List<GalleryIssue> issues = jdbc.query(SELECT_ISSUES,
-                (rs, rowNum) -> new GalleryIssue(
-                        GalleryIssueCategory.valueOf(rs.getString("category")),
-                        rs.getString("headline"),
-                        rs.getString("body"),
-                        rs.getString("issue_date")), batchId);
-
         Map<Long, List<GalleryComment>> commentsByPost = loadComments(batchId);
         List<GalleryView.Post> posts = jdbc.query(SELECT_POSTS,
                 (rs, rowNum) -> readPost(rs, commentsByPost), batchId);
 
         List<GalleryView> found = jdbc.query(SELECT_BATCH,
-                (rs, rowNum) -> readBatch(rs, issues, posts), batchId);
+                (rs, rowNum) -> readBatch(rs, posts), batchId);
         return found.isEmpty() ? Optional.empty() : Optional.of(found.get(0));
     }
 
@@ -234,12 +198,6 @@ public class GalleryDao {
     @Transactional(readOnly = true)
     public List<Integer> slotsWithGalleries() {
         return jdbc.queryForList(SELECT_SLOTS, Integer.class);
-    }
-
-    /** 최근 이슈 헤드라인. 다음 이슈가 겹치지 않게 프롬프트에 넘긴다. */
-    @Transactional(readOnly = true)
-    public List<String> recentHeadlines(int slotId, int limit) {
-        return jdbc.queryForList(SELECT_RECENT_HEADLINES, String.class, slotId, limit);
     }
 
     private long insertPost(long batchId, int ordinal, GalleryPost post) {
@@ -281,8 +239,8 @@ public class GalleryDao {
         return out;
     }
 
-    private static GalleryView readBatch(ResultSet rs, List<GalleryIssue> issues,
-                                         List<GalleryView.Post> posts) throws SQLException {
+    private static GalleryView readBatch(ResultSet rs, List<GalleryView.Post> posts)
+            throws SQLException {
         return new GalleryView(
                 rs.getLong("batch_id"),
                 rs.getInt("slot_id"),
@@ -298,7 +256,6 @@ public class GalleryDao {
                 rs.getObject("generated_at", OffsetDateTime.class),
                 rs.getString("model"),
                 rs.getInt("chunks"),
-                issues,
                 posts);
     }
 

@@ -76,14 +76,13 @@ A:\project\TeamFighter\
 │   │   ├─ StoryComments · JsonSalvage      깨진 JSON 배열을 건진다 (댓글·게시글 공용)
 │   │   ├─ StoryGenerator                   수동 트리거 셋. 기사 · 총평 · 갤러리
 │   │   ├─ StoryConfiguration               플래그를 켜야 빈이 생긴다 (D61)
-│   │   ├─ gallery/     게시판 (D72 · D73). 기사와 독립이다
+│   │   ├─ gallery/     게시판 (D72~D74). 기사와 독립이다
 │   │   │    ├─ GalleryPostKind             유형 10종 — 할당량과 짝인 ENUM
-│   │   │    ├─ GalleryChunk                조각 4 × 글 5 = 20. 갤의 시간 순서
-│   │   │    ├─ GalleryIssue · GalleryIssues 사이드바 뉴스 6건 (모드의 [이슈])
+│   │   │    ├─ GalleryChunk                조각 2 × 글 10 = 20. 갤의 시간 순서
 │   │   │    ├─ GalleryComment              댓글 — 기사 것과 달리 작성 시각이 있다
 │   │   │    ├─ GalleryPrompts              모드의 GAME_IDENTITY · defaultPromptBase 이식
 │   │   │    ├─ GalleryPosts                항목 단위 복구 — 하나 깨져도 나머지는 산다
-│   │   │    ├─ GalleryWriter               호출 다섯. 단계 실패를 밖으로 안 내보낸다
+│   │   │    ├─ GalleryWriter               호출 둘. 조각 실패를 밖으로 안 내보낸다
 │   │   │    ├─ GalleryGenerator            매치를 고른다. 세이브를 다시 읽는다
 │   │   │    └─ GalleryJobs                 요청 밖에서 돈다 + 진행 상황 (D73)
 │   │   └─ dao/         ArticleDao          업서트 — 재생성이 갱신이 된다
@@ -119,7 +118,8 @@ A:\project\TeamFighter\
 │   │   ├─ V9__comment_author_and_replies.sql  닉네임 · 대댓글 (D69)
 │   │   ├─ V10__article_kind.sql           기사 종류 · NULLS NOT DISTINCT (D70)
 │   │   ├─ V11__gallery.sql                batch · post · comment (D71 · D72)
-│   │   └─ V12__gallery_standalone_and_issues.sql  기사에서 뗀다 · 이슈 (D73)
+│   │   ├─ V12__gallery_standalone_and_issues.sql  기사에서 뗀다 · 이슈 (D73)
+│   │   └─ V13__drop_gallery_issues.sql    이슈를 도로 걷어낸다 (D74)
 │   ├─ templates/story/                    list.html · detail.html · gallery.html
 │   ├─ templates/ + templates/fragments/    (통계 화면은 아직)
 │   └─ static/css/tfm.css · gallery.css · static/js/gallery.js
@@ -180,9 +180,9 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 둘 다 근거가 아직 없다 (D50).
 
 `story/` 는 파서에서 화면까지 이어졌다 — 목록·상세·수동 생성이 돈다. 그 옆에
-`story/gallery/` 가 게시판을 세운다: 매치 하나에 짧은 글 20편이 유형 할당제로 붙고
-이슈 6건이 사이드바에 뜬다 (D72 · D73). 세트 나열을 프롬프트가 아니라 구조로 푼 것이
-이 계층의 존재 이유다. **기사와 독립이라** 둘 중 하나만 있어도 된다.
+`story/gallery/` 가 게시판을 세운다: 매치 하나에 짧은 글 20편이 유형 할당제로 붙는다
+(D72~D74). 세트 나열을 프롬프트가 아니라 구조로 푼 것이 이 계층의 존재 이유다.
+**기사와 독립이라** 둘 중 하나만 있어도 된다.
 `web/` 에 있는 것은 연대기와 갤러리뿐이고 통계 화면(`/tier` · `/champion` · `/gaps` · `/teams`)과
 `draft/` 는 아직 없다. 상단 탭도 통계 화면이 생길 때 붙인다 — 갈 곳이 하나뿐인 탭은
 탭으로 안 읽힌다.

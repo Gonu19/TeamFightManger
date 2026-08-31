@@ -5,22 +5,27 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 한 번의 호출로 뽑을 글 묶음. <b>페이지 하나가 호출 넷으로 만들어진다</b> (D72).
+ * 한 번의 호출로 뽑을 글 묶음. <b>페이지 하나가 호출 둘로 만들어진다</b> (D74).
  *
- * <h2>왜 한 번에 스무 개를 안 뽑는가</h2>
+ * <h2>왜 하나도 아니고 넷도 아닌가</h2>
  *
- * 레퍼런스 모드는 한 호출로 20개를 뽑는다({@code maxTokens: 8192}). 우리는 그럴 수 없다 —
- * 무료 티어의 <b>분당 토큰 8,000</b> 이 그 한 번에 다 들어간다. 걸리면 재시도가 받아주므로
- * 실패는 아니지만, 버튼 하나에 1분을 보게 된다.
+ * 레퍼런스 모드는 <b>한 호출</b>로 20개를 뽑는다({@code maxTokens: 8192}). 우리는 그럴 수
+ * 없다 — 무료 티어의 분당 한도가 8,000 토큰이라 <b>요청 하나가 한도보다 커진다.</b>
+ * 그런 요청은 몇 번을 다시 보내도 통과하지 못한다. 재시도로 넘길 수 있는 종류가 아니다.
  *
- * <p>더 큰 이유가 따로 있다. <b>한 호출이 실패하면 스무 개가 통째로 날아간다.</b>
- * 넷으로 나누면 하나가 깨져도 열다섯 개가 남고, 남은 것만으로도 게시판이 성립한다.
+ * <p>처음에는 <b>넷</b>으로 나눴다(D72). 조각이 작으면 실패가 격리되고 429 를 덜 맞는다는
+ * 이유였는데, 실물에서 그 대가가 더 컸다 — 조각마다 프롬프트(정체성 · 규칙 · 선수 표)가
+ * 통째로 다시 실려 나가서 <b>입력 토큰이 네 배</b>가 됐다. 페이지 하나에 3~5분이 걸렸고,
+ * 그 시간이 곧 이 기능의 값어치를 깎았다.
+ *
+ * <p>둘이 그 사이다. 요청 하나는 한도 안에 들어가고, 프롬프트는 두 번만 실린다.
+ * 하나가 깨져도 열 개가 남아 게시판은 여전히 성립한다.
  *
  * <h2>왜 하필 이 묶음인가</h2>
  *
  * 유형을 무작위로 쪼개지 않고 <b>갤의 시간 순서</b>로 묶었다. 실제 커뮤니티는 경기 직후
- * 실황·저격이 먼저 터지고, 한참 뒤에 분석과 키배가 오고, 그다음 서사와 잡담이 온다.
- * 묶음이 곧 그 순서다 — 뒤 조각은 앞 조각의 제목을 받아 보므로 <b>이어지는 흐름</b>이 된다.
+ * 실황·저격이 먼저 터지고, 그 뒤에 분석과 키배와 잡담이 온다. 묶음이 곧 그 순서다 —
+ * 뒤 조각은 앞 조각의 제목을 받아 보므로 <b>이어지는 흐름</b>이 된다.
  */
 public record GalleryChunk(String mood, Map<GalleryPostKind, Integer> quota) {
 
@@ -40,23 +45,16 @@ public record GalleryChunk(String mood, Map<GalleryPostKind, Integer> quota) {
         return List.of(
                 new GalleryChunk("경기 직후. 아직 흥분이 안 가셨다", quotaOf(
                         GalleryPostKind.LIVE, 2,
-                        GalleryPostKind.PLAYER, 2,
-                        GalleryPostKind.SKIT, 1)),
+                        GalleryPostKind.PLAYER, 3,
+                        GalleryPostKind.SKIT, 2,
+                        GalleryPostKind.BAIT, 3)),
 
-                new GalleryChunk("몇 시간 지나 분석과 싸움이 시작된다", quotaOf(
+                new GalleryChunk("몇 시간 뒤. 분석과 싸움과 잡담이 섞인다", quotaOf(
                         GalleryPostKind.ANALYSIS, 1,
                         GalleryPostKind.FLAME, 2,
-                        GalleryPostKind.BAIT, 2)),
-
-                new GalleryChunk("떡밥이 서사로 번진다", quotaOf(
                         GalleryPostKind.SAGA, 2,
                         GalleryPostKind.TRANSFER, 2,
-                        GalleryPostKind.SCRAP, 1)),
-
-                new GalleryChunk("밤. 여운과 잡담이 섞인다", quotaOf(
                         GalleryPostKind.SCRAP, 1,
-                        GalleryPostKind.PLAYER, 1,
-                        GalleryPostKind.SKIT, 1,
                         GalleryPostKind.DAILY, 2)));
     }
 

@@ -2,8 +2,6 @@ package com.teamfighter.tfm.story.dao;
 
 import com.teamfighter.tfm.story.ArticleDraft;
 import com.teamfighter.tfm.story.gallery.GalleryComment;
-import com.teamfighter.tfm.story.gallery.GalleryIssue;
-import com.teamfighter.tfm.story.gallery.GalleryIssue.GalleryIssueCategory;
 import com.teamfighter.tfm.story.gallery.GalleryPost;
 import com.teamfighter.tfm.story.gallery.GalleryPostKind;
 import org.junit.jupiter.api.DisplayName;
@@ -27,6 +25,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  * 계산한다. 그 규칙이 정말 그렇게 도는지는 여기서만 확인된다.
  *
  * <p>V12 가 갤러리를 기사에서 뗀 것도 여기서 본다 — <b>기사 없이 저장되는가</b>.
+ * (V12 가 들여왔던 이슈 표는 V13 이 도로 걷어냈다 — D74.)
  *
  * <p>DB 가 필요하다. 각 테스트는 트랜잭션 롤백으로 격리된다.
  */
@@ -75,7 +74,7 @@ class GalleryDaoTest {
         int blue = team(slotId, 33, "Seorabal");
         int red = team(slotId, 36, "Bahamut");
 
-        long batchId = dao.save(batch(slotId, blue, red, 4), List.of(), List.of(
+        long batchId = dao.save(batch(slotId, blue, red, 4), List.of(
                 post(GalleryPostKind.LIVE, "실황", 5, List.of(
                         new GalleryComment("ㅇㅇ(220.76)", "ㄹㅇ", null, "16:41"),
                         new GalleryComment("ㅇㅇ(112.47)", "@ㅇㅇ 그니까", 1, "16:42"))),
@@ -118,30 +117,9 @@ class GalleryDaoTest {
 
         long batchId = dao.save(
                 new GalleryBatch(slotId, articleId, 2025, 4, blue, red, 2, 0, "test-model", 4),
-                List.of(), List.of(post(GalleryPostKind.LIVE, "글", 1, List.of())));
+                List.of(post(GalleryPostKind.LIVE, "글", 1, List.of())));
 
         assertThat(dao.find(batchId).orElseThrow().articleId()).isEqualTo(articleId);
-    }
-
-    @Test
-    @DisplayName("이슈를 같이 저장하고 순서대로 읽는다")
-    void savesIssues() {
-        int slotId = newSlot();
-        int blue = team(slotId, 33, "Seorabal");
-        int red = team(slotId, 36, "Bahamut");
-
-        long batchId = dao.save(batch(slotId, blue, red, 5), List.of(
-                new GalleryIssue(GalleryIssueCategory.TRANSFER, "[단독] 이적설", "본문", "08.14"),
-                new GalleryIssue(GalleryIssueCategory.SCANDAL, "[루머] 불화설", "본문", null)),
-                List.of(post(GalleryPostKind.SCRAP, "스크랩", 1, List.of())));
-
-        assertThat(dao.find(batchId).orElseThrow().issues())
-                .extracting(GalleryIssue::headline)
-                .containsExactly("[단독] 이적설", "[루머] 불화설");
-
-        // 다음 이슈가 겹치지 않게 프롬프트로 되돌려 줄 목록이다
-        assertThat(dao.recentHeadlines(slotId, 10))
-                .containsExactly("[단독] 이적설", "[루머] 불화설");
     }
 
     @Test
@@ -151,7 +129,7 @@ class GalleryDaoTest {
         int blue = team(slotId, 33, "Seorabal");
         int red = team(slotId, 36, "Bahamut");
 
-        long batchId = dao.save(batch(slotId, blue, red, 6), List.of(), List.of(
+        long batchId = dao.save(batch(slotId, blue, red, 6), List.of(
                 post(GalleryPostKind.FLAME, "떡밥", 30, List.of()),
                 post(GalleryPostKind.DAILY, "잡담", 29, List.of())));
 
@@ -168,7 +146,7 @@ class GalleryDaoTest {
         int blue = team(slotId, 33, "Seorabal");
         int red = team(slotId, 36, "Bahamut");
 
-        long batchId = dao.save(batch(slotId, blue, red, 7), List.of(), List.of(
+        long batchId = dao.save(batch(slotId, blue, red, 7), List.of(
                 new GalleryPost(GalleryPostKind.DAILY, "잡담", null, "본문",
                         null, null, false, null, null, List.of())));
 
@@ -188,9 +166,9 @@ class GalleryDaoTest {
         int blue = team(slotId, 33, "Seorabal");
         int red = team(slotId, 36, "Bahamut");
 
-        dao.save(batch(slotId, blue, red, 8), List.of(),
+        dao.save(batch(slotId, blue, red, 8),
                 List.of(post(GalleryPostKind.LIVE, "첫 페이지", 1, List.of())));
-        dao.save(batch(slotId, blue, red, 8), List.of(),
+        dao.save(batch(slotId, blue, red, 8),
                 List.of(post(GalleryPostKind.LIVE, "둘째 페이지", 1, List.of())));
 
         // 기사는 업서트고 갤러리는 쌓인다 — 이 층에는 정답이 없기 때문이다
@@ -206,7 +184,7 @@ class GalleryDaoTest {
 
         assertThat(dao.writtenKeys(slotId)).isEmpty();
 
-        dao.save(batch(slotId, blue, red, 9), List.of(),
+        dao.save(batch(slotId, blue, red, 9),
                 List.of(post(GalleryPostKind.LIVE, "글", 1, List.of())));
 
         assertThat(dao.writtenKeys(slotId))
@@ -223,9 +201,9 @@ class GalleryDaoTest {
 
         // 옛 경기를 나중에 뽑아도 최근 경기가 위여야 한다. generated_at 으로 정렬하면
         // 이 순서가 뒤집힌다 — 그것을 막는 것이 이 테스트의 전부다.
-        dao.save(batch(slotId, blue, red, 12), List.of(),
+        dao.save(batch(slotId, blue, red, 12),
                 List.of(post(GalleryPostKind.LIVE, "최근 경기", 1, List.of())));
-        dao.save(batch(slotId, blue, red, 3), List.of(),
+        dao.save(batch(slotId, blue, red, 3),
                 List.of(post(GalleryPostKind.LIVE, "옛 경기", 1, List.of())));
 
         assertThat(dao.pages(slotId)).extracting(GalleryView::day).containsExactly(12, 3);
@@ -238,7 +216,7 @@ class GalleryDaoTest {
         int blue = team(slotId, 33, "Seorabal");
         int red = team(slotId, 36, "Bahamut");
 
-        assertThatThrownBy(() -> dao.save(batch(slotId, blue, red, 10), List.of(), List.of()))
+        assertThatThrownBy(() -> dao.save(batch(slotId, blue, red, 10), List.of()))
                 .hasMessageContaining("글이 하나도 없는");
     }
 }

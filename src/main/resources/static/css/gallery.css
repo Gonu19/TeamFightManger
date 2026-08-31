@@ -18,18 +18,12 @@ body {
     background-color: #f2f2f2;
 }
 
-/* ===== 레이아웃: 가운데 게시판 + 오른쪽 이슈 ===== */
+/* ===== 레이아웃 =====
+   모드는 오른쪽에 이슈 사이드바를 두지만 우리는 그것을 뺐다(D74). 한 단으로 가운데
+   정렬하되 너비는 모드와 같은 950px 을 지킨다 — 표의 칸 나눔이 그 너비에 맞춰져 있다. */
 
-.layout-wrap {
-    width: 1240px;
-    max-width: 100%;
-    margin: 0 auto;
-    display: flex;
-    gap: 18px;
-    align-items: flex-start;
-}
-
-.main-col { width: 950px; max-width: 100%; flex-shrink: 1; min-width: 0; }
+.layout-wrap { width: 950px; max-width: 100%; margin: 0 auto; }
+.main-col { width: 100%; }
 
 .gallery-title {
     background-color: #fff;
@@ -269,65 +263,6 @@ main {
 
 .disclaimer { margin-top: 30px; font-size: 11px; color: #888; line-height: 1.6; }
 
-/* ===== 이슈 사이드바 ===== */
-
-.issue-panel {
-    width: 265px;
-    flex-shrink: 0;
-    background: #fff;
-    border: 1px solid #ddd;
-    border-top: 2px solid #3b4890;
-    margin-top: 20px;
-    position: sticky;
-    top: 20px;
-    box-sizing: border-box;
-    border-radius: 3px;
-}
-
-.issue-head { font-size: 13px; font-weight: bold; color: #3b4890; padding: 10px 12px; border-bottom: 1px solid #eee; }
-.issue-panel ul { list-style: none; margin: 0; padding: 4px 0; }
-.issue-panel li { padding: 8px 12px; border-bottom: 1px dashed #eee; cursor: pointer; font-size: 11px; line-height: 1.45; color: #333; }
-.issue-panel li:last-child { border-bottom: none; }
-.issue-panel li:hover { background: #f7f8fc; color: #3b4890; }
-
-.issue-cat-badge {
-    display: inline-block;
-    font-size: 9px;
-    font-weight: bold;
-    color: #fff;
-    background: #3b4890;
-    padding: 1px 5px;
-    border-radius: 2px;
-    margin-right: 5px;
-    vertical-align: 1px;
-}
-
-.issue-cat-badge.scandal { background: #d64545; }
-.issue-cat-badge.transfer { background: #2a9d5c; }
-.issue-cat-badge.broadcast { background: #b8862d; }
-.issue-empty { color: #999 !important; cursor: default !important; text-align: center; padding: 20px 12px !important; }
-.issue-empty:hover { background: none !important; }
-
-#issueModal { display: none; position: fixed; inset: 0; background: rgba(0, 0, 0, 0.55); z-index: 3000; }
-
-.issue-modal-box {
-    width: 560px;
-    max-width: 92vw;
-    max-height: 75vh;
-    overflow-y: auto;
-    background: #fff;
-    margin: 10vh auto 0;
-    padding: 24px 28px;
-    border-radius: 5px;
-    border-top: 3px solid #3b4890;
-    box-sizing: border-box;
-}
-
-.issue-modal-cat { margin-bottom: 8px; }
-.issue-modal-title { font-size: 19px; margin: 0 0 6px; color: #222; line-height: 1.4; }
-.issue-modal-date { font-size: 11px; color: #999; margin-bottom: 14px; border-bottom: 1px solid #eee; padding-bottom: 10px; }
-.issue-modal-content { font-size: 13px; line-height: 1.75; color: #333; white-space: pre-wrap; }
-
 /* ===== 다크 모드 (디시 다크 테마) ===== */
 
 body.dark { background-color: #141418; color: #cfcfd4; }
@@ -373,19 +308,10 @@ body.dark .sub-comment-prefix { color: #6d6d76; }
 body.dark .page-btn { background: #24242b; border-color: #45454f; color: #b5b5bd; }
 body.dark .page-btn:hover:not(.active) { background: #2c2c34; }
 body.dark .page-btn.active { background: #5b6ac4; border-color: #5b6ac4; }
-body.dark .issue-panel { background: #1e1e24; border-color: #3a3a44; border-top-color: #5b6ac4; }
-body.dark .issue-head { color: #8fa0ff; border-bottom-color: #33333c; }
-body.dark .issue-panel li { color: #c5c5cc; border-bottom-color: #2e2e36; }
-body.dark .issue-panel li:hover { background: #26262d; color: #8fa0ff; }
-body.dark .issue-modal-box { background: #1e1e24; border-top-color: #5b6ac4; }
-body.dark .issue-modal-title { color: #e8e8ec; }
-body.dark .issue-modal-content { color: #d0d0d6; }
-body.dark .issue-modal-date { border-bottom-color: #33333c; }
 body.dark .disclaimer { color: #7a7a83; }
 
 /* 좁은 화면에서는 이슈 사이드바를 아래로 내린다 */
 @media (max-width: 1240px) {
     .layout-wrap { flex-direction: column; align-items: stretch; padding: 0 10px; }
     .main-col { width: auto; }
-    .issue-panel { width: auto; position: static; }
 }

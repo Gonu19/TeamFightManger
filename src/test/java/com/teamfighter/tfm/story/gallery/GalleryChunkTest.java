@@ -20,21 +20,22 @@ import static org.assertj.core.api.Assertions.assertThat;
 class GalleryChunkTest {
 
     @Test
-    @DisplayName("한 페이지는 조각 넷, 글 스물이다")
+    @DisplayName("한 페이지는 조각 둘, 글 스물이다")
     void pageAddsUpToTwenty() {
         List<GalleryChunk> page = GalleryChunk.page();
 
-        assertThat(page).hasSize(4);
+        assertThat(page).hasSize(2);
         assertThat(page.stream().mapToInt(GalleryChunk::size).sum()).isEqualTo(20);
     }
 
     @Test
-    @DisplayName("조각 하나가 다섯 편을 넘지 않는다 — 넘으면 분당 토큰에 걸린다")
-    void noChunkIsTooBig() {
-        // 글 하나에 800토큰을 잡으므로 다섯이면 4,000 이다. 분당 8,000 안에서
-        // 조각 둘이 연달아 나가도 재시도로 넘어가지 않는 크기다.
+    @DisplayName("조각 하나가 분당 토큰 한도를 넘지 않는다")
+    void noChunkExceedsTheMinuteBudget() {
+        // 글 하나에 380토큰이므로 열이면 3,800 이다. 무료 티어의 분당 한도가 8,000 이라
+        // 요청 하나가 그 안에 들어간다 — 넘으면 몇 번을 다시 보내도 통과하지 못한다.
+        // 조각을 하나로 합칠 수 없는 이유가 바로 이것이다 (D74).
         assertThat(GalleryChunk.page()).allSatisfy(chunk ->
-                assertThat(chunk.size()).isLessThanOrEqualTo(5));
+                assertThat(chunk.size() * 380).isLessThan(8_000));
     }
 
     @Test
@@ -53,7 +54,7 @@ class GalleryChunkTest {
     void fallbackIsTheMostRequestedKind() {
         // 유형을 못 읽은 글이 갈 자리다. 가장 많이 요구한 유형이 가장 그럴듯하다.
         assertThat(GalleryChunk.page().get(0).fallbackKind())
-                .isIn(GalleryPostKind.LIVE, GalleryPostKind.PLAYER);
+                .isIn(GalleryPostKind.PLAYER, GalleryPostKind.BAIT);
     }
 
     @Test
@@ -63,7 +64,7 @@ class GalleryChunkTest {
 
         // 모델은 이 문자열만 보고 kind 값을 고른다 — enum 이름이 빠지면
         // 파싱이 전부 기본값으로 떨어진다
-        assertThat(described).contains("ANALYSIS", "FLAME", "BAIT");
+        assertThat(described).contains("ANALYSIS", "FLAME", "SAGA", "DAILY");
         assertThat(described).contains("2개");
     }
 

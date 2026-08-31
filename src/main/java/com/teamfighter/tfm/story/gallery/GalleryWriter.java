@@ -14,26 +14,25 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.ThreadLocalRandom;
 
 /**
- * 갤러리 한 페이지를 만든다. <b>호출 다섯, 글 스물, 이슈 여섯.</b>
+ * 갤러리 한 페이지를 만든다. <b>호출 둘, 글 스물.</b>
  *
- * <h2>단계 하나가 실패해도 페이지는 산다</h2>
+ * <h2>조각 하나가 실패해도 페이지는 산다</h2>
  *
- * 이슈 호출이 깨져도 게시글은 나온다(사이드바만 빈다). 게시글 조각 넷 중 하나가 깨져도
- * 나머지로 저장한다 — 열다섯 개짜리 게시판은 성립하고, 0개짜리는 성립하지 않기 때문이다.
+ * 둘 중 하나가 깨져도 나머지로 저장한다 — 열 개짜리 게시판은 성립하고, 0개짜리는
+ * 성립하지 않기 때문이다.
  *
  * <p>대신 그 사실을 지운 채 저장하지는 않는다. {@code gallery_batch.chunks} 에 몇 조각을
  * <b>시도했는지</b>가 남으므로 글 수가 할당보다 적으면 어디선가 실패했다는 뜻이 되고,
  * 로그에도 남는다. <b>조용히 적게 나오는 것</b>이 이 구조의 유일한 위험이라 그것만은
  * 읽을 수 있게 둔다 (D72 결정 4).
  *
- * <h2>몇 분 걸린다. 그래서 진행 상황을 흘린다</h2>
+ * <h2>1분 남짓 걸린다. 그래서 진행 상황을 흘린다</h2>
  *
- * 무료 티어의 분당 토큰이 8,000 인데 이 페이지 하나가 20,000 을 넘게 쓴다 — 산술적으로
- * <b>최소 3분</b>이고, 429 재시도가 붙으면 더 간다. 그동안 아무 신호가 없으면 화면은
- * 멈춘 것과 구분되지 않는다. 실제로 첫 실물에서 그렇게 보였다.
+ * 무료 티어의 분당 토큰이 8,000 인데 이 페이지 하나가 그 언저리를 쓴다 — 429 를 한 번쯤
+ * 맞고 기다린다. 그동안 아무 신호가 없으면 화면은 멈춘 것과 구분되지 않는다.
+ * 실제로 첫 실물에서 그렇게 보였고, 그때는 조각이 넷에 이슈까지 있어 3분이 넘었다(D74).
  *
  * <p>그래서 {@link Progress} 로 단계마다 알린다. 부르는 쪽(백그라운드 작업)이 그것을
  * 받아 두고 화면이 물어볼 때 돌려준다.
@@ -45,9 +44,6 @@ import java.util.concurrent.ThreadLocalRandom;
 public class GalleryWriter {
 
     private static final Logger log = LoggerFactory.getLogger(GalleryWriter.class);
-
-    /** 이슈 프롬프트에 "이미 나온 것" 으로 넘길 헤드라인 수. */
-    private static final int RECENT_HEADLINES = 20;
 
     /** 진행 상황을 받는 쪽. 화면이 폴링해서 읽는다. */
     @FunctionalInterface
@@ -92,28 +88,22 @@ public class GalleryWriter {
         Objects.requireNonNull(tags, "tags");
 
         List<GalleryChunk> chunks = GalleryChunk.page();
-        int total = chunks.size() + 1;                                          // 이슈 호출 하나가 앞에 붙는다
-
-        progress.at("이슈 취재 중", 0, total);
-        List<GalleryIssue> issues = callIssues(batch.slotId(), brief, names);   // 1. 사이드바 뉴스 6개. 실패해도 계속 간다
-
         List<GalleryPost> posts = new ArrayList<>();
         List<String> earlierTitles = new ArrayList<>();
 
-        for (int i = 0; i < chunks.size(); i++) {                               // 2. 조각을 순서대로. 순서가 곧 갤의 시간이다
+        for (int i = 0; i < chunks.size(); i++) {                               // 1. 조각을 순서대로. 순서가 곧 갤의 시간이다
             GalleryChunk chunk = chunks.get(i);
             progress.at("갤 반응 " + (i + 1) + "/" + chunks.size() + " — " + chunk.mood(),
-                    i + 1, total);
+                    i, chunks.size());
 
-            StoryRequest request = GalleryPrompts.chunk(
-                    chunk, brief, names, issues, tags, earlierTitles);
+            StoryRequest request = GalleryPrompts.chunk(chunk, brief, names, tags, earlierTitles);
 
-            List<GalleryPost> written = callChunk(chunk, request);              // 3. 실패하면 빈 목록 — 다음 조각은 계속 돈다
+            List<GalleryPost> written = callChunk(chunk, request);              // 2. 실패하면 빈 목록 — 다음 조각은 계속 돈다
             posts.addAll(written);
-            written.forEach(post -> earlierTitles.add(post.title()));           // 4. 뒤 조각이 이 제목들을 보고 겹침을 피한다
+            written.forEach(post -> earlierTitles.add(post.title()));           // 3. 뒤 조각이 이 제목들을 보고 겹침을 피한다
         }
 
-        progress.at("저장 중", total, total);
+        progress.at("저장 중", chunks.size(), chunks.size());
 
         if (posts.isEmpty()) {
             log.warn("슬롯 {} 시즌 {} {}일: 조각 {}개가 전부 실패했다 — 저장할 글이 없다",
@@ -122,42 +112,16 @@ public class GalleryWriter {
         }
 
         int expected = chunks.stream().mapToInt(GalleryChunk::size).sum();
-        if (posts.size() < expected) {                                          // 5. 적게 나온 것을 조용히 넘기지 않는다
+        if (posts.size() < expected) {                                          // 4. 적게 나온 것을 조용히 넘기지 않는다
             log.warn("글이 {}개 나왔다 (요청 {}개). 조각 하나가 깨졌거나 모델이 덜 썼다",
                     posts.size(), expected);
         }
 
-        long batchId = gallery.save(batch, issues, posts);
-        log.info("슬롯 {} 시즌 {} {}일: 갤러리 {} 를 만들었다 (글 {}편 · 댓글 {}개 · 이슈 {}건)",
+        long batchId = gallery.save(batch, posts);
+        log.info("슬롯 {} 시즌 {} {}일: 갤러리 {} 를 만들었다 (글 {}편 · 댓글 {}개)",
                 batch.slotId(), batch.season(), batch.day(), batchId, posts.size(),
-                posts.stream().mapToInt(p -> p.comments().size()).sum(), issues.size());
+                posts.stream().mapToInt(p -> p.comments().size()).sum());
         return Optional.of(batchId);
-    }
-
-    /**
-     * 이슈 여섯 개. <b>실패해도 던지지 않는다</b> — 이슈는 부가 기능이고, 없으면
-     * 사이드바만 비고 게시판은 그대로 선다.
-     *
-     * <p>다만 조용히 넘기지는 않는다. 모드는 {@code catch} 안에서 아무 말도 안 하는데,
-     * 그러면 "사이드바가 왜 비었지" 에 답할 방법이 없다.
-     */
-    private List<GalleryIssue> callIssues(int slotId, MatchBrief brief, NameBook names) {
-        List<String> angles = GalleryPrompts.ISSUE_ANGLES;
-        String focus = angles.get(ThreadLocalRandom.current().nextInt(angles.size()));
-
-        try {
-            List<String> recent = gallery.recentHeadlines(slotId, RECENT_HEADLINES);
-            String raw = client.complete(GalleryPrompts.issues(brief, names, focus, recent));
-            List<GalleryIssue> issues = GalleryIssues.parse(raw);
-            if (issues.isEmpty()) {
-                log.warn("이슈를 하나도 못 건졌다 ({}자). 사이드바 없이 계속 간다",
-                        raw == null ? 0 : raw.length());
-            }
-            return issues;
-        } catch (RuntimeException e) {
-            log.warn("이슈 생성 실패 — 게시글은 계속 만든다: {}", e.toString());
-            return List.of();
-        }
     }
 
     /**

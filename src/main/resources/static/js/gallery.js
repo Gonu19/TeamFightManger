@@ -18,7 +18,10 @@
     /** 진행 상황을 몇 초마다 물을까. 단계가 분 단위로 바뀌므로 자주 물을 이유가 없다. */
     var POLL_MS = 3000;
 
-    var board = null;      // { batchId, issues[], posts[] }
+    /** "내가 시작한 작업을 기다리는 중" 을 POST 왕복 너머로 나르는 열쇠. */
+    var AWAIT_KEY = 'tfm_gallery_awaiting';
+
+    var board = null;      // { batchId, posts[] }
     var sortKey = 'date';
     var slot = null;
 
@@ -28,7 +31,6 @@
         slot = options.slot;
         board = readBoardData();
 
-        renderIssues();
         renderBoard();
 
         if (options.canGenerate && slot !== null) {
@@ -197,37 +199,6 @@
         return row;
     }
 
-    /* ---------- 이슈 ---------- */
-
-    function renderIssues() {
-        var list = document.getElementById('issueList');
-        if (!board || !board.issues.length) { return; }
-
-        list.innerHTML = '';
-        board.issues.forEach(function (issue) {
-            var li = document.createElement('li');
-            li.appendChild(tag('span', 'issue-cat-badge ' + (issue.badge || ''), issue.category));
-            li.appendChild(text(issue.headline));
-            li.onclick = function () { openIssue(issue); };
-            list.appendChild(li);
-        });
-    }
-
-    function openIssue(issue) {
-        document.getElementById('issueModalCat').innerHTML = '';
-        document.getElementById('issueModalCat').appendChild(
-            tag('span', 'issue-cat-badge ' + (issue.badge || ''), issue.category));
-        document.getElementById('issueModalTitle').textContent = issue.headline;
-        document.getElementById('issueModalDate').textContent =
-            '팀파이트 매니저 이슈' + (issue.date ? ' | ' + issue.date : '');
-        document.getElementById('issueModalContent').textContent = issue.body;
-        document.getElementById('issueModal').style.display = 'block';
-    }
-
-    window.closeIssue = function () {
-        document.getElementById('issueModal').style.display = 'none';
-    };
-
     /* ---------- 생성 진행 상황 ---------- */
 
     /**
@@ -241,9 +212,62 @@
         if (!form) { return; }
         form.addEventListener('submit', function () {
             showProgress('시작하는 중…', 0);
-            document.getElementById('genBtn').disabled = true;
+            setButtonEnabled(false);
+            markAwaiting(true);                // 이 브라우저가 시작한 작업이라는 표시
         });
     }
+
+    /**
+     * "내가 시작한 작업을 기다리는 중" 표시.
+     *
+     * 끝난 상태는 서버 메모리에 남으므로, 그것만 보고 새로고침하면 <b>나중에 이 화면을
+     * 열기만 해도</b> 새로고침이 돈다. 지난주에 뽑은 갤을 보러 왔는데 페이지가 튀는 셈이다.
+     * 그래서 <b>이 브라우저가 실제로 버튼을 누른 경우에만</b> 결과로 넘어간다.
+     *
+     * sessionStorage 인 이유는 POST → 302 → GET 왕복을 건너야 하고, 탭을 닫으면
+     * 함께 사라져야 하기 때문이다.
+     */
+    function markAwaiting(value) {
+        try {
+            if (value) {
+                sessionStorage.setItem(AWAIT_KEY, '1');
+            } else {
+                sessionStorage.removeItem(AWAIT_KEY);
+            }
+        } catch (e) {
+            // 사생활 보호 모드에서 던진다. 그때는 아래 batchId 비교만으로 판단한다.
+        }
+    }
+
+    function isAwaiting() {
+        try {
+            return sessionStorage.getItem(AWAIT_KEY) === '1';
+        } catch (e) {
+            return false;
+        }
+    }
+
+    /**
+     * 지금 화면이 그리고 있는 페이지 번호.
+     *
+     * <b>무한 새로고침을 막는 것이 이 값의 존재 이유다.</b> 끝난 작업의 상태는 서버
+     * 메모리에 그대로 남는다(그래야 화면을 늦게 열어도 결과를 볼 수 있다). 그런데
+     * DONE 을 볼 때마다 새로고침하면 — 새로고침 → 폴링 → DONE → 새로고침 이 끝없이 돈다.
+     * 실제로 그렇게 돌았다. 그래서 <b>"새 페이지가 생겼을 때만"</b> 새로고침한다.
+     */
+    function shownBatchId() {
+        return board && board.batchId ? board.batchId : 0;
+    }
+
+    /**
+     * 페이지를 떠나는 중인가.
+     *
+     * 새로고침이 시작되면 그때 날아가 있던 fetch 가 <b>취소되면서 거부된다.</b>
+     * 그것을 네트워크 오류로 읽으면 떠나는 화면에 "진행 상황을 읽지 못했다" 가 뜬다 —
+     * 위 무한 루프와 겹쳐서 실제로 그 문구가 계속 보였다.
+     */
+    var leaving = false;
+    window.addEventListener('pagehide', function () { leaving = true; });
 
     function pollStatus() {
         fetch('/gallery/status?slot=' + slot)
@@ -251,31 +275,56 @@
             .then(function (status) {
                 if (status.state === 'RUNNING') {
                     showProgress(status.step + '…', status.percent);
-                    document.getElementById('genBtn').disabled = true;
+                    setButtonEnabled(false);
                     setTimeout(pollStatus, POLL_MS);
                     return;
                 }
                 if (status.state === 'DONE') {
-                    // 새 페이지가 생겼으니 서버에서 다시 받아 온다. 여기서 직접 그리지
-                    // 않는 이유는 페이지 목록(번호)도 함께 바뀌기 때문이다.
-                    showProgress('다 됐다. 새로 불러온다…', 100);
-                    window.location = '/gallery?slot=' + slot;
+                    if (isAwaiting() && status.batchId && status.batchId !== shownBatchId()) {
+                        // 새 페이지가 생겼다. 서버에서 다시 받아 온다 — 여기서 직접
+                        // 그리지 않는 이유는 페이지 목록(번호)도 함께 바뀌기 때문이다.
+                        showProgress('다 됐다. 새로 불러온다…', 100);
+                        leaving = true;
+                        window.location = '/gallery?slot=' + slot;
+                        return;
+                    }
+                    // 이미 그 페이지를 보고 있거나, 내가 시작한 작업이 아니다.
+                    // 지난 결과이므로 막대를 치우고 끝낸다.
+                    markAwaiting(false);
+                    hideProgress();
+                    setButtonEnabled(true);
                     return;
                 }
                 if (status.state === 'FAILED' || status.state === 'NOTHING_TO_DO') {
-                    showProgress(status.message || '끝났다', 100);
-                    document.getElementById('genBtn').disabled = false;
+                    // 내가 시작한 작업일 때만 알린다. 지난 실패를 나중에 들어온 사람에게
+                    // 보여주면 방금 실패한 것처럼 읽힌다.
+                    if (isAwaiting()) {
+                        showProgress(status.message || '끝났다', 100);
+                        markAwaiting(false);
+                    } else {
+                        hideProgress();
+                    }
+                    setButtonEnabled(true);
                     return;
                 }
                 hideProgress();                // IDLE — 아직 한 번도 안 눌렀다
+                setButtonEnabled(true);
             })
             .catch(function (e) {
+                if (leaving) {
+                    return;                    // 새로고침이 fetch 를 끊은 것뿐이다
+                }
                 // 서버가 죽었거나 네트워크가 끊겼다. 막대를 진실하지 않은 상태로
                 // 두지 않는다 — 멈춘 막대는 "돌고 있다" 는 거짓말이 된다.
                 console.error('진행 상황을 읽지 못했다', e);
                 showProgress('진행 상황을 읽지 못했다. 새로고침해 본다.', 0);
-                document.getElementById('genBtn').disabled = false;
+                setButtonEnabled(true);
             });
+    }
+
+    function setButtonEnabled(enabled) {
+        var button = document.getElementById('genBtn');
+        if (button) { button.disabled = !enabled; }
     }
 
     function showProgress(step, percent) {

@@ -1,7 +1,6 @@
 package com.teamfighter.tfm.story.dao;
 
 import com.teamfighter.tfm.story.gallery.GalleryComment;
-import com.teamfighter.tfm.story.gallery.GalleryIssue;
 import com.teamfighter.tfm.story.gallery.GalleryPostKind;
 
 import java.time.OffsetDateTime;
@@ -37,11 +36,9 @@ public record GalleryView(
         OffsetDateTime generatedAt,
         String model,
         int chunks,
-        List<GalleryIssue> issues,
         List<Post> posts) {
 
     public GalleryView {
-        issues = List.copyOf(issues);
         posts = List.copyOf(posts);
     }
 
