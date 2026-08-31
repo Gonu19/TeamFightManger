@@ -16,17 +16,24 @@ import java.util.List;
  * <p>값이 전부 1 이면 좌표 하나의 최적해가 <b>나눗셈 한 번</b>으로 닫힌다:
  *
  * <pre>
- *   θ_j ← θ_j + (Σ_{i∈cells(j)} r_i − λ_j·θ_j) / (|cells(j)| + λ_j)
+ *   θ_j ← θ_j + (Σ_{i∈cells(j)} w_i·r_i − λ_j·θ_j) / (Σ_{i∈cells(j)} w_i + λ_j)
  * </pre>
  *
- * 여기서 {@code r} 은 잔차이고 {@code cells(j)} 는 그 특성이 켜진 행들이다.
- * 분모의 {@code |cells(j)|} 가 원래 자리는 {@code Σx²} 인데 x 가 1 뿐이라 개수와 같다.
+ * 여기서 {@code r} 은 잔차, {@code w} 는 행 가중치, {@code cells(j)} 는 그 특성이 켜진
+ * 행들이다. 분모의 {@code Σw} 가 원래 자리는 {@code Σw·x²} 인데 x 가 1 뿐이라 같다.
+ *
+ * <h2>가중치는 나중에 붙었다 (D78)</h2>
+ *
+ * 처음에는 없었다 — 모든 행이 무게 1 이었고 갱신식의 분모가 <b>행의 개수</b>였다.
+ * 패치 감쇠를 넣으면서(D78) 무게가 행마다 달라졌고, 그때 개수가 {@code Σw} 로 바뀌었다.
+ * 무게가 전부 1 이면 두 식은 같은 값을 낸다.
  *
  * <h2>참조 구현</h2>
  *
- * {@code tools/perf_champion.py} 의 {@code fit()} 을 그대로 옮겼다. 그쪽이 D63~D65 의
- * 측정을 낸 코드이고, <b>같은 입력에 같은 답을 내야 한다</b> — 그래야 저 문서의 t 값과
- * 상위 쌍 표가 이 앱의 화면을 설명한다. 상수(쓸기 60회 · 수렴 1e-9)도 같은 값이다.
+ * {@code tools/perf_champion.py} 의 {@code fit()} 을 옮긴 것이다. 그쪽이 D63~D65 의
+ * 측정을 낸 코드이고, <b>가중치 1 에서는 같은 입력에 같은 답을 내야 한다</b> — 그래야
+ * 저 문서의 t 값과 상위 쌍 표가 이 앱의 화면을 설명한다. 파이썬 쪽에는 가중치가 없으므로,
+ * 그 등가를 {@code RidgeFitTest} 가 고정한다. 상수(쓸기 60회 · 수렴 1e-9)도 같은 값이다.
  */
 public final class RidgeFit {
 
@@ -53,17 +60,26 @@ public final class RidgeFit {
     public static double[] fit(List<Row> rows, int params, double[] ridge) {
         double[] theta = new double[params];
         double[] resid = new double[rows.size()];
+        double[] weight = new double[rows.size()];
         for (int i = 0; i < rows.size(); i++) {
             resid[i] = rows.get(i).target();
+            weight[i] = rows.get(i).weight();
         }
 
         // 특성 → 그 특성이 켜진 행 번호들. 한 번 만들어 두고 쓸기마다 재사용한다 —
         // 매번 전체 행을 훑으면 (쓸기 60) × (행 수) × (특성 수) 가 된다.
         List<int[]> cells = invert(rows, params);
 
+        // 분모는 행의 개수가 아니라 무게의 합이다. 감쇠로 눌린 행이 많은 특성은
+        // 분모가 작아지는 것이 아니라 <b>분자도 같이 작아진다</b> — 즉 그 특성의
+        // 계수는 릿지 쪽으로 더 끌린다. 오래된 쌍이 조용해지는 것이 그 뜻이다.
         double[] denom = new double[params];
         for (int j = 0; j < params; j++) {
-            denom[j] = cells.get(j).length + ridge[j];
+            double sum = 0.0;
+            for (int i : cells.get(j)) {
+                sum += weight[i];
+            }
+            denom[j] = sum + ridge[j];
         }
 
         for (int sweep = 0; sweep < MAX_SWEEPS; sweep++) {
@@ -75,7 +91,7 @@ public final class RidgeFit {
                 }
                 double sum = 0.0;
                 for (int i : cell) {
-                    sum += resid[i];
+                    sum += weight[i] * resid[i];
                 }
                 double delta = (sum - ridge[j] * theta[j]) / denom[j];
                 if (delta == 0.0) {
@@ -142,7 +158,21 @@ public final class RidgeFit {
      * @param features 켜진 특성 번호. <b>값은 안 담는다</b> — 전부 1 이기 때문이고,
      *                 그 사실이 위 나눗셈 한 번짜리 갱신식을 성립시킨다
      * @param target   맞출 값. 여기서는 챔피언별로 표준화한 z 다
+     * @param weight   이 행의 무게. 패치 감쇠가 여기로 들어온다 (D78).
+     *                 <b>음수는 안 된다</b> — 오래된 경기가 최신보다 무거워지는 것을
+     *                 넘어, 잔차를 반대로 밀어 적합이 발산한다
      */
-    public record Row(int[] features, double target) {
+    public record Row(int[] features, double target, double weight) {
+
+        public Row {
+            if (weight < 0.0 || Double.isNaN(weight)) {
+                throw new IllegalArgumentException("행 가중치가 음수이거나 NaN 이다: " + weight);
+            }
+        }
+
+        /** 무게 1 짜리 행. 감쇠를 안 거는 자리(시험·교차검증)가 쓴다. */
+        public Row(int[] features, double target) {
+            this(features, target, 1.0);
+        }
     }
 }

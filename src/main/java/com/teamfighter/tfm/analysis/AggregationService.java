@@ -121,7 +121,7 @@ public class AggregationService {
 
         int pairRows = 0;
         for (SlotData slot : slots) {
-            pairRows += writePairEffects(slot.slotId());
+            pairRows += writePairEffects(slot, config);
         }
 
         runs.finish(runId);
@@ -142,19 +142,31 @@ public class AggregationService {
      * <h2>지표마다 한 번씩 적합한다</h2>
      *
      * 여섯 지표가 각자 다른 모형이다. 관측은 한 번만 읽고 지표별로 나눠 쓴다.
+     *
+     * <h2>패치 감쇠가 걸린다 (D78 이 D52 를 고친다)</h2>
+     *
+     * 슬롯의 기준 시점을 DAO 로 내려보내면 DAO 가 관측마다 무게를 붙이고, 릿지가 그
+     * 무게로 적합한다. 티어·카운터와 <b>같은 기준 시점 · 같은 반감기</b>다 — 세 값이
+     * 다른 시점을 보면 화면에서 서로 어긋나는데, 그 어긋남은 숫자만 봐서는 안 보인다.
      */
-    private int writePairEffects(int slotId) {
+    private int writePairEffects(SlotData slot, AnalysisConfig config) {
         Map<Integer, Integer> roleByChampion = roles.load();
-        Map<PerfMetric, List<PairObservation>> byMetric = pairObservations.load(slotId);
+        Map<PerfMetric, List<PairObservation>> byMetric =
+                pairObservations.load(slot.slotId(), slot.reference(), config);
 
         int written = 0;
         for (Map.Entry<PerfMetric, List<PairObservation>> entry : byMetric.entrySet()) {
             List<Effect> effects = PairEffectCalculator.effects(
                     entry.getValue(), roleByChampion::get);
-            pairWriter.replace(slotId, entry.getKey(), false, effects);
+            pairWriter.replace(slot.slotId(), entry.getKey(), false, effects);
             written += effects.size();
-            log.debug("슬롯 {} 지표 {} — 관측 {}행 → 쌍 {}개",
-                    slotId, entry.getKey(), entry.getValue().size(), effects.size());
+            // 유효 표본 = 무게의 합. 원 행 수와 크게 벌어지면 감쇠가 세게 걸린 것이고,
+            // 그건 반감기를 다시 볼 신호다 (D52 의 재측정 조건).
+            long effective = Math.round(
+                    entry.getValue().stream().mapToDouble(PairObservation::weight).sum());
+            log.debug("슬롯 {} 지표 {} — 관측 {}행(유효 {}행) → 쌍 {}개",
+                    slot.slotId(), entry.getKey(), entry.getValue().size(),
+                    effective, effects.size());
         }
         return written;
     }

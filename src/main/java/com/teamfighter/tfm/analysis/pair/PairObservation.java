@@ -27,13 +27,16 @@ import java.util.Objects;
  * @param foes       맞은편 넷
  * @param value      그 지표의 원값. 표준화는 {@link Standardizer} 가 한다 —
  *                   <b>학습 폴드 안에서만</b> 해야 정답을 훔쳐보지 않는다
+ * @param weight     이 관측이 지금 얼마나 유효한가 (0,1]. 패치 감쇠다 (D15a · D78).
+ *                   1 이면 감쇠를 안 건 것이고, 그때 모형은 D63~D65 와 같은 답을 낸다
  */
 public record PairObservation(
         int championId,
         String teamKey,
         List<Integer> mates,
         List<Integer> foes,
-        double value) {
+        double value,
+        double weight) {
 
     public PairObservation {
         Objects.requireNonNull(mates, "mates");
@@ -47,5 +50,19 @@ public record PairObservation(
             throw new IllegalArgumentException(
                     "동료 목록에 자기 자신이 있다: 챔피언 " + championId);
         }
+        if (weight <= 0.0 || weight > 1.0 || Double.isNaN(weight)) {
+            // 0 이면 그 행이 적합에 아무 기여도 안 하는데 관측 수에는 세어진다 —
+            // 화면이 "40경기" 라고 말하면서 실제로는 0경기로 적합한 값이 나간다.
+            // 1 을 넘으면 감쇠가 아니라 증폭이고, 그건 뺄셈을 뒤집은 것이다 (D15a).
+            throw new IllegalArgumentException(
+                    "관측 가중치가 (0,1] 밖이다: " + weight
+                            + ". 감쇠는 과거를 누르는 것이지 최신을 키우는 것이 아니다");
+        }
+    }
+
+    /** 감쇠를 안 거는 자리(시험·합성 데이터)가 쓰는 생성자. */
+    public PairObservation(int championId, String teamKey,
+                           List<Integer> mates, List<Integer> foes, double value) {
+        this(championId, teamKey, mates, foes, value, 1.0);
     }
 }

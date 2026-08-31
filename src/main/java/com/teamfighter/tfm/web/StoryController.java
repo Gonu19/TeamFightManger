@@ -1,11 +1,14 @@
 package com.teamfighter.tfm.web;
 
+import com.teamfighter.tfm.analysis.AggregationService;
 import com.teamfighter.tfm.story.StoryClient;
 import com.teamfighter.tfm.story.StoryGenerator;
 import com.teamfighter.tfm.story.dao.ArticleCard;
 import com.teamfighter.tfm.story.dao.ArticleDao;
 import com.teamfighter.tfm.story.dao.ArticleView;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
+import com.teamfighter.tfm.story.gallery.GalleryJobs;
+import com.teamfighter.tfm.web.dao.CycleDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -20,6 +23,7 @@ import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * 연대기 — {@code /story} · {@code /story/{id}} · {@code POST /story/generate}.
@@ -65,13 +69,21 @@ public class StoryController {
 
     private final ArticleDao articles;
     private final StoryReferenceDao slots;
+    private final CycleDao cycles;
+    private final AggregationService aggregation;
     private final Optional<StoryGenerator> generator;
+    private final Optional<GalleryJobs> galleryJobs;
 
-    public StoryController(ArticleDao articles, StoryReferenceDao slots,
-                           Optional<StoryGenerator> generator) {
+    public StoryController(ArticleDao articles, StoryReferenceDao slots, CycleDao cycles,
+                           AggregationService aggregation,
+                           Optional<StoryGenerator> generator,
+                           Optional<GalleryJobs> galleryJobs) {
         this.articles = articles;
         this.slots = slots;
+        this.cycles = cycles;
+        this.aggregation = aggregation;
         this.generator = generator;
+        this.galleryJobs = galleryJobs;
     }
 
     /**
@@ -99,31 +111,41 @@ public class StoryController {
      */
     @GetMapping("/story")
     public String list(@RequestParam(required = false) Integer slot, Model model) {
-        // 슬롯 목록은 article 에서 뽑는다 — 기사가 없는 슬롯을 기본값으로 골라주면
-        // "기본 커리어를 보여준다" 는 목적이 그 자리에서 실패하기 때문이다.
-        //
-        // 다만 한 편도 없으면 그 목록이 비고, 그러면 고를 커리어가 없어 생성 버튼도
-        // 안 그려진다 — 기사가 있어야 버튼이 보이고 버튼을 눌러야 기사가 생기는 순환이다.
-        // 그때만 적재된 커리어 전부로 물러선다. 첫 기사를 쓸 길을 열어두는 것이 목적이므로
-        // 기사가 하나라도 생기면 다시 위쪽 목록이 쓰인다.
-        List<Integer> withArticles = articles.slotsWithArticles();
-        List<Integer> slots = withArticles.isEmpty() ? this.slots.slotIds() : withArticles;
+        // 커리어 목록은 <b>적재된 것 전부</b>다. 전에는 "기사가 있는 슬롯" 만 넣었는데,
+        // 그러면 슬롯 2로 첫 기사를 쓰러 갈 길이 없다 — 기사가 있어야 칩이 보이고
+        // 칩을 눌러야 기사가 생기는 순환이다. 비어 있다는 사실은 칩을 빼서가 아니라
+        // 흐리게 그려서 말한다 (fragments/filters.html).
+        List<Integer> slots = this.slots.slotIds();
+        Set<Integer> withArticles = Set.copyOf(articles.slotsWithArticles());
 
-        // 사용자가 고른 값이 1순위, 없으면 첫 슬롯, 그것도 없으면 null.
+        // 사용자가 고른 값이 1순위. 없으면 기사가 있는 첫 슬롯, 그것도 없으면 첫 슬롯.
         // null 을 그대로 뷰까지 보내는 이유는 "고를 것이 없다" 와 "안 골랐다" 가
-        // 화면에서 같은 그림이기 때문이다 — 둘을 나누려면 뷰에 분기가 하나 더 생긴다.
-        Integer selected = slot != null ? slot : (slots.isEmpty() ? null : slots.get(0));
-
-        List<ArticleCard> cards = selected == null
-                ? List.of()
-                : articles.recent(selected, PAGE_SIZE);
+        // 화면에서 같은 그림이기 때문이다.
+        Integer selected = slot != null ? slot : firstSlot(slots, withArticles);
 
         model.addAttribute("slots", slots);
+        model.addAttribute("filledSlots", withArticles);
         model.addAttribute("selectedSlot", selected);
-        model.addAttribute("cards", cards);
+
+        // 사이클 목록 — 매치 하나가 한 줄이고, 그 줄이 적재·기사·갤러리를 다 들고 있다.
+        model.addAttribute("cycle", selected == null
+                ? List.of() : cycles.matches(selected, PAGE_SIZE));
+
+        // 기사 목록은 그대로 남긴다. 사이클이 "무엇을 할 차례인가" 를 말한다면
+        // 이쪽은 "무엇을 썼나" 이고, 둘은 다른 질문이다.
+        model.addAttribute("cards", selected == null
+                ? List.of() : articles.recent(selected, PAGE_SIZE));
+
         // 생성기가 없으면(=story 가 꺼져 있으면) 버튼을 안 그린다
         model.addAttribute("canGenerate", generator.isPresent());
+        model.addAttribute("canGenerateGallery", galleryJobs.isPresent());
         return "story/list";
+    }
+
+    /** 내용이 있는 커리어를 먼저 보여준다. 없으면 첫 커리어, 그것도 없으면 {@code null}. */
+    private static Integer firstSlot(List<Integer> slots, Set<Integer> filled) {
+        return slots.stream().filter(filled::contains).findFirst()
+                .orElseGet(() -> slots.isEmpty() ? null : slots.get(0));
     }
 
     /**
@@ -233,6 +255,104 @@ public class StoryController {
         } catch (IllegalStateException | IllegalArgumentException e) {
             return backToListWith(redirect, slot, "총평을 쓸 수 없다: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * <b>사이클 ② — 집계를 다시 돌린다.</b>
+     *
+     * <h2>왜 버튼인가</h2>
+     *
+     * 적재는 워처가 자동으로 한다. 집계는 <b>안 한다</b> — {@code tfm.aggregate-on-start}
+     * 는 기본이 꺼져 있고, 켜도 기동 때 한 번뿐이다. 그래서 경기를 하고 세이브를 저장하면
+     * 매치는 목록에 뜨는데 <b>티어와 쌍 효과는 어제 값 그대로</b>다. 그 어긋남은
+     * 화면 어디에도 안 보인다 — 숫자가 여전히 그럴듯하기 때문이다.
+     *
+     * <p>적재 완료를 신호로 자동으로 돌리는 것이 자연스러워 보이지만, 그러면 워처가
+     * 저장을 감지할 때마다 집계가 돈다. 그 비용을 아직 안 쟀고, 게다가 기동 시 두
+     * {@code ApplicationRunner} 의 순서가 정의돼 있지 않아 <b>집계가 따라잡기보다 먼저
+     * 끝나는</b> 문제가 실측으로 남아 있다({@code decisions/OPEN.md}).
+     *
+     * <p>그래서 지금은 사람이 누른다. 요청 안에서 돌려도 되는 이유는 <b>1초 남짓</b>이기
+     * 때문이다 — 모델 호출과 달리 돈이 나가지도 않는다.
+     */
+    @PostMapping("/story/aggregate")
+    public String aggregate(@RequestParam(required = false) Integer slot,
+                            RedirectAttributes redirect) {
+        AggregationService.Result result = aggregation.run();
+        redirect.addFlashAttribute("notice",
+                "집계를 다시 돌렸다 — 카운터 " + result.counterRows() + "행 · 티어 "
+                        + result.performanceRows() + "행 · 쌍 효과 " + result.pairRows() + "행.");
+        if (slot != null) {
+            redirect.addAttribute("slot", slot);
+        }
+        return "redirect:/story";
+    }
+
+    /**
+     * <b>사이클 ③ — 이 매치의 기사를 쓴다.</b> 연대기 목록의 줄마다 붙은 버튼이다.
+     *
+     * <h2>왜 "가장 최근" 이 아닌가</h2>
+     *
+     * {@code /story/generate} 는 생성기가 대상을 고른다. 화면이 매치를 줄로 세운
+     * 뒤로는 <b>사용자가 이미 골랐는데</b> 생성기가 다시 고르면 3일차 버튼을 눌렀을 때
+     * 5일차 기사가 나온다. 그리고 그 어긋남은 "기사가 하나 생겼다" 로만 보인다.
+     *
+     * <p>두 팀은 순서가 바뀌어도 같은 매치를 가리킨다 — 화면이 넘기는 값은
+     * {@code match_record} 를 정렬해 묶은 것이라 세이브의 진영과 다를 수 있다.
+     */
+    @PostMapping("/story/generate-match")
+    public String generateMatch(@RequestParam int slot,
+                                @RequestParam int season, @RequestParam int day,
+                                @RequestParam int teamA, @RequestParam int teamB,
+                                RedirectAttributes redirect) {
+        StoryGenerator writer = generator.orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "기사 생성이 꺼져 있다 — tfm.story.enabled=true 로 켠다 (D61 결정 4)"));
+
+        try {
+            Optional<Long> articleId = writer.writeFor(slot, season, day, teamA, teamB);
+            if (articleId.isEmpty()) {
+                // 세이브에서 그 매치를 못 찾았다. DB 에는 있는데 세이브에 없다는 것은
+                // 세이브가 바뀌었다는 뜻이다 — 오류가 아니라 알려야 할 사실이다.
+                redirect.addFlashAttribute("notice",
+                        "시즌 " + season + " " + day + "일 매치를 세이브에서 못 찾았다. "
+                                + "세이브가 바뀌었거나 그 매치의 세트 기록이 버려졌다 (D6).");
+                redirect.addAttribute("slot", slot);
+                return "redirect:/story";
+            }
+            return "redirect:/story/" + articleId.get();
+
+        } catch (StoryClient.StoryUnavailableException e) {
+            return backToListWith(redirect, slot, "기사 생성을 부를 수 없다: " + e.getMessage(), e);
+        } catch (StoryClient.StoryFailedException e) {
+            return backToListWith(redirect, slot, "모델 호출이 실패했다: " + e.getMessage(), e);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return backToListWith(redirect, slot, "기사를 쓸 수 없다: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * <b>사이클 ④ — 이 매치의 갤러리 반응을 뽑는다.</b>
+     *
+     * <p>요청 밖에서 돈다 (D73) — 페이지 하나가 모델 호출 둘이고 1분 남짓이라, 요청
+     * 안에서 돌리면 브라우저가 그동안 스피너만 돈다. 그래서 시작만 시키고 갤러리
+     * 화면으로 보낸다. 거기서 진행 막대가 단계를 그린다.
+     */
+    @PostMapping("/story/generate-gallery")
+    public String generateGallery(@RequestParam int slot,
+                                  @RequestParam int season, @RequestParam int day,
+                                  @RequestParam int teamA, @RequestParam int teamB,
+                                  RedirectAttributes redirect) {
+        GalleryJobs jobs = galleryJobs.orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "갤러리 생성이 꺼져 있다 — tfm.story.enabled=true 로 켠다 (D61 결정 4)"));
+
+        if (!jobs.startFor(slot, season, day, teamA, teamB)) {
+            // 이미 돌고 있다. 버튼을 두 번 누른 것은 오류가 아니다.
+            redirect.addFlashAttribute("notice", "이미 뽑는 중이다. 진행 상황은 갤러리 화면에 있다.");
+        }
+        redirect.addAttribute("slot", slot);
+        return "redirect:/gallery";
     }
 
     /**

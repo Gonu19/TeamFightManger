@@ -86,12 +86,29 @@ public class GalleryJobs {
      *         <b>예외가 아니다.</b> 버튼을 두 번 누른 것은 오류가 아니라 흔한 일이다
      */
     public boolean start(int slotId) {
+        return submit(slotId, progress -> generator.writeNext(slotId, progress));
+    }
+
+    /**
+     * <b>지정한 매치</b>의 갤러리 생성을 시작한다. 연대기 화면의 줄마다 붙은 버튼이다.
+     *
+     * <p>{@link #start(int)} 와 같은 자리(커리어 하나에 작업 하나)를 쓴다. 매치마다
+     * 따로 돌게 하면 버튼 셋을 연달아 눌러 셋이 동시에 도는데, 분당 토큰이 하나로
+     * 정해져 있어 그건 셋 다 429 를 만드는 길이다.
+     */
+    public boolean startFor(int slotId, int season, int day, int teamA, int teamB) {
+        return submit(slotId, progress ->
+                generator.writeFor(slotId, season, day, teamA, teamB, progress));
+    }
+
+    private boolean submit(int slotId, java.util.function.Function<
+            GalleryWriter.Progress, Optional<Long>> work) {
         Status now = statuses.get(slotId);
         if (now != null && now.isRunning()) {
             return false;
         }
         statuses.put(slotId, Status.running("시작하는 중", 0, GalleryChunk.page().size() + 1));
-        pool.submit(() -> run(slotId));
+        pool.submit(() -> run(slotId, work));
         return true;
     }
 
@@ -105,9 +122,10 @@ public class GalleryJobs {
      * 조용히 삼키고, 화면은 "진행 중" 에서 영원히 멈춘다. 그것이 이 클래스가 고치려는
      * 바로 그 증상이다.
      */
-    private void run(int slotId) {
+    private void run(int slotId, java.util.function.Function<
+            GalleryWriter.Progress, Optional<Long>> work) {
         try {
-            Optional<Long> batchId = generator.writeNext(slotId,
+            Optional<Long> batchId = work.apply(
                     (step, done, total) -> statuses.put(slotId, Status.running(step, done, total)));
 
             statuses.put(slotId, batchId

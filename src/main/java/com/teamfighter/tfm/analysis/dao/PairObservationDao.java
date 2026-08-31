@@ -1,5 +1,8 @@
 package com.teamfighter.tfm.analysis.dao;
 
+import com.teamfighter.tfm.analysis.AnalysisConfig;
+import com.teamfighter.tfm.analysis.ReferencePoint;
+import com.teamfighter.tfm.analysis.decay.DecayWeight;
 import com.teamfighter.tfm.analysis.pair.PairObservation;
 import com.teamfighter.tfm.analysis.pair.PerfMetric;
 import org.springframework.jdbc.core.JdbcTemplate;
@@ -48,9 +51,11 @@ public class PairObservationDao {
     private static final String PARTICIPANTS = """
             SELECT m.match_id, p.side, p.champion_id,
                    CASE WHEN p.side = 'BLUE' THEN m.blue_team_id ELSE m.red_team_id END AS team_id,
+                   pt.seq AS patch_seq, p.change_count,
                    p.dealing, p.tanking, p.healing, p.kills, p.deaths, p.assists
             FROM match_record m
             JOIN match_participant p ON p.match_id = m.match_id
+            LEFT JOIN patch pt ON pt.patch_id = m.patch_id
             WHERE m.slot_id = ? AND m.match_type = 'OFFICIAL' AND m.team_size = 4
             ORDER BY m.match_id, p.side, p.pick_order
             """;
@@ -70,7 +75,9 @@ public class PairObservationDao {
      * @return 지표 → 관측 목록. 값이 비어 있는 참가자가 있는 경기는 통째로 빠진다
      */
     @Transactional(readOnly = true)
-    public Map<PerfMetric, List<PairObservation>> load(int slotId) {
+    public Map<PerfMetric, List<PairObservation>> load(int slotId,
+                                                       ReferencePoint reference,
+                                                       AnalysisConfig config) {
         List<Participant> buffer = new ArrayList<>(PARTICIPANTS_PER_MATCH);
         Map<PerfMetric, List<PairObservation>> out = new LinkedHashMap<>();
         for (PerfMetric metric : PerfMetric.values()) {
@@ -81,7 +88,7 @@ public class PairObservationDao {
         jdbc.query(PARTICIPANTS, rs -> {
             long matchId = rs.getLong("match_id");
             if (matchId != currentMatch[0]) {
-                flush(buffer, out);                                   // 앞 경기를 마감한다
+                flush(buffer, out, reference, config);                // 앞 경기를 마감한다
                 buffer.clear();
                 currentMatch[0] = matchId;
             }
@@ -89,6 +96,8 @@ public class PairObservationDao {
                     rs.getString("side"),
                     rs.getInt("champion_id"),
                     nullableInt(rs, "team_id"),
+                    nullableInt(rs, "patch_seq"),
+                    rs.getInt("change_count"),
                     nullableInt(rs, "dealing"),
                     nullableInt(rs, "tanking"),
                     nullableInt(rs, "healing"),
@@ -96,7 +105,7 @@ public class PairObservationDao {
                     nullableInt(rs, "deaths"),
                     nullableInt(rs, "assists")));
         }, slotId);
-        flush(buffer, out);                                           // 마지막 경기
+        flush(buffer, out, reference, config);                        // 마지막 경기
 
         return out;
     }
@@ -110,7 +119,8 @@ public class PairObservationDao {
      * 보이지만, 틀린 쌍은 화면에서 발견처럼 보인다.
      */
     private static void flush(List<Participant> match,
-                              Map<PerfMetric, List<PairObservation>> out) {
+                              Map<PerfMetric, List<PairObservation>> out,
+                              ReferencePoint reference, AnalysisConfig config) {
         if (match.size() != PARTICIPANTS_PER_MATCH) {
             return;
         }
@@ -124,13 +134,31 @@ public class PairObservationDao {
             if (match.stream().anyMatch(p -> metric.of(p) == null)) {
                 continue;                                             // 이 지표만 비었다면 이 지표만 건너뛴다
             }
-            append(out.get(metric), blue, red, metric);
-            append(out.get(metric), red, blue, metric);
+            append(out.get(metric), blue, red, metric, reference, config);
+            append(out.get(metric), red, blue, metric, reference, config);
         }
     }
 
+    /**
+     * 그 관측의 감쇠 가중치 (D15a · D78).
+     *
+     * <p><b>{@link DecayWeight#of} 를 쓴다 — {@code forPair} 가 아니다.</b> 한 관측의
+     * 주인은 챔피언 하나이고, 그 행이 켜는 쌍 특성이 일곱 개(동료 셋 · 상대 넷)다.
+     * 쌍마다 무게를 다르게 주려면 행을 쪼개야 하는데, 그러면 같은 출력값이 일곱 번
+     * 세어져 표본이 부풀고 목표값 z 의 뜻이 무너진다.
+     *
+     * <p>대가는 분명하다: <b>상대 쪽이 너프돼서 낡은 쌍</b>은 그만큼 안 눌린다.
+     * 다만 메타 항(경과 패치)은 양쪽에 똑같이 걸리므로 그 부분은 온전하다.
+     */
+    private static double decay(Participant p, ReferencePoint reference, AnalysisConfig config) {
+        int elapsed = reference.elapsedPatchesFrom(p.patchSeq());
+        int selfChanges = reference.selfChangesFrom(p.championId(), p.changeCount());
+        return DecayWeight.of(selfChanges, elapsed, config);
+    }
+
     private static void append(List<PairObservation> out, List<Participant> own,
-                               List<Participant> opposing, PerfMetric metric) {
+                               List<Participant> opposing, PerfMetric metric,
+                               ReferencePoint reference, AnalysisConfig config) {
         List<Integer> foes = opposing.stream().map(Participant::championId).toList();
         for (Participant p : own) {
             List<Integer> mates = own.stream()
@@ -141,7 +169,7 @@ public class PairObservationDao {
             // "팀 0" 이라는 가짜 팀이 생겨 팀 없는 경기가 전부 한 팀으로 묶인다.
             String teamKey = p.teamId() == null ? null : "t" + p.teamId();
             out.add(new PairObservation(p.championId(), teamKey, mates, foes,
-                    metric.of(p).doubleValue()));
+                    metric.of(p).doubleValue(), decay(p, reference, config)));
         }
     }
 
@@ -151,8 +179,15 @@ public class PairObservationDao {
         return rs.wasNull() ? null : value;
     }
 
-    /** DB 에서 읽은 참가자 한 줄. 지표 여섯을 다 들고 있다. */
+    /**
+     * DB 에서 읽은 참가자 한 줄. 지표 여섯과 <b>감쇠의 재료 둘</b>을 들고 있다.
+     *
+     * @param patchSeq    경기에 적용 중이던 패치의 커리어 내 순번. 첫 패치 이전이면 {@code null}
+     * @param changeCount 경기 <b>시점</b>의 누적 변경 횟수. 거리로 바꾸는 것은
+     *                    {@link ReferencePoint#selfChangesFrom} 의 일이다 (D15a)
+     */
     public record Participant(String side, int championId, Integer teamId,
+                              Integer patchSeq, int changeCount,
                               Integer dealing, Integer tanking, Integer healing,
                               Integer kills, Integer deaths, Integer assists) {
     }

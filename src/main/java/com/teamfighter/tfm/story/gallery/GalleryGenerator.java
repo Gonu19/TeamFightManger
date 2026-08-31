@@ -115,20 +115,92 @@ public class GalleryGenerator {
             return Optional.empty();
         }
 
-        ParsedSchedule match = target.get();
-        MatchBrief brief = MatchBrief.of(match, setsByMatch.get(match.matchKey()));      // 4. 사실만 모은다. 두 등식이 안 맞으면 여기서 던진다
-        List<String> tags = new SeasonBook(schedules).tagsFor(match, reference);         // 5. 맥락 태그 (순위·연패·라이벌). 최대 2개
+        return write(reference, target.get(), setsByMatch, schedules, progress);
+    }
+
+    /**
+     * 고른 매치를 실제로 뽑는다. <b>"가장 최근" 과 "지정" 이 여기서 만난다</b> —
+     * 고르는 규칙만 다르고 뽑는 절차는 같아서, 나눠 적으면 한쪽만 고쳐지는 날이 온다.
+     */
+    private Optional<Long> write(StoryReference reference, ParsedSchedule match,
+                                 Map<ParsedSchedule.MatchKey, List<ParsedGame>> setsByMatch,
+                                 List<ParsedSchedule> schedules,
+                                 GalleryWriter.Progress progress) {
+        MatchBrief brief = MatchBrief.of(match, setsByMatch.get(match.matchKey()));      // 사실만 모은다. 두 등식이 안 맞으면 여기서 던진다
+        List<String> tags = new SeasonBook(schedules).tagsFor(match, reference);         // 맥락 태그 (순위·연패·라이벌). 최대 2개
 
         ArticleKey key = keyOf(reference, match);
         GalleryBatch batch = new GalleryBatch(
                 reference.slotId(),
-                articles.findIdByKey(reference.slotId(), key).orElse(null),              // 6. 기사가 있으면 링크만 건다. 생성에는 안 쓴다
+                articles.findIdByKey(reference.slotId(), key).orElse(null),              // 기사가 있으면 링크만 건다. 생성에는 안 쓴다
                 key.season(), key.day(), key.blueTeamId(), key.redTeamId(),
                 match.blueScore(), match.redScore(),
                 writer.model(),
                 GalleryChunk.page().size());
 
-        return writer.write(batch, brief, reference, tags, progress);                    // 7. 여기부터는 GalleryWriter 의 일이다
+        return writer.write(batch, brief, reference, tags, progress);                    // 여기부터는 GalleryWriter 의 일이다
+    }
+
+    /**
+     * <b>지정한 매치</b>의 갤러리를 뽑는다. 연대기 화면의 줄마다 붙은 버튼이 이리로 온다.
+     *
+     * <p>"가장 최근 안 뽑은 것" 규칙은 버튼이 하나일 때 맞았다. 화면이 매치를 줄로
+     * 세운 뒤로는 사용자가 이미 어느 경기인지 정했는데 생성기가 다시 고르면
+     * <b>기사를 쓴 경기와 갤을 뽑은 경기가 갈린다</b> — 그게 이 사이클을 만든 이유다.
+     *
+     * <p>팀은 무순으로 맞춘다. 화면이 넘겨주는 두 팀은 {@code match_record} 를 정렬해
+     * 묶은 것이라 세이브의 진영 순서와 다를 수 있다.
+     */
+    public Optional<Long> writeFor(int slotId, int season, int day, int teamA, int teamB,
+                                   GalleryWriter.Progress progress) {
+        Path saveFile = locateSaveFile(slotId);
+        List<ParsedSchedule> schedules;
+        List<ParsedGame> sets;
+        try {
+            schedules = MatchScheduleParser.read(saveFile);
+            sets = SaveParser.read(saveFile).gameStats();
+        } catch (IOException e) {
+            throw new UncheckedIOException("세이브를 읽지 못했다: " + saveFile, e);
+        }
+        return writeFor(references.load(slotId), schedules, sets,
+                season, day, teamA, teamB, progress);
+    }
+
+    /** 파일을 이미 읽었을 때. 테스트가 쓰는 입구다. */
+    public Optional<Long> writeFor(StoryReference reference, List<ParsedSchedule> schedules,
+                                   List<ParsedGame> sets, int season, int day,
+                                   int teamA, int teamB, GalleryWriter.Progress progress) {
+        Objects.requireNonNull(reference, "reference");
+        Map<ParsedSchedule.MatchKey, List<ParsedGame>> setsByMatch = groupSets(sets);
+
+        Optional<ParsedSchedule> target = schedules.stream()
+                .filter(ParsedSchedule::isPlayed)
+                .filter(m -> setsByMatch.containsKey(m.matchKey()))
+                .filter(m -> matches(reference, m, season, day, teamA, teamB))
+                .findFirst();
+
+        if (target.isEmpty()) {
+            log.info("슬롯 {}: 시즌 {} {}일 팀 {}·{} 매치를 세이브에서 못 찾았다",
+                    reference.slotId(), season, day, teamA, teamB);
+            return Optional.empty();
+        }
+
+        return write(reference, target.get(), setsByMatch, schedules, progress);
+    }
+
+    /**
+     * 그 매치가 화면이 가리킨 것인가. <b>팀은 무순</b>이다 — 진영을 그대로 비교하면
+     * 실측 294세트 중 122건이 어긋나고, 증상은 "버튼을 눌렀는데 아무 일도 안 일어난다"
+     * 로 나온다.
+     */
+    private static boolean matches(StoryReference reference, ParsedSchedule match,
+                                   int season, int day, int teamA, int teamB) {
+        if (orZero(match.season()) != season || orZero(match.day()) != day) {
+            return false;
+        }
+        int blue = reference.teamId(match.blueTeamId());
+        int red = reference.teamId(match.redTeamId());
+        return (blue == teamA && red == teamB) || (blue == teamB && red == teamA);
     }
 
     /**

@@ -127,7 +127,11 @@ public final class DesignMatrix {
             for (int i = 0; i < packed.length; i++) {
                 packed[i] = features.get(i);
             }
-            out.add(new RidgeFit.Row(packed, standardizer.z(row)));
+            // 감쇠는 여기서 적합으로 넘어간다. 표준화(z)에는 안 걸린다 —
+            // 표준화가 지우는 것은 챔피언 주효과이고 그건 시간의 함수가 아니다.
+            // 무게를 거기까지 걸면 "이 챔피언의 평균 딜" 이 최근 패치 쪽으로 끌리고,
+            // 그러면 조합 효과가 아니라 메타 변화가 z 에 섞여 들어온다 (D78).
+            out.add(new RidgeFit.Row(packed, standardizer.z(row), row.weight()));
         }
         return out;
     }

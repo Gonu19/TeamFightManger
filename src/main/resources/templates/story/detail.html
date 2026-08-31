@@ -14,18 +14,20 @@
 <head>
     <meta charset="UTF-8">
     <title th:text="${article.headline} + ' — 연대기'">기사</title>
-    <link rel="stylesheet" th:href="@{/css/tfm.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/story.css}">
 </head>
 <body>
-<header class="top">
-    <a class="back" th:href="@{/story(slot=${article.slotId})}">← 연대기</a>
-</header>
+
+<div th:replace="~{fragments/nav :: tabs('story')}"></div>
 
 <main>
+    <p class="crumb"><a th:href="@{/story(slot=${article.slotId})}">← 연대기</a></p>
+
     <article>
         <h1 th:text="${article.headline}">제목</h1>
 
-        <p class="meta">
+        <p class="byline">
             <span th:text="'시즌 ' + ${article.season} + ' · ' + ${article.day} + '일'">시점</span>
             <!-- 총평에는 대전 상대가 없다 (D70) -->
             <span th:if="${article.kind().name() == 'ROUND'}"><b>하루 총평</b></span>
@@ -37,7 +39,7 @@
                   th:text="${article.redTeamName} ?: ('팀 ' + ${article.redTeamId})">레드</span>
         </p>
 
-        <div class="warn banner" th:if="${article.contradicted}">
+        <div class="warn-box" th:if="${article.contradicted}">
             ⚠ 이 기사에는 <b>대조에서 어긋난 내용</b>이 있다. 아래 지적을 함께 읽는다.
         </div>
 
@@ -60,13 +62,13 @@
           th:with(500)보다 먼저 평가된다. 둘을 같은 태그에 두면 th:if 가 아직
           만들어지지 않은 변수를 읽어 파싱 단계에서 죽는다 — 실제로 그렇게 깼다.
         -->
-        <ul class="thread">
+        <ul>
             <li th:each="comment : ${article.topLevelComments()}"
                 th:with="replies=${article.repliesTo(comment)}">
                 <span class="who" th:text="${comment.author} ?: 'ㅇㅇ'">닉</span>
                 <span th:text="${comment.body}">댓글</span>
 
-                <ul class="replies" th:if="${!replies.isEmpty()}">
+                <ul th:if="${!replies.isEmpty()}" class="replies">
                     <li th:each="reply : ${replies}">
                         <span class="who" th:text="${reply.author} ?: 'ㅇㅇ'">닉</span>
                         <span th:text="${reply.body}">대댓글</span>

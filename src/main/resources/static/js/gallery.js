@@ -373,25 +373,23 @@
 
     /* ---------- 테마 ---------- */
 
-    /**
-     * 다크 모드. 모드의 것을 그대로 옮겼다 — localStorage 에 남겨 다음에도 유지한다.
-     * 서버에 저장할 값이 아니다. 이 앱은 1인용 로컬 앱이고(D59) 브라우저 취향은
-     * 브라우저에 남는 것이 맞다.
+    /*
+     * 테마 토글은 없앴다.
+     *
+     * 모드에서 옮겨올 때는 body.dark 를 붙였다 떼는 버튼이 있었고 localStorage 에
+     * 남겼다. 앱의 다른 화면이 전부 어두워지면서 그 버튼의 뜻이 바뀌었다 —
+     * 이제 그것은 "테마 바꾸기" 가 아니라 "이 화면만 다르게 보이기" 이고,
+     * 그건 화면 통일의 반대다.
+     *
+     * 남아 있던 저장값을 지운다. 안 지우면 예전에 켜 둔 사람의 body 에 dark 가
+     * 붙는데, 그 class 를 받는 규칙이 이제 없어서 아무 일도 안 일어난다 —
+     * 흔적만 남고 아무도 못 찾는 종류의 쓰레기다.
      */
-    window.toggleTheme = function () {
-        var dark = document.body.classList.toggle('dark');
-        try {
-            localStorage.setItem('tfm_gallery_dark', dark ? '1' : '0');
-        } catch (e) {
-            // 사생활 보호 모드 등에서 던진다. 테마가 이번 세션에만 남을 뿐이라 넘어간다.
-        }
-    };
-
     try {
-        if (localStorage.getItem('tfm_gallery_dark') === '1') {
-            document.body.classList.add('dark');
-        }
-    } catch (e) { /* 위와 같다 */ }
+        localStorage.removeItem('tfm_gallery_dark');
+    } catch (e) {
+        // 사생활 보호 모드 등에서 던진다. 지울 것이 없다는 뜻이라 넘어간다.
+    }
 
     /* ---------- 자잘한 것 ---------- */
 

@@ -18,23 +18,23 @@
 <head>
     <meta charset="UTF-8">
     <title>팀파이트 매니저 갤러리</title>
+    <link rel="stylesheet" th:href="@{/css/app.css}">
     <link rel="stylesheet" th:href="@{/css/gallery.css}">
 </head>
 <body>
 
+<div th:replace="~{fragments/nav :: tabs('gallery')}"></div>
+
 <div class="layout-wrap">
     <div class="main-col">
+        <div th:replace="~{fragments/filters :: slots('/gallery', ${slots}, ${selectedSlot}, ${filledSlots})}"></div>
+
         <div class="gallery-title">
             <h2>
                 팀파이트 매니저 갤러리
                 <span th:if="${gallery != null}"
                       th:text="'시즌 ' + ${gallery.season} + ' · ' + ${gallery.day} + '일차'">시점</span>
             </h2>
-            <div>
-                <a class="settings-btn" th:href="@{/tier}">📊 티어</a>
-                <a class="settings-btn" th:href="@{/story(slot=${selectedSlot})}">📰 연대기</a>
-                <button class="settings-btn" type="button" onclick="toggleTheme()">🌓 테마</button>
-            </div>
         </div>
 
         <main>
@@ -89,6 +89,8 @@
                 <span class="sort-link" id="sort-likes" onclick="sortBoard('likes')">추천순</span>
             </div>
 
+            <!-- 좁은 화면에서 제목 칸이 0 이 되지 않게, 표가 자기 상자 안에서만 흐른다 -->
+            <div class="board-scroll">
             <table class="board-list">
                 <thead>
                 <tr>
@@ -104,6 +106,7 @@
                 <tr><td colspan="6" class="board-empty">아직 게시글이 없습니다.</td></tr>
                 </tbody>
             </table>
+            </div>
 
             <!--
               페이지 넘기기. 배치 하나가 페이지 하나다 — '반응 불러오기' 를 누를 때마다

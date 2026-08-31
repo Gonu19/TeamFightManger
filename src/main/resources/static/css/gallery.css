@@ -1,67 +1,55 @@
 /*
- * 갤러리 — 레퍼런스 모드(TFA2_gallery.html)의 스타일을 옮긴 것이다.
+ * 갤러리 — 레퍼런스 모드(TFA2_gallery.html)의 게시판. <b>app.css 위에 얹는다.</b>
  *
- * tfm.css 와 따로 두는 이유: 저쪽은 연대기(기사)의 것이고 이쪽은 게시판의 것이다.
- * 둘은 같은 앱 안에 있지만 완전히 다른 화면이고, 한 파일에 합치면 한쪽을 손볼 때마다
- * 다른 쪽이 흔들린다. 실제로 두 화면은 글꼴 크기부터 다르다 —
- * 게시판은 12px 이 기본이고(디시가 그렇다) 연대기는 읽는 화면이라 더 크다.
+ * <h2>모드의 밝은 디시 색을 버렸다</h2>
  *
- * 다크 모드는 body.dark 로 갈린다. 모드와 같은 방식이고, 색값도 그대로 가져왔다.
+ * 처음에는 모드의 색값(#3b4890 · #f2f2f2)을 그대로 옮겼고, 다크 모드는 body.dark 로
+ * 갈렸다. 그런데 앱의 다른 화면이 전부 어두워지면서 <b>탭을 눌러 넘어가면 다른 앱으로
+ * 들어간 것처럼</b> 보였다. 같은 데이터의 다른 면인데 그렇게 보이면 안 된다.
+ *
+ * <p>그래서 색은 app.css 의 토큰을 쓰고, 테마 토글은 없앴다 — 화면 하나만 밝아지는
+ * 토글은 "통일" 의 반대다. 남긴 것은 <b>구조와 밀도</b>다: 12px 기본, 표로 된 목록,
+ * 개념글 강조, 글을 누르면 목록 자리에 본문이 뜨는 방식. 그게 게시판을 게시판으로
+ * 만드는 것이고 색이 아니다.
+ *
+ * <h2>왜 파일을 따로 두나</h2>
+ *
+ * 이 화면은 12px 이 기본이고 다른 화면은 14px 이다. 한 파일에 두 규칙을 넣으면
+ * 한쪽을 손볼 때마다 다른 쪽이 흔들린다.
  */
-
-body {
-    font-family: 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif;
-    font-size: 12px;
-    color: #333;
-    margin: 0;
-    padding: 0;
-    background-color: #f2f2f2;
-}
 
 /* ===== 레이아웃 =====
    모드는 오른쪽에 이슈 사이드바를 두지만 우리는 그것을 뺐다(D74). 한 단으로 가운데
-   정렬하되 너비는 모드와 같은 950px 을 지킨다 — 표의 칸 나눔이 그 너비에 맞춰져 있다. */
+   정렬하되 너비는 app.css 의 다른 화면과 맞춘다 — 950px 을 고집하면 티어 화면과
+   본문 폭이 달라서 탭을 오갈 때 화면이 움찔한다. */
 
-.layout-wrap { width: 950px; max-width: 100%; margin: 0 auto; }
+.layout-wrap { max-width: 62rem; margin: 0 auto; font-size: 12px; }
 .main-col { width: 100%; }
 
 .gallery-title {
-    background-color: #fff;
-    padding: 15px 20px;
-    margin: 20px 0 10px;
-    box-sizing: border-box;
-    border-bottom: 2px solid #3b4890;
     display: flex;
     justify-content: space-between;
     align-items: center;
+    padding: 0.85rem 1rem;
+    margin: 0 0 0.5rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-bottom: 2px solid var(--gold);
+    border-radius: 4px 4px 0 0;
 }
 
-.gallery-title h2 { margin: 0; font-size: 18px; color: #333; display: flex; align-items: center; }
-.gallery-title span { font-size: 11px; color: #666; margin-left: 10px; }
+.gallery-title h2 { margin: 0; font-size: 16px; color: var(--ink); display: flex; align-items: center; }
+.gallery-title span { font-size: 11px; color: var(--faint); margin-left: 10px; }
 
-main {
-    background-color: #fff;
-    min-height: 700px;
-    padding: 20px;
-    box-sizing: border-box;
+.layout-wrap main {
+    background: var(--panel);
+    min-height: 600px;
+    padding: 1rem;
+    border: 1px solid var(--line);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
     position: relative;
 }
-
-.settings-btn {
-    background: #3b4890;
-    color: #fff;
-    border: none;
-    padding: 6px 12px;
-    cursor: pointer;
-    border-radius: 3px;
-    font-size: 11px;
-    font-weight: bold;
-    font-family: inherit;
-    text-decoration: none;
-    display: inline-block;
-}
-
-.settings-btn:hover { background: #2f3a75; }
 
 /* ===== 머리말 · 버튼 ===== */
 
@@ -80,126 +68,146 @@ main {
     display: inline-flex;
     align-items: center;
     gap: 8px;
-    background: #eef1fb;
-    border: 1px solid #c4cdf0;
-    color: #3b4890;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    color: var(--dim);
     font-size: 12px;
     font-weight: bold;
     padding: 5px 12px;
     border-radius: 4px;
 }
 
-.tour-badge .league { color: #2f3a75; }
-.tour-badge .stage { background: #3b4890; color: #fff; padding: 1px 8px; border-radius: 3px; font-size: 11px; }
-.tour-link { font-size: 11px; color: #3b4890; }
+.tour-badge .league { color: var(--ink); }
+.tour-badge .stage { background: var(--gold); color: #1a1a1a; padding: 1px 8px; border-radius: 3px; font-size: 11px; }
+.tour-link { font-size: 11px; color: var(--gold); }
 
+/*
+ * 생성 버튼. 이것만 다른 버튼과 색이 다르다 — <b>누르면 요금이 나가기</b> 때문이다.
+ * 페이지 이동과 같은 모양이면 그 차이가 안 보인다.
+ */
 .btn-refresh {
-    background-color: #ff5e5e;
-    color: #fff;
-    border: none;
-    padding: 8px 16px;
+    background: transparent;
+    color: var(--gold);
+    border: 1px solid var(--gold);
+    padding: 7px 16px;
     cursor: pointer;
     font-weight: bold;
-    border-radius: 2px;
+    border-radius: 4px;
     font-family: inherit;
     font-size: 12px;
 }
 
-.btn-refresh:hover { background-color: #e94b4b; }
-.btn-refresh:disabled { background-color: #bbb; cursor: default; }
+.btn-refresh:hover { background: rgba(200, 169, 98, 0.12); }
+.btn-refresh:disabled { border-color: var(--line); color: var(--faint); cursor: default; }
 
-.notice {
-    background: #f4f4f0;
-    border-left: 3px solid #999;
-    padding: 8px 12px;
-    margin: 0 0 12px;
-    word-break: break-word;
+.settings-btn {
+    background: var(--panel-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    padding: 6px 12px;
+    cursor: pointer;
+    border-radius: 4px;
+    font-size: 11px;
+    font-weight: bold;
+    font-family: inherit;
+    text-decoration: none;
+    display: inline-block;
 }
 
+.settings-btn:hover { border-color: var(--gold); color: var(--gold); }
+
 /* ===== 진행 막대 =====
-   생성이 요청 밖에서 돌기 때문에 이 화면이 단계를 그린다. 이게 없으면 몇 분 동안
-   아무 신호가 없고, 그건 사용자에게 "멈췄다" 와 구분되지 않는다. */
+   생성이 요청 밖에서 돌기 때문에 이 화면이 단계를 그린다 (D73). 이게 없으면 1분 넘게
+   아무 신호가 없고, 그건 사용자에게 "멈췄다" 와 구분되지 않는다 — 첫 실물이 그랬다. */
 
 .progress-box {
-    background: #f7f8fc;
-    border: 1px solid #c4cdf0;
+    background: var(--panel-2);
+    border: 1px solid var(--line);
     border-radius: 4px;
     padding: 12px 14px;
     margin-bottom: 14px;
 }
 
-.progress-step { font-size: 12px; font-weight: bold; color: #3b4890; margin-bottom: 8px; }
-.progress-track { height: 6px; background: #dfe3f5; border-radius: 3px; overflow: hidden; }
+.progress-step { font-size: 12px; font-weight: bold; color: var(--gold); margin-bottom: 8px; }
+.progress-track { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
 
 .progress-fill {
     height: 100%;
     width: 0;
-    background: #3b4890;
+    background: var(--gold);
     border-radius: 3px;
     transition: width 0.4s ease;
 }
 
-.progress-note { font-size: 11px; color: #777; margin-top: 8px; line-height: 1.5; }
+.progress-note { font-size: 11px; color: var(--faint); margin-top: 8px; line-height: 1.5; }
 
 /* ===== 정렬 · 목록 ===== */
 
-.sort-bar { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 8px; font-size: 11px; color: #666; }
+.sort-bar { display: flex; justify-content: flex-end; gap: 12px; margin-bottom: 8px; font-size: 11px; color: var(--faint); }
 .sort-link { cursor: pointer; user-select: none; }
-.sort-link.active { font-weight: bold; color: #3b4890; text-decoration: underline; }
+.sort-link:hover { color: var(--ink); }
+.sort-link.active { font-weight: bold; color: var(--gold); text-decoration: underline; }
 
-.board-list { width: 100%; border-collapse: collapse; margin-top: 5px; table-layout: fixed; }
+.board-scroll { overflow-x: auto; }
+
+/* min-width 가 없으면 좁은 화면에서 제목 칸이 0 으로 눌린다 — 표는 남고 글은 사라진다 */
+.board-list { width: 100%; min-width: 34rem; border-collapse: collapse; margin-top: 5px; table-layout: fixed; }
 
 .board-list th {
-    background-color: #f9f9fa;
-    border-top: 1px solid #3b4890;
-    border-bottom: 1px solid #ddd;
+    background: var(--panel-2);
+    border-top: 1px solid var(--gold);
+    border-bottom: 1px solid var(--line);
     padding: 8px;
     font-weight: bold;
-    color: #333;
+    color: var(--dim);
 }
 
-.board-list td { border-bottom: 1px solid #eee; padding: 8px; text-align: center; }
-.board-list .title-td { text-align: left; padding-left: 15px; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.board-list .title-td:hover { text-decoration: underline; color: #3b4890; }
-.board-list .concept-row { background: #fff9f9; }
+.board-list td { border-bottom: 1px solid var(--line); padding: 8px; text-align: center; color: var(--dim); }
+.board-list .title-td { text-align: left; padding-left: 15px; cursor: pointer; color: var(--ink);
+                        overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-list .title-td:hover { text-decoration: underline; color: var(--gold); }
+
+/* 개념글. DB 생성 컬럼이 계산한 값이다 (D71) — 화면이 다시 세지 않는다 */
+.board-list .concept-row { background: rgba(229, 89, 95, 0.06); }
 .board-list .concept-row .title-td { font-weight: bold; }
-.board-list .num-concept { color: #ff5e5e; font-weight: bold; }
-.board-list .cmt { color: #ff5e5e; font-size: 11px; }
-.board-list .pic { color: #888; font-size: 11px; }
-.board-list .who { color: #555; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.board-list .hot { color: #ff5e5e; font-weight: bold; }
-.board-empty { padding: 40px !important; color: #888; }
+.board-list .num-concept { color: var(--bad); font-weight: bold; }
+.board-list .cmt { color: var(--bad); font-size: 11px; }
+.board-list .pic { color: var(--faint); font-size: 11px; }
+.board-list .who { color: var(--dim); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.board-list .hot { color: var(--bad); font-weight: bold; }
+.board-empty { padding: 40px !important; color: var(--faint); }
 
 .pagination-container { display: flex; justify-content: center; gap: 5px; margin-top: 20px; }
 
 .page-btn {
     padding: 6px 12px;
-    border: 1px solid #ddd;
-    background: #fff;
+    border: 1px solid var(--line);
+    background: var(--panel-2);
     cursor: pointer;
     font-size: 11px;
     border-radius: 3px;
     font-weight: bold;
-    color: #555;
+    color: var(--dim);
     text-decoration: none;
 }
 
-.page-btn.active { background: #3b4890; color: #fff; border-color: #3b4890; }
-.page-btn:hover:not(.active) { background: #f2f2f2; }
+.page-btn.active { background: var(--gold); color: #1a1a1a; border-color: var(--gold); }
+.page-btn:hover:not(.active) { border-color: var(--gold); color: var(--gold); }
 
 /* ===== 글 하나 ===== */
 
-.post-view { display: none; margin-top: 20px; border: 1px solid #ddd; background: #fff; padding: 20px; }
-.post-view-header { border-bottom: 1px solid #eee; padding-bottom: 10px; margin-bottom: 15px; }
-.post-view-title { font-size: 18px; font-weight: bold; color: #333; margin: 0 0 8px 0; }
-.post-view-info { font-size: 11px; color: #666; display: flex; justify-content: space-between; gap: 10px; }
-.post-view-info #viewAuthor { font-weight: bold; }
+.post-view { display: none; margin-top: 20px; border: 1px solid var(--line); background: var(--panel-2);
+             border-radius: 4px; padding: 20px; }
+.post-view-header { border-bottom: 1px solid var(--line); padding-bottom: 10px; margin-bottom: 15px; }
+.post-view-title { font-size: 17px; font-weight: bold; color: var(--ink); margin: 0 0 8px 0; }
+.post-view-info { font-size: 11px; color: var(--faint); display: flex; justify-content: space-between; gap: 10px; }
+.post-view-info #viewAuthor { font-weight: bold; color: var(--dim); }
 
 .kind-badge {
     display: inline-block;
     font-size: 10px;
-    border: 1px solid #c4cdf0;
-    color: #3b4890;
+    border: 1px solid var(--line);
+    color: var(--gold);
     padding: 1px 6px;
     border-radius: 2px;
     margin-left: 6px;
@@ -207,26 +215,28 @@ main {
 
 .post-view-content {
     font-size: 13px;
-    line-height: 1.7;
+    line-height: 1.8;
     min-height: 120px;
     padding: 10px 5px;
     white-space: pre-wrap;
     word-break: break-word;
+    color: var(--ink);
 }
 
 /* 짤방은 파일명 텍스트만 나온다. 실제 이미지는 없다(모드도 같다). */
 .attach-box {
     display: inline-block;
-    background: #f4f4f4;
-    border: 1px solid #ddd;
-    color: #888;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    color: var(--faint);
     font-size: 11px;
     padding: 9px 16px;
     border-radius: 3px;
     margin: 8px 0 14px;
 }
 
-.recom-container { display: flex; justify-content: center; margin: 30px 0; padding-bottom: 20px; border-bottom: 1px solid #eee; }
+.recom-container { display: flex; justify-content: center; margin: 30px 0; padding-bottom: 20px;
+                   border-bottom: 1px solid var(--line); }
 
 .recom-btn {
     display: flex;
@@ -235,9 +245,9 @@ main {
     justify-content: center;
     width: 84px;
     height: 84px;
-    border: 1px solid #ef5350;
-    color: #ef5350;
-    background: #fff;
+    border: 1px solid var(--bad);
+    color: var(--bad);
+    background: transparent;
     border-radius: 4px;
     box-sizing: border-box;
 }
@@ -247,71 +257,35 @@ main {
 
 /* ===== 댓글 ===== */
 
-.comment-section { margin-top: 20px; background: #fafafa; padding: 15px; border: 1px solid #ddd; border-radius: 3px; }
-.comment-section h4 { margin: 0 0 10px 0; font-size: 12px; color: #3b4890; border-bottom: 1px solid #eee; padding-bottom: 5px; }
-.comment-item-container { border-bottom: 1px dashed #eee; padding: 8px 0; }
+.comment-section { margin-top: 20px; background: var(--bg); padding: 15px;
+                   border: 1px solid var(--line); border-radius: 4px; }
+.comment-section h4 { margin: 0 0 10px 0; font-size: 12px; color: var(--gold);
+                      border-bottom: 1px solid var(--line); padding-bottom: 5px; }
+.comment-item-container { border-bottom: 1px dashed var(--line); padding: 8px 0; }
 .comment-item { font-size: 11px; display: flex; align-items: flex-start; padding: 4px 0; }
-.comment-author { font-weight: bold; width: 120px; flex-shrink: 0; color: #555; word-break: break-all; padding-right: 10px; }
-.comment-body { flex-grow: 1; color: #333; word-break: break-word; line-height: 1.5; }
-.comment-date { color: #999; width: 50px; flex-shrink: 0; text-align: right; }
+.comment-author { font-weight: bold; width: 120px; flex-shrink: 0; color: var(--dim);
+                  word-break: break-all; padding-right: 10px; }
+.comment-body { flex-grow: 1; color: var(--ink); word-break: break-word; line-height: 1.6; }
+.comment-date { color: var(--faint); width: 50px; flex-shrink: 0; text-align: right; }
 
-/* 대댓글은 한 단계만 들여쓴다. 더 깊이 들어가면 화면이 계단이 된다. */
-.sub-comment-list { background: #f4f4f4; margin-left: 30px; border-left: 2px solid #ccc; padding-left: 10px; }
-.sub-comment-item { font-size: 11px; display: flex; align-items: flex-start; padding: 6px 0; border-bottom: 1px dashed #e5e5e5; }
+/* 대댓글은 한 단계만 들여쓴다. 더 깊이 들어가면 화면이 계단이 된다 (D69). */
+.sub-comment-list { background: var(--panel-2); margin-left: 30px; border-left: 2px solid var(--line); padding-left: 10px; }
+.sub-comment-item { font-size: 11px; display: flex; align-items: flex-start; padding: 6px 0;
+                    border-bottom: 1px dashed var(--line); }
 .sub-comment-item:last-child { border-bottom: none; }
-.sub-comment-prefix { color: #999; font-weight: bold; margin-right: 5px; font-family: monospace; }
+.sub-comment-prefix { color: var(--faint); font-weight: bold; margin-right: 5px; font-family: monospace; }
 
-.disclaimer { margin-top: 30px; font-size: 11px; color: #888; line-height: 1.6; }
+/* 지어낸 값이라는 고지 (D71). 지우면 안 되는 한 줄이다 */
+.disclaimer { margin-top: 30px; font-size: 11px; color: var(--faint); line-height: 1.6; }
+.disclaimer b { color: var(--dim); }
 
-/* ===== 다크 모드 (디시 다크 테마) ===== */
-
-body.dark { background-color: #141418; color: #cfcfd4; }
-body.dark .gallery-title { background-color: #1e1e24; border-bottom-color: #5b6ac4; }
-body.dark .gallery-title h2 { color: #e8e8ec; }
-body.dark .gallery-title span { color: #8d8d96; }
-body.dark main { background-color: #1e1e24; }
-body.dark .notice { background: #26262d; border-left-color: #5b6ac4; }
-body.dark .tour-badge { background: #26262d; border-color: #45454f; color: #8fa0ff; }
-body.dark .tour-badge .league { color: #a9b4ff; }
-body.dark .tour-badge .stage { background: #5b6ac4; color: #fff; }
-body.dark .tour-link { color: #8fa0ff; }
-body.dark .progress-box { background: #26262d; border-color: #45454f; }
-body.dark .progress-step { color: #8fa0ff; }
-body.dark .progress-track { background: #33333c; }
-body.dark .progress-fill { background: #5b6ac4; }
-body.dark .progress-note { color: #8d8d96; }
-body.dark .sort-bar { color: #8d8d96; }
-body.dark .sort-link.active { color: #8fa0ff; }
-body.dark .board-list th { background-color: #26262d; border-top-color: #5b6ac4; border-bottom-color: #3a3a44; color: #d5d5da; }
-body.dark .board-list td { border-bottom-color: #2c2c34; color: #c5c5cc; }
-body.dark .board-list .title-td:hover { color: #8fa0ff; }
-body.dark .board-list .concept-row { background: #272028; }
-body.dark .board-list .who { color: #a9a9b2; }
-body.dark .post-view { background: #1e1e24; border-color: #3a3a44; }
-body.dark .post-view-header { border-bottom-color: #33333c; }
-body.dark .post-view-title { color: #e8e8ec; }
-body.dark .post-view-info { color: #8d8d96; }
-body.dark .post-view-content { color: #d0d0d6; }
-body.dark .kind-badge { border-color: #45454f; color: #8fa0ff; }
-body.dark .attach-box { background: #26262d; border-color: #3a3a44; color: #9a9aa2; }
-body.dark .recom-container { border-bottom-color: #33333c; }
-body.dark .recom-btn { background: #24242b; }
-body.dark .comment-section { background: #232329; border-color: #3a3a44; }
-body.dark .comment-section h4 { color: #8fa0ff; border-bottom-color: #33333c; }
-body.dark .comment-item-container { border-bottom-color: #2e2e36; }
-body.dark .comment-author { color: #a9a9b2; }
-body.dark .comment-body { color: #d0d0d6; }
-body.dark .comment-date { color: #6d6d76; }
-body.dark .sub-comment-list { background: #1c1c22; border-left-color: #45454f; }
-body.dark .sub-comment-item { border-bottom-color: #2a2a32; }
-body.dark .sub-comment-prefix { color: #6d6d76; }
-body.dark .page-btn { background: #24242b; border-color: #45454f; color: #b5b5bd; }
-body.dark .page-btn:hover:not(.active) { background: #2c2c34; }
-body.dark .page-btn.active { background: #5b6ac4; border-color: #5b6ac4; }
-body.dark .disclaimer { color: #7a7a83; }
-
-/* 좁은 화면에서는 이슈 사이드바를 아래로 내린다 */
-@media (max-width: 1240px) {
-    .layout-wrap { flex-direction: column; align-items: stretch; padding: 0 10px; }
-    .main-col { width: auto; }
+/* 갤러리의 알림은 게시판 안에 있어 app.css 의 것보다 작다 */
+.layout-wrap .notice {
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-left: 3px solid var(--gold);
+    padding: 8px 12px;
+    margin: 0 0 12px;
+    font-size: 12px;
+    word-break: break-word;
 }

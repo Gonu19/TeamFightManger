@@ -75,9 +75,14 @@ public class GalleryController {
                         @RequestParam(defaultValue = "0") int page,
                         @RequestParam(required = false) Long batch,
                         Model model) {
-        List<Integer> withGalleries = galleries.slotsWithGalleries();
-        List<Integer> slotIds = withGalleries.isEmpty() ? slots.slotIds() : withGalleries;
-        Integer selected = slot != null ? slot : (slotIds.isEmpty() ? null : slotIds.get(0));
+        // 커리어 목록은 <b>적재된 것 전부</b>다. 전에는 "갤이 있는 슬롯" 만 넣었고
+        // 화면에는 칩도 없었다 — 그러면 슬롯 2의 첫 갤을 뽑으러 갈 길이 없다.
+        // 비어 있다는 사실은 목록에서 빼서가 아니라 흐리게 그려서 말한다.
+        List<Integer> slotIds = slots.slotIds();
+        java.util.Set<Integer> withGalleries = java.util.Set.copyOf(galleries.slotsWithGalleries());
+        Integer selected = slot != null ? slot
+                : slotIds.stream().filter(withGalleries::contains).findFirst()
+                        .orElseGet(() -> slotIds.isEmpty() ? null : slotIds.get(0));
 
         List<GalleryView> pages = selected == null ? List.of() : galleries.pages(selected);
         int index = indexOf(pages, batch, page);
@@ -89,6 +94,7 @@ public class GalleryController {
                 : galleries.find(pages.get(index).batchId());
 
         model.addAttribute("slots", slotIds);
+        model.addAttribute("filledSlots", withGalleries);
         model.addAttribute("selectedSlot", selected);
         model.addAttribute("pageCount", pages.size());
         model.addAttribute("pageIndex", index);

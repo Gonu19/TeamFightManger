@@ -112,9 +112,12 @@ class StoryControllerTest {
     void emptySlotIsNotAnError() throws Exception {
         int slotId = newSlot();
 
+        // 화면이 매치 목록으로 바뀌면서 문구도 바뀌었다 (D79). 지키는 것은 같다:
+        // 빈 커리어는 200 이고, 화면이 "왜 비었는지" 를 말한다.
         mvc().perform(get("/story").param("slot", String.valueOf(slotId)))
                 .andExpect(status().isOk())
-                .andExpect(content().string(org.hamcrest.Matchers.containsString("아직 쓴 기사가 없다")));
+                .andExpect(content().string(
+                        org.hamcrest.Matchers.containsString("아직 끝난 공식전이 없다")));
     }
 
     @Test
@@ -149,7 +152,13 @@ class StoryControllerTest {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsString();
 
-        org.assertj.core.api.Assertions.assertThat(html)
+        // 상단 탭은 두 세계가 만나는 <b>유일한 자리</b>다 (D61) — 거기 /tier 가 있는 것은
+        // 규칙이지 위반이 아니다. 금지되는 것은 <b>본문에서</b> 통계로 넘어가는 길이다:
+        // 챔피언 이름을 눌러 티어로 가는 링크가 생기면 D61 이 물리적으로 끊어둔 경계가
+        // 다시 이어진다. 그래서 탭을 도려낸 나머지를 본다.
+        String body = withoutNav(html);
+
+        org.assertj.core.api.Assertions.assertThat(body)
                 .doesNotContain("/tier")
                 .doesNotContain("/champion/")
                 .doesNotContain("/synergy");
@@ -170,7 +179,7 @@ class StoryControllerTest {
 
         // 슬롯이 하나면 선택 폼은 안 그리므로, 고른 커리어가 있다는 증거는
         // "기사가 없다" 문구가 정상적으로 나오는 것과 200 응답이다
-        org.assertj.core.api.Assertions.assertThat(html).contains("아직 쓴 기사가 없다");
+        org.assertj.core.api.Assertions.assertThat(html).contains("아직 끝난 공식전이 없다");
         org.assertj.core.api.Assertions.assertThat(
                 jdbc.queryForObject("SELECT count(*)::int FROM save_slot WHERE slot_id = ?",
                         Integer.class, slotId)).isEqualTo(1);
@@ -251,5 +260,22 @@ class StoryControllerTest {
     @DisplayName("없는 기사는 404 다 — 빈 화면 200 이 아니다")
     void missingArticleIsNotFound() throws Exception {
         mvc().perform(get("/story/999999999")).andExpect(status().isNotFound());
+    }
+
+    /**
+     * 상단 탭을 도려낸 나머지. <b>탭은 D61 이 허락한 유일한 통로</b>라서 여기서 빼고 본다.
+     *
+     * <p>문자열로 자르는 것이 거칠지만, 파서를 들이는 값보다 그 대가가 작다 —
+     * 이 조각은 우리가 쓴 템플릿이고 모양이 정해져 있다. 탭이 사라지면
+     * {@code indexOf} 가 -1 이 되어 원본을 그대로 돌려주므로, 그때는 검사가
+     * <b>더 엄격해질 뿐</b> 조용히 통과하지 않는다.
+     */
+    private static String withoutNav(String html) {
+        int start = html.indexOf("<nav class=\"tabs\"");
+        if (start < 0) {
+            return html;
+        }
+        int end = html.indexOf("</nav>", start);
+        return end < 0 ? html : html.substring(0, start) + html.substring(end + "</nav>".length());
     }
 }

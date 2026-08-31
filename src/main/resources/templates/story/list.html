@@ -1,131 +1,199 @@
 <!DOCTYPE html>
 <!--
-  연대기 목록.
+  연대기 — <b>사이클 화면</b>.
 
-  통계 화면으로 가는 링크가 없다 (D61). 상단 탭도 아직 없다 — 갈 곳이 하나뿐이라
-  탭을 그리면 그게 탭인지 제목인지 구분되지 않는다. 통계 화면이 생길 때 붙인다.
+    ① 경기 진행 · 세이브 저장   워처가 자동으로 적재한다 (줄이 있다 = ① 이 끝났다)
+    ② 데이터 반영              집계가 돈다 (티어 · 카운터 · 쌍 효과)
+    ③ 기사 작성               사람이 누른다 — 모델 호출 2회
+    ④ 갤러리 반응             사람이 누른다 — 모델 호출 2회
 
-  모순 표시를 목록에도 둔다. 상세에서만 경고하면 열어보기 전까지 알 수 없고,
-  그러면 검증 장치가 사실상 꺼진 것과 같다.
--->
-<!--
-  Thymeleaf 가 이 파일을 어떻게 처리하나 (읽는 순서대로)
+  전에는 화면이 "쓴 기사 목록" 이었다. 그러면 ③ 과 ④ 가 각자 "가장 최근 안 한 것" 을
+  알아서 골랐고, 기사를 쓴 경기와 갤을 뽑은 경기가 갈릴 수 있었다 — 목록이 둘로 따로
+  있으니 나란히 놓고 볼 수가 없었다.
 
-  1. 서버가 컨트롤러의 반환값 "story/list" 를 templates/story/list.html 로 바꾼다
-     (spring.thymeleaf 의 기본 prefix=templates/ · suffix=.html)
-  2. 이 파일을 HTML 로 파싱한 뒤 th:* 속성을 만나면 그 자리에서 실행한다
-  3. th:* 속성 자체는 결과 HTML 에서 사라진다. 브라우저는 평범한 HTML 만 받는다
-  4. 반면 HTML 주석(지금 읽고 있는 이것)은 지워지지 않고 응답에 그대로 나간다.
-     그래서 주석 안에 주석 닫는 기호를 글자로 쓰면 안 된다 — 거기서 주석이 끝나고
-     나머지가 화면에 본문으로 찍힌다. 실제로 그렇게 새어 나온 적이 있다.
+  그래서 매치를 줄로 세우고 그 줄이 자기 상태를 들고 있게 한다. 버튼도 줄에 붙는다:
+  사용자가 어느 경기인지 이미 골랐으므로 생성기가 다시 고르지 않는다.
 
-  ${...} 는 컨트롤러가 model 에 담은 값이다. @{...} 는 URL 인데, 서버가 컨텍스트
-  경로를 앞에 붙여준다 — 앱이 / 가 아닌 경로에 배포돼도 링크가 안 깨진다.
+  통계 화면으로 가는 링크는 상단 탭에만 있다 (D61). 챔피언 이름을 눌러 티어로 가는
+  길은 안 만든다 — 창작층이 만든 값이 통계로 새어 들어오는 경로를 물리적으로 끊어
+  두는 것이 D61 의 전부다. StoryControllerTest 가 본문에 /tier 문자열이 없음을 확인한다.
 -->
 <html xmlns:th="http://www.thymeleaf.org" lang="ko">
 <head>
     <meta charset="UTF-8">
     <title>연대기 — 팀파이트 매니저</title>
-    <link rel="stylesheet" th:href="@{/css/tfm.css}">
+    <link rel="stylesheet" th:href="@{/css/app.css}">
+    <link rel="stylesheet" th:href="@{/css/story.css}">
 </head>
 <body>
-<header class="top">
-    <h1>연대기</h1>
-    <!--
-      커리어 선택. th:if 가 거짓이면 이 <form> 은 통째로 결과에서 빠진다
-      (숨기는 게 아니라 아예 안 그린다). 슬롯이 하나뿐이면 고를 것이 없으므로 안 그린다.
-      onchange 로 폼을 제출하니 GET /story?slot=N 이 되고, 목록이 그 커리어로 다시 그려진다.
-    -->
-    <form class="slots" method="get" th:action="@{/story}" th:if="${slots.size() > 1}">
-        <label for="slot">커리어</label>
-        <select id="slot" name="slot" onchange="this.form.submit()">
-            <!--
-              th:each 는 이 <option> 하나를 틀로 삼아 목록 수만큼 복제한다.
-              th:selected 는 조건이 참일 때만 selected 속성이 붙는 불리언 속성이다 —
-              거짓이면 속성 자체가 안 나간다 (selected="false" 가 아니다).
-            -->
-            <option th:each="s : ${slots}"
-                    th:value="${s}"
-                    th:text="'슬롯 ' + ${s}"
-                    th:selected="${s == selectedSlot}"></option>
-        </select>
-    </form>
-</header>
 
 <div th:replace="~{fragments/nav :: tabs('story')}"></div>
 
 <main>
+    <h1>연대기</h1>
+
+    <div th:replace="~{fragments/filters :: slots('/story', ${slots}, ${selectedSlot}, ${filledSlots})}"></div>
+
     <!--
-      flash 메시지. POST /story/generate 가 리다이렉트하면서 한 번만 실어 보낸 값이라,
-      새로고침하면 사라진다 (RedirectAttributes.addFlashAttribute).
+      flash 메시지. POST 가 리다이렉트하면서 한 번만 실어 보낸 값이라 새로고침하면 사라진다
+      (RedirectAttributes.addFlashAttribute).
     -->
     <p class="notice" th:if="${notice}" th:text="${notice}">알림</p>
 
     <!--
-      수동 트리거 (D61 결정 4 · 수동 생성).
-      - 버튼은 story 가 켜져 있을 때만 그린다 — canGenerate 가 그 신호다
-      - POST 인 이유: 이 요청은 모델 호출 두 번이고 DB 를 바꾼다. GET 이면 새로고침만으로
-        다시 나간다
-      - 한 번에 한 편이다. "아직 안 쓴 매치 중 가장 최근 것" 하나만 쓴다
-      - 버튼이 둘인 이유는 분당 토큰이다 (D70). 하나로 묶으면 한 번에 모델 호출이
-        넷이 되어 무료 티어 한도에 거의 확실히 걸린다. 나눠 누르면 그 사이에
-        창이 다시 열린다
+      사이클 안내. 버튼 옆에 두지 않고 위에 한 번만 그린다 — 줄마다 반복하면
+      마흔 번 읽히고, 그러면 아무도 안 읽는다.
     -->
-    <div class="generate" th:if="${canGenerate and selectedSlot != null}">
-        <form method="post" th:action="@{/story/generate}">
-            <input type="hidden" name="slot" th:value="${selectedSlot}">
-            <button type="submit">최근 경기 기사 쓰기</button>
-        </form>
+    <ol class="cycle-legend">
+        <li><b>①</b> 경기 진행 · 세이브 저장 <span class="faint">— 워처가 자동으로 적재한다</span></li>
+        <li>
+            <b>②</b> 데이터 반영
+            <span class="faint">— 티어 · 카운터 · 쌍 효과 집계</span>
+            <!--
+              적재는 자동이지만 집계는 아니다. 안 돌리면 매치는 목록에 뜨는데
+              티어와 쌍 효과는 어제 값 그대로이고, 그 어긋남은 화면에 안 보인다 —
+              숫자가 여전히 그럴듯하기 때문이다. 1초 남짓이고 돈이 안 나간다.
+            -->
+            <form method="post" th:action="@{/story/aggregate}" class="inline-form">
+                <input type="hidden" name="slot" th:value="${selectedSlot}">
+                <button class="btn tiny" type="submit">다시 돌리기</button>
+            </form>
+        </li>
+        <li><b>③</b> 기사 작성 <span class="faint">— 모델 호출 2회</span></li>
+        <li><b>④</b> 갤러리 반응 <span class="faint">— 모델 호출 2회</span></li>
+    </ol>
+
+    <p class="note" th:unless="${canGenerate}">
+        <b>생성이 꺼져 있다.</b> 기사와 갤러리를 뽑으려면 <code>tfm.story.enabled=true</code>
+        로 켠다 (D61 결정 4). 이미 쓴 것은 켜지 않아도 보인다.
+    </p>
+
+    <p class="empty" th:if="${cycle.isEmpty()}">
+        이 커리어에는 아직 끝난 공식전이 없다.<br>
+        <span class="faint">경기를 하고 세이브를 저장하면 워처가 자동으로 적재한다.</span>
+    </p>
+
+    <!--
+      줄 하나 = 매치 하나. 왼쪽이 사실(언제 · 누가 · 몇 대 몇)이고 오른쪽이 할 일이다.
+      버튼과 링크를 같은 칸에 두되 모양을 다르게 한다 — 하나는 요금이 나가고 하나는
+      그냥 이동이다.
+    -->
+    <ol class="cycle" th:unless="${cycle.isEmpty()}">
+        <li class="match" th:each="m : ${cycle}"
+            th:classappend="${m.hasPlayer()} ? 'mine' : ''">
+
+            <div class="when">
+                <b th:text="'시즌 ' + ${m.season}">시즌 1</b>
+                <span th:text="${m.day} + '일'">1일</span>
+            </div>
+
+            <div class="who">
+                <!--
+                  플레이어 팀에 표를 단다. 이름표가 들고 오는 is_player 다 —
+                  Notability 의 "내 팀" 항이 한 번도 안 켜졌던 그 값이고,
+                  화면에서도 같은 값을 쓴다.
+                -->
+                <span th:classappend="${m.homeIsPlayer} ? 'player' : ''"
+                      th:text="${m.homeLabel()}">블루</span>
+                <b class="score"
+                   th:classappend="${m.playerWon() == null} ? '' : (${m.playerWon()} ? 'good' : 'bad')"
+                   th:text="${m.homeWins} + ' : ' + ${m.awayWins()}">2 : 1</b>
+                <span th:classappend="${m.awayIsPlayer} ? 'player' : ''"
+                      th:text="${m.awayLabel()}">레드</span>
+                <span class="faint sets" th:text="${m.sets} + '세트'">3세트</span>
+            </div>
+
+            <!-- 진행 점. 적재는 이 줄이 존재한다는 것으로 이미 끝나 있다 -->
+            <div class="dots" th:with="stage=${m.stage()}"
+                 th:title="'적재됨 · 기사 ' + (${m.hasArticle()} ? '있음' : '없음')
+                           + ' · 갤러리 ' + (${m.hasGallery()} ? '있음' : '없음')">
+                <span class="dot on">①</span>
+                <span class="dot on">②</span>
+                <span class="dot" th:classappend="${m.hasArticle()} ? 'on' : ''">③</span>
+                <span class="dot" th:classappend="${m.hasGallery()} ? 'on' : ''">④</span>
+            </div>
+
+            <div class="act">
+                <!-- ③ 기사 -->
+                <a class="btn" th:if="${m.hasArticle()}"
+                   th:href="@{'/story/' + ${m.articleId}}">기사 보기</a>
+                <form th:if="${!m.hasArticle() and canGenerate}"
+                      method="post" th:action="@{/story/generate-match}">
+                    <input type="hidden" name="slot" th:value="${selectedSlot}">
+                    <input type="hidden" name="season" th:value="${m.season}">
+                    <input type="hidden" name="day" th:value="${m.day}">
+                    <input type="hidden" name="teamA" th:value="${m.homeTeamId}">
+                    <input type="hidden" name="teamB" th:value="${m.awayTeamId}">
+                    <button class="btn primary" type="submit">기사 쓰기</button>
+                </form>
+
+                <!-- ④ 갤러리 -->
+                <a class="btn" th:if="${m.hasGallery()}"
+                   th:href="@{/gallery(slot=${selectedSlot}, batch=${m.batchId})}">
+                    <span th:text="${m.batches > 1} ? ('갤러리 ' + ${m.batches} + '개') : '갤러리 보기'">갤러리 보기</span>
+                </a>
+                <form th:if="${!m.hasGallery() and canGenerateGallery}"
+                      method="post" th:action="@{/story/generate-gallery}">
+                    <input type="hidden" name="slot" th:value="${selectedSlot}">
+                    <input type="hidden" name="season" th:value="${m.season}">
+                    <input type="hidden" name="day" th:value="${m.day}">
+                    <input type="hidden" name="teamA" th:value="${m.homeTeamId}">
+                    <input type="hidden" name="teamB" th:value="${m.awayTeamId}">
+                    <button class="btn primary" type="submit">반응 생성</button>
+                </form>
+            </div>
+        </li>
+    </ol>
+
+    <!--
+      총평은 매치가 아니라 <b>날</b> 단위라 줄에 못 붙인다. 그래서 따로 둔다.
+      버튼이 나뉜 이유는 분당 토큰이다 (D70) — 한 번에 묶으면 모델 호출이 넷이 되어
+      무료 티어 한도(8,000)에 거의 확실히 걸린다.
+    -->
+    <div class="round" th:if="${canGenerate and selectedSlot != null}">
         <form method="post" th:action="@{/story/generate-round}">
             <input type="hidden" name="slot" th:value="${selectedSlot}">
-            <button type="submit">그날 총평 쓰기</button>
+            <button class="btn" type="submit">그날 총평 쓰기</button>
         </form>
-        <span class="hint">각각 모델 호출 두 번. 나눠 누르면 분당 한도에 덜 걸린다.</span>
+        <span class="faint">경기가 둘 이상인 날을 하루씩 정리한다. 매치 기사와 호출을 나눠 쓴다.</span>
     </div>
 
     <!--
-      갤러리로 넘어가는 문. <b>생성 버튼과 나란히 두지 않는다</b> — 위의 둘은 누르면
-      요금이 나가고, 이건 그냥 페이지 이동이다. 같은 줄에 있으면 그 차이가 안 보인다.
-      갤러리는 기사가 없어도 되므로(D73) 기사 유무와 무관하게 항상 그린다.
+      쓴 기사 목록. 사이클이 "무엇을 할 차례인가" 라면 이쪽은 "무엇을 썼나" 이고,
+      둘은 다른 질문이다. 총평은 매치 줄에 안 붙으므로 여기서만 보인다.
     -->
-    <p class="go-gallery">
-        <a th:href="@{/gallery(slot=${selectedSlot})}">🔥 갤러리 가기 →</a>
-        <span class="hint">경기마다 게시글 20편과 댓글이 붙는 게시판</span>
-    </p>
-
-    <p class="empty" th:if="${cards.isEmpty()}">
-        <span th:if="${canGenerate}">아직 쓴 기사가 없다. 위 버튼을 누르면 최근 경기부터 쓴다.</span>
-        <span th:unless="${canGenerate}">아직 쓴 기사가 없다. 기사를 쓰려면 tfm.story.enabled=true 로 켠다.</span>
-    </p>
-
-    <ol class="cards" th:unless="${cards.isEmpty()}">
-        <li class="card" th:each="card : ${cards}">
-            <!--
-              th:text 는 태그 <b>안의 내용</b>을 바꿔치기한다. 그래서 여기 적힌 "제목" 은
-              디자인 확인용 자리표시자이고 실제 응답에는 안 나온다.
-              th:text 는 값을 이스케이프한다 — 기사 제목에 <script> 가 들어와도 글자로 나온다.
-              (이스케이프 안 하는 th:utext 는 이 프로젝트에서 쓰지 않는다.)
-            -->
-            <a class="headline" th:href="@{'/story/' + ${card.articleId}}" th:text="${card.headline}">제목</a>
-
-            <p class="meta">
-                <span th:text="'시즌 ' + ${card.season} + ' · ' + ${card.day} + '일'">시점</span>
-                <span class="teams">
-                    <!-- ?: 는 엘비스 연산자. 왼쪽이 null 이면 오른쪽을 쓴다 -->
-                    <span th:text="${card.blueTeamName} ?: ('팀 ' + ${card.blueTeamId})">블루</span>
-                    <b th:text="${card.blueScore} + ' - ' + ${card.redScore}">스코어</b>
-                    <span th:text="${card.redTeamName} ?: ('팀 ' + ${card.redTeamId})">레드</span>
-                </span>
+    <details class="written" th:unless="${cards.isEmpty()}">
+        <summary th:text="'쓴 기사 ' + ${cards.size()} + '편 — 총평 포함'">쓴 기사</summary>
+        <ol class="cards">
+            <li class="card" th:each="card : ${cards}">
                 <!--
-                  ${card.contradicted} 는 필드가 아니라 ArticleCard.isContradicted() 를 부른다.
-                  Thymeleaf 가 자바빈 규약대로 is/get 접두사를 붙여 찾기 때문이다.
+                  th:text 는 값을 이스케이프한다 — 기사 제목에 태그가 들어와도 글자로 나온다.
+                  (이스케이프 안 하는 th:utext 는 이 프로젝트에서 쓰지 않는다.)
                 -->
-                <span class="warn" th:if="${card.contradicted}" title="brief 와 어긋난 내용이 있다">
-                    ⚠ 대조에서 모순
-                </span>
-            </p>
-        </li>
-    </ol>
+                <a class="headline" th:href="@{'/story/' + ${card.articleId}}"
+                   th:text="${card.headline}">제목</a>
+                <p class="meta">
+                    <span th:text="'시즌 ' + ${card.season} + ' · ' + ${card.day} + '일'">시점</span>
+                    <span class="teams">
+                        <!-- ?: 는 엘비스 연산자. 왼쪽이 null 이면 오른쪽을 쓴다 -->
+                        <span th:text="${card.blueTeamName} ?: ('팀 ' + ${card.blueTeamId})">블루</span>
+                        <b th:text="${card.blueScore} + ' - ' + ${card.redScore}">스코어</b>
+                        <span th:text="${card.redTeamName} ?: ('팀 ' + ${card.redTeamId})">레드</span>
+                    </span>
+                    <!--
+                      ${card.contradicted} 는 필드가 아니라 ArticleCard.isContradicted() 를 부른다.
+                      Thymeleaf 가 자바빈 규약대로 is/get 접두사를 붙여 찾기 때문이다.
+
+                      모순 표시를 목록에도 둔다. 상세에서만 경고하면 열어보기 전까지 알 수
+                      없고, 그러면 검증 장치가 사실상 꺼진 것과 같다.
+                    -->
+                    <span class="bad" th:if="${card.contradicted}" title="brief 와 어긋난 내용이 있다">
+                        ⚠ 대조에서 모순
+                    </span>
+                </p>
+            </li>
+        </ol>
+    </details>
 </main>
 </body>
 </html>

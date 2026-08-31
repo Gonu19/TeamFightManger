@@ -60,11 +60,11 @@ A:\project\TeamFighter\
 │   │   │                CounterCalculator   BT 기대승률 · 1단 축소 · 상성 이득
 │   │   ├─ performance/ ChampionTallyAggregator   챔피언별 출전 누적
 │   │   │                PerformanceCalculator     티어 — 강도 보정 없음 (D50)
-│   │   ├─ pair/       출력 기반 쌍 효과 (D63~D65 · D76)
-│   │   │    ├─ PairObservation             한 관측 = 경기에 나온 챔피언 하나
+│   │   ├─ pair/       출력 기반 쌍 효과 (D63~D65 · D76 · D78 감쇠)
+│   │   │    ├─ PairObservation             한 관측 = 경기에 나온 챔피언 하나 + 감쇠 무게
 │   │   │    ├─ Standardizer                챔피언별 z — 주효과를 0 으로
 │   │   │    ├─ DesignMatrix                팀·동료·상대·역할군 특성
-│   │   │    ├─ RidgeFit                    좌표하강. 이진 특성이라 나눗셈 한 번
+│   │   │    ├─ RidgeFit                    가중 좌표하강. 이진 특성이라 나눗셈 한 번
 │   │   │    ├─ PerfMetric                  딜·탱·힐·킬·데스·어시 — 묶음으로 본다
 │   │   │    └─ PairEffectCalculator        역할군 통제 후 방향 있는 쌍
 │   │   ├─ synergy/                          승률 기반. 비어 있다 (D63 이 강등)
@@ -105,15 +105,16 @@ A:\project\TeamFighter\
 │   │   └─ dao/
 │   ├─ web/
 │   │   ├─ StatsController                  /tier · /champion/{code}  (D76 · D77)
-│   │   ├─ StoryController                  / → /tier · /story · /story/{id}
-│   │   │                                    POST /story/generate · -round
+│   │   ├─ StoryController                  / → /tier · /story(사이클, D79) · /story/{id}
+│   │   │                                    POST generate · -round · -match · -gallery
 │   │   ├─ GalleryController                 /gallery(?batch= 로 신원 열기, D75)
 │   │   │                                    /gallery/status (JSON)
 │   │   │                                    POST /gallery/generate (비동기, D73)
 │   │   ├─ 아직 없는 컨트롤러: Gaps · Draft · Slot
 │   │   ├─ sse/                             실시간 갱신
-│   │   ├─ dao/StatsDao                     화면은 계산하지 않는다. 정렬만 한다
-│   │   └─ view/TierRow · PairRow · PairBucket  표시 모델 (문턱 · 묶음 · 서명 문구)
+│   │   ├─ dao/StatsDao · CycleDao          화면은 계산하지 않는다. 정렬만 한다
+│   │   │                                    CycleDao: 세트를 매치로 묶는다 (D79)
+│   │   └─ view/TierRow · PairRow · PairBucket · CycleRow   표시 모델
 │   └─ common/
 │
 ├─ src/main/resources/
@@ -134,8 +135,9 @@ A:\project\TeamFighter\
 │   │   └─ V14__champion_pair_effect.sql   방향 있는 쌍 × 지표 (D63~D65 · D76)
 │   ├─ templates/stats/                    tier.html · champion.html   순위 · 세 묶음 (D77)
 │   ├─ templates/fragments/nav.html         상단 탭 — 두 세계가 만나는 유일한 자리
+│   ├─ templates/fragments/filters.html     커리어 칩 — 셋이 같이 쓴다 (D79)
 │   ├─ templates/story/                    list.html · detail.html · gallery.html
-│   └─ static/css/tfm.css · stats.css · gallery.css · static/js/gallery.js
+│   └─ static/css/app.css(껍데기) + stats · story · gallery.css · js/gallery.js
 │
 └─ src/test/java/...                        main 과 거울 구조
 ```

@@ -142,6 +142,85 @@ public class StoryGenerator {
     }
 
     /**
+     * <b>지정한 매치</b>의 기사를 쓴다. 연대기 화면의 줄마다 붙은 버튼이 이리로 온다.
+     *
+     * <h2>왜 "가장 최근 안 쓴 것" 으로 부족한가</h2>
+     *
+     * 그 규칙은 버튼이 하나일 때 맞았다. 지금은 화면이 매치를 줄로 세우고 줄마다
+     * 버튼이 있다 — 사용자가 <b>어느 경기</b>를 가리키는지 이미 정했는데 생성기가 다시
+     * 고르면, 3일차 버튼을 눌렀는데 5일차 기사가 나온다. 그리고 그 어긋남은 화면에
+     * "기사가 하나 생겼다" 로만 보인다.
+     *
+     * <h2>팀은 무순으로 맞춘다</h2>
+     *
+     * 화면이 넘겨주는 두 팀은 {@code match_record} 를 정렬해 묶은 것이라 세이브의
+     * 진영 순서와 다를 수 있다 — 실측 294세트 중 122건이 반대다. 그래서 <b>집합으로</b>
+     * 비교한다.
+     *
+     * @param teamA DB 팀 번호. {@code teamB} 와 순서가 바뀌어도 같은 매치를 찾는다
+     * @return 저장된 {@code article_id}. 그런 매치가 없으면 {@link Optional#empty()}
+     */
+    public Optional<Long> writeFor(int slotId, int season, int day, int teamA, int teamB) {
+        Path saveFile = locateSaveFile(slotId);
+        List<ParsedSchedule> schedules;
+        List<ParsedGame> sets;
+        try {
+            schedules = MatchScheduleParser.read(saveFile);
+            sets = SaveParser.read(saveFile).gameStats();
+        } catch (IOException e) {
+            throw new UncheckedIOException("세이브를 읽지 못했다: " + saveFile, e);
+        }
+        return writeFor(references.load(slotId), schedules, sets, season, day, teamA, teamB);
+    }
+
+    /** 파일을 이미 읽었을 때. 테스트가 쓰는 입구다. */
+    public Optional<Long> writeFor(StoryReference reference, List<ParsedSchedule> schedules,
+                                   List<ParsedGame> sets, int season, int day,
+                                   int teamA, int teamB) {
+        Objects.requireNonNull(reference, "reference");
+        Map<ParsedSchedule.MatchKey, List<ParsedGame>> setsByMatch = groupSets(sets);
+
+        Optional<ParsedSchedule> target = schedules.stream()
+                .filter(ParsedSchedule::isPlayed)
+                .filter(m -> setsByMatch.containsKey(m.matchKey()))
+                .filter(m -> matches(reference, m, season, day, teamA, teamB))
+                .findFirst();
+
+        if (target.isEmpty()) {
+            log.info("슬롯 {}: 시즌 {} {}일 팀 {}·{} 매치를 세이브에서 못 찾았다",
+                    reference.slotId(), season, day, teamA, teamB);
+            return Optional.empty();
+        }
+
+        ParsedSchedule match = target.get();
+        SeasonBook book = new SeasonBook(schedules);
+        NotabilityContext context = book.contextFor(match, reference.playerGameTeamId());
+        MatchBrief brief = MatchBrief.of(match, setsByMatch.get(match.matchKey()));
+        List<String> tags = book.tagsFor(match, reference);
+
+        long articleId = writer.write(reference, brief, context, tags);
+        log.info("슬롯 {}: 시즌 {} {}일 매치로 기사 {} 를 썼다 (지정)",
+                reference.slotId(), match.season(), match.day(), articleId);
+        return Optional.of(articleId);
+    }
+
+    /**
+     * 그 매치가 화면이 가리킨 것인가. <b>팀은 무순</b>이다.
+     *
+     * <p>진영을 그대로 비교하면 실측 294세트 중 122건이 어긋나고, 증상은 "버튼을
+     * 눌렀는데 아무 일도 안 일어난다" 로 나온다 — 예외도 로그도 없이 조용하다.
+     */
+    private static boolean matches(StoryReference reference, ParsedSchedule match,
+                                   int season, int day, int teamA, int teamB) {
+        if (orZero(match.season()) != season || orZero(match.day()) != day) {
+            return false;
+        }
+        int blue = reference.teamId(match.blueTeamId());
+        int red = reference.teamId(match.redTeamId());
+        return (blue == teamA && red == teamB) || (blue == teamB && red == teamA);
+    }
+
+    /**
      * 아직 총평이 없는 날 중 <b>가장 최근 날</b>의 총평을 쓴다.
      *
      * <h2>왜 버튼이 따로인가</h2>
