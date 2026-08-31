@@ -131,7 +131,7 @@ public class StoryGenerator {
         ParsedSchedule match = target.get();
 
         SeasonBook book = new SeasonBook(schedules);                            // 4. 순위·업셋·라이벌의 재료. 전체 일정을 넘겨도 미래는 안 본다
-        NotabilityContext context = book.contextFor(match, null);               // 5. 그 매치 시점의 맥락. null 은 "플레이어 팀을 모른다" 는 뜻
+        NotabilityContext context = book.contextFor(match, reference.playerGameTeamId());  // 5. 그 매치 시점의 맥락. 이름표가 들고 온 is_player 팀을 넘긴다 (없으면 null = "모른다")
         MatchBrief brief = MatchBrief.of(match, setsByMatch.get(match.matchKey()));  // 6. 사실만 모은다. 두 등식이 안 맞으면 여기서 던진다
         List<String> tags = book.tagsFor(match, reference);                     // 7. 맥락 태그 (순위·연패·라이벌). 최대 2개
 

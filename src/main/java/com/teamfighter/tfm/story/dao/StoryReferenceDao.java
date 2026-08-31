@@ -25,7 +25,7 @@ import java.util.Set;
 public class StoryReferenceDao {
 
     private static final String TEAMS = """
-            SELECT game_team_id, team_id, name FROM team WHERE slot_id = ? ORDER BY game_team_id
+            SELECT game_team_id, team_id, name, is_player FROM team WHERE slot_id = ? ORDER BY game_team_id
             """;
 
     /**
@@ -93,6 +93,7 @@ public class StoryReferenceDao {
         Map<Integer, Integer> teamIds = new LinkedHashMap<>();
         Map<Integer, String> teamNames = new LinkedHashMap<>();
         Set<String> names = new LinkedHashSet<>();
+        Integer[] playerGameTeamId = {null};                                    // 배열인 이유: 람다 안에서 대입하려면 사실상 final 이 아니어야 한다
 
         jdbc.query(TEAMS, rs -> {
             int gameTeamId = rs.getInt("game_team_id");
@@ -101,6 +102,13 @@ public class StoryReferenceDao {
             if (name != null && !name.isBlank()) {
                 teamNames.put(gameTeamId, name);
                 names.add(name);
+            }
+            if (rs.getBoolean("is_player")) {                                   // 커리어당 한 팀이다. 둘이면 적재가 깨진 것이므로 먼저 만난 팀을 조용히 쓰지 않는다
+                if (playerGameTeamId[0] != null) {
+                    throw new IllegalStateException("슬롯 " + slotId + " 에 플레이어 팀이 둘이다: "
+                            + playerGameTeamId[0] + " · " + gameTeamId + " — 적재를 다시 돌린다");
+                }
+                playerGameTeamId[0] = gameTeamId;
             }
         }, slotId);
 
@@ -112,6 +120,6 @@ public class StoryReferenceDao {
             athletes.put(rs.getInt("game_athlete_id"), rs.getString("name"));
         }, slotId);
 
-        return new StoryReference(slotId, teamIds, teamNames, champions, names, athletes);
+        return new StoryReference(slotId, playerGameTeamId[0], teamIds, teamNames, champions, names, athletes);
     }
 }

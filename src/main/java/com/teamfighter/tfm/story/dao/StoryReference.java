@@ -21,9 +21,13 @@ import java.util.Set;
  *                      brief 의 픽({@code ParsedGame} 에서 온 코드)과 어휘가 갈려서,
  *                      이 매치에 <b>실제로 나온</b> 챔피언이 "없는 챔피언" 으로 잡힌다
  * @param teamNames     커리어의 팀 이름 전체. 이 매치에 없는 팀을 기사가 부르면 모순이다
+ * @param playerGameTeamId 플레이어 팀의 <b>세이브 번호</b>다. 보통 0 이다(D54).
+ *                      커리어에 {@code is_player} 팀이 없으면 {@code null} 이고, 그때는 주목도의
+ *                      "내 팀" 항이 통째로 빠진다 — 0점이 아니라 판단에서 제외다
  */
 public record StoryReference(
         int slotId,
+        Integer playerGameTeamId,
         Map<Integer, Integer> teamIdByGameTeamId,
         Map<Integer, String> teamNameByGameTeamId,
         Set<String> championCodes,
