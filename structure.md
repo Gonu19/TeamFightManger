@@ -73,19 +73,29 @@ A:\project\TeamFighter\
 │   │   ├─ FactCheck · FactCheckResult      대조 — 모순 / 미확인 2등급
 │   │   ├─ ArticleDraft                     fact_status 를 타입이 계산한다
 │   │   ├─ ArticleWriter                    넷을 잇기만 한다. @Transactional 없음
-│   │   ├─ StoryGenerator                   수동 트리거. 안 쓴 매치 중 최근 하나
+│   │   ├─ StoryComments · JsonSalvage      깨진 JSON 배열을 건진다 (댓글·게시글 공용)
+│   │   ├─ StoryGenerator                   수동 트리거 셋. 기사 · 총평 · 갤러리
 │   │   ├─ StoryConfiguration               플래그를 켜야 빈이 생긴다 (D61)
+│   │   ├─ gallery/     게시판 (D72). 기사가 모드의 [이슈] 자리에 들어간다
+│   │   │    ├─ GalleryPostKind             유형 10종 — 할당량과 짝인 ENUM
+│   │   │    ├─ GalleryChunk                조각 4 × 글 5 = 20. 갤의 시간 순서
+│   │   │    ├─ GalleryPrompts              모드의 GAME_IDENTITY 이식
+│   │   │    ├─ GalleryPosts                항목 단위 복구 — 하나 깨져도 나머지는 산다
+│   │   │    └─ GalleryWriter               호출 넷. 조각 실패를 밖으로 안 내보낸다
 │   │   └─ dao/         ArticleDao          업서트 — 재생성이 갱신이 된다
 │   │                    ArticleView · ArticleCard    상세용 · 목록용
 │   │                    StoryReference · StoryReferenceDao  이름표 (NameBook 구현)
 │   │                    ArticleKey          매치 신원 — 이미 쓴 것 판정
+│   │                    GalleryDao          쌓는다 (업서트 아님, D72 결정 5)
+│   │                    GalleryView · GalleryAnchor  게시판용 · 매달릴 기사
 │   ├─ draft/           밴픽 시뮬            (banpick.md)
 │   │   ├─ DraftStateMachine · DraftSessionService · EvidenceGate
 │   │   ├─ score/                           PickScorer · BanScorer · ScoreBreakdown
 │   │   └─ dao/
 │   ├─ web/
 │   │   ├─ StoryController                  / · /story · /story/{id}
-│   │   │                                    POST /story/generate (수동 트리거)
+│   │   │                                    /story/{id}/gallery  게시판 (D72)
+│   │   │                                    POST /story/generate · -round · -gallery
 │   │   ├─ 컨트롤러: Tier · Champion · Synergy · Gaps · Draft · Slot
 │   │   ├─ sse/                             실시간 갱신
 │   │   └─ view/                            서버가 계산해 내려보내는 표시 모델
@@ -100,8 +110,11 @@ A:\project\TeamFighter\
 │   │   ├─ V5__current_patch_basis.sql      메타 반감기 2 · GLOBAL 중단 (D53)
 │   │   ├─ V6__team_identity.sql          team.name_key · 팀 이름 시드 52 (D56)
 │   │   ├─ V7__athlete.sql                athlete · 선수 이름 풀 551 (D58)
-│   │   └─ V8__article.sql                article · comment · finding (D61)
-│   ├─ templates/story/                    list.html · detail.html
+│   │   ├─ V8__article.sql                article · comment · finding (D61)
+│   │   ├─ V9__comment_author_and_replies.sql  닉네임 · 대댓글 (D69)
+│   │   ├─ V10__article_kind.sql           기사 종류 · NULLS NOT DISTINCT (D70)
+│   │   └─ V11__gallery.sql                batch · post · comment (D71 · D72)
+│   ├─ templates/story/                    list.html · detail.html · gallery.html
 │   ├─ templates/ + templates/fragments/    (통계 화면은 아직)
 │   └─ static/css/tfm.css · static/js
 │
@@ -160,8 +173,11 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 `performance/` 는 티어·픽률·밴률까지 만들지만 **경기력 z값과 티어 등급은 비워 둔다** —
 둘 다 근거가 아직 없다 (D50).
 
-`story/` 는 파서에서 화면까지 이어졌다 — 목록·상세·수동 생성이 돈다.
-`web/` 에 있는 것은 그 둘뿐이고 통계 화면(`/tier` · `/champion` · `/gaps` · `/teams`)과
+`story/` 는 파서에서 화면까지 이어졌다 — 목록·상세·수동 생성이 돈다. 그 위에
+`story/gallery/` 가 게시판을 얹는다: 기사 하나가 갤러가 읽은 [이슈] 자리에 들어가고,
+그 아래 짧은 글 20편이 유형 할당제로 붙는다 (D72). 세트 나열을 프롬프트가 아니라
+구조로 푼 것이 이 계층의 존재 이유다.
+`web/` 에 있는 것은 연대기와 갤러리뿐이고 통계 화면(`/tier` · `/champion` · `/gaps` · `/teams`)과
 `draft/` 는 아직 없다. 상단 탭도 통계 화면이 생길 때 붙인다 — 갈 곳이 하나뿐인 탭은
 탭으로 안 읽힌다.
 

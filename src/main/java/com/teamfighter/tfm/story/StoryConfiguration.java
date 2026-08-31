@@ -2,6 +2,8 @@ package com.teamfighter.tfm.story;
 
 import com.teamfighter.tfm.ingest.watcher.TfmProperties;
 import com.teamfighter.tfm.story.dao.ArticleDao;
+import com.teamfighter.tfm.story.dao.GalleryDao;
+import com.teamfighter.tfm.story.gallery.GalleryWriter;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
@@ -42,6 +44,17 @@ public class StoryConfiguration {
     }
 
     /**
+     * 갤러리를 만드는 쪽. {@link ArticleWriter} 와 같은 조건이다 —
+     * 꺼진 설치에는 바깥으로 나가는 호출이 아예 없어야 한다.
+     */
+    @ConditionalOnProperty(prefix = "tfm.story", name = "enabled", havingValue = "true")
+    @Bean
+    public GalleryWriter galleryWriter(StoryClient client, GalleryDao galleries,
+                                       StoryProperties properties) {
+        return new GalleryWriter(client, galleries, properties);
+    }
+
+    /**
      * 수동 트리거의 알맹이. 화면의 버튼이 이걸 부른다.
      *
      * <p>{@link ArticleWriter} 와 같은 조건이다 — 꺼진 설치에는 생성기 자체가 없고,
@@ -50,8 +63,9 @@ public class StoryConfiguration {
      */
     @ConditionalOnProperty(prefix = "tfm.story", name = "enabled", havingValue = "true")
     @Bean
-    public StoryGenerator storyGenerator(ArticleWriter writer, ArticleDao articles,
+    public StoryGenerator storyGenerator(ArticleWriter writer, GalleryWriter galleryWriter,
+                                         ArticleDao articles, GalleryDao galleries,
                                          StoryReferenceDao references, TfmProperties properties) {
-        return new StoryGenerator(writer, articles, references, properties);
+        return new StoryGenerator(writer, galleryWriter, articles, galleries, references, properties);
     }
 }

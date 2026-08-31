@@ -5,6 +5,8 @@ import com.teamfighter.tfm.parser.common.ParsedSchedule;
 import com.teamfighter.tfm.parser.model.ParsedGame;
 import com.teamfighter.tfm.story.dao.ArticleDao;
 import com.teamfighter.tfm.story.dao.ArticleView;
+import com.teamfighter.tfm.story.dao.GalleryDao;
+import com.teamfighter.tfm.story.gallery.GalleryWriter;
 import com.teamfighter.tfm.story.dao.StoryReference;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import org.junit.jupiter.api.DisplayName;
@@ -45,6 +47,9 @@ class StoryGeneratorTest {
     private StoryReferenceDao references;
 
     @Autowired
+    private GalleryDao galleries;
+
+    @Autowired
     private StoryProperties storyProperties;
 
     @Autowired
@@ -71,7 +76,9 @@ class StoryGeneratorTest {
 
     private StoryGenerator generatorWith(CountingClient client) {
         ArticleWriter writer = new ArticleWriter(client, articles, references, storyProperties);
-        return new StoryGenerator(writer, articles, references, tfmProperties);
+        GalleryWriter galleryWriter = new GalleryWriter(client, galleries, storyProperties);
+        return new StoryGenerator(writer, galleryWriter, articles, galleries,
+                references, tfmProperties);
     }
 
     private int newSlot() {

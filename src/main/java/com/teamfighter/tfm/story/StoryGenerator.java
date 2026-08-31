@@ -7,6 +7,9 @@ import com.teamfighter.tfm.parser.model.ParsedGame;
 import com.teamfighter.tfm.parser.save.SaveParser;
 import com.teamfighter.tfm.story.dao.ArticleDao;
 import com.teamfighter.tfm.story.dao.ArticleKey;
+import com.teamfighter.tfm.story.dao.GalleryAnchor;
+import com.teamfighter.tfm.story.dao.GalleryDao;
+import com.teamfighter.tfm.story.gallery.GalleryWriter;
 import com.teamfighter.tfm.story.dao.StoryReference;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import org.slf4j.Logger;
@@ -68,14 +71,19 @@ public class StoryGenerator {
     private static final Logger log = LoggerFactory.getLogger(StoryGenerator.class);
 
     private final ArticleWriter writer;
+    private final GalleryWriter galleryWriter;
     private final ArticleDao articles;
+    private final GalleryDao galleries;
     private final StoryReferenceDao references;
     private final TfmProperties properties;
 
-    public StoryGenerator(ArticleWriter writer, ArticleDao articles,
+    public StoryGenerator(ArticleWriter writer, GalleryWriter galleryWriter,
+                          ArticleDao articles, GalleryDao galleries,
                           StoryReferenceDao references, TfmProperties properties) {
         this.writer = writer;
+        this.galleryWriter = galleryWriter;
         this.articles = articles;
+        this.galleries = galleries;
         this.references = references;
         this.properties = properties;
     }
@@ -139,6 +147,75 @@ public class StoryGenerator {
         log.info("슬롯 {}: 시즌 {} {}일 매치로 기사 {} 를 썼다",
                 reference.slotId(), match.season(), match.day(), articleId);
         return Optional.of(articleId);
+    }
+
+    /**
+     * 갤러리가 아직 없는 <b>가장 최근 매치 기사</b> 아래에 게시판 한 페이지를 만든다.
+     *
+     * <h2>왜 기사와 같은 버튼이 아닌가</h2>
+     *
+     * 갤러리 한 페이지가 모델 호출 넷이다(D72). 기사 생성(둘)과 묶으면 한 번 누를 때
+     * 여섯 번이 나가고, 분당 토큰 8,000 에서 그건 거의 확실히 재시도로 들어간다.
+     * <b>비용의 단위를 사람이 고르게 한다</b>는 수동 트리거의 취지가 여기서도 그대로다.
+     *
+     * <h2>세이브를 다시 읽는 이유</h2>
+     *
+     * 갤 글은 선수별 표를 읽고 장면을 파낸다. 그 표는 {@link MatchBrief} 에서 나오고,
+     * {@code MatchBrief} 는 세트 기록에서 나온다 — <b>DB 에는 매치 일정이 없다.</b>
+     * 그래서 기사를 쓸 때와 똑같이 파일을 다시 읽어 매치를 찾는다.
+     *
+     * @return 저장된 {@code batch_id}. 갤러리를 붙일 기사가 없거나 조각이 전부 실패하면
+     *         {@link Optional#empty()} — 둘 다 예외가 아니다
+     */
+    public Optional<Long> writeGallery(int slotId) {
+        Optional<GalleryAnchor> anchor = galleries.nextAnchor(slotId);          // 1. 갤러리 없는 최근 기사
+        if (anchor.isEmpty()) {
+            log.info("슬롯 {}: 갤러리를 붙일 기사가 없다 (매치 기사에 전부 붙었거나 기사가 없다)", slotId);
+            return Optional.empty();
+        }
+
+        Path saveFile = locateSaveFile(slotId);
+        List<ParsedSchedule> schedules;
+        List<ParsedGame> sets;
+        try {
+            schedules = MatchScheduleParser.read(saveFile);                     // 2. 기사를 쓸 때와 같은 두 파서
+            sets = SaveParser.read(saveFile).gameStats();
+        } catch (IOException e) {
+            throw new UncheckedIOException("세이브를 읽지 못했다: " + saveFile, e);
+        }
+
+        return writeGallery(references.load(slotId), anchor.get(), schedules, sets);
+    }
+
+    /** 파일을 이미 읽었을 때. 테스트가 쓰는 입구다. */
+    public Optional<Long> writeGallery(StoryReference reference, GalleryAnchor anchor,
+                                       List<ParsedSchedule> schedules, List<ParsedGame> sets) {
+        Objects.requireNonNull(reference, "reference");
+        Objects.requireNonNull(anchor, "anchor");
+
+        Map<ParsedSchedule.MatchKey, List<ParsedGame>> setsByMatch = groupSets(sets);
+
+        Optional<ParsedSchedule> match = schedules.stream()                     // 1. 기사의 신원으로 매치를 되찾는다
+                .filter(ParsedSchedule::isPlayed)
+                .filter(m -> setsByMatch.containsKey(m.matchKey()))
+                .filter(m -> keyOf(reference, m).equals(anchor.key()))
+                .findFirst();
+
+        if (match.isEmpty()) {
+            // 기사는 있는데 그 매치를 세이브에서 못 찾는 상황이다. 세이브가 바뀌었거나
+            // (다른 커리어 파일로 덮였거나) 세트가 버려진 옛 시즌이다 — 어느 쪽이든
+            // 조용히 넘어가면 "버튼을 눌러도 아무 일이 없다" 가 된다.
+            log.warn("슬롯 {}: 기사 {} 의 매치를 세이브에서 못 찾았다 (시즌 {} {}일)",
+                    reference.slotId(), anchor.articleId(),
+                    anchor.key().season(), anchor.key().day());
+            return Optional.empty();
+        }
+
+        MatchBrief brief = MatchBrief.of(match.get(), setsByMatch.get(match.get().matchKey()));
+        List<String> tags = new SeasonBook(schedules).tagsFor(match.get(), reference);
+
+        return galleryWriter.write(anchor.articleId(), anchor.headline(), anchor.body(),
+                brief, reference, tags);                                        // 2. 여기부터는 GalleryWriter 의 일이다
     }
 
     /**

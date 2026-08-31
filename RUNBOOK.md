@@ -19,15 +19,16 @@ $env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat test
 .\gradlew.bat test --tests "*MatchBriefTest*" --console=plain
 ```
 
-**결과 세는 법** — `build/test-results/test/TEST-*.xml` 의 `tests=` 속성을 합친다.
+**결과 세는 법** — `build/reports/tests/test/index.html` 의 카운터를 본다.
 `BUILD SUCCESSFUL` 만 보면 몇 개가 건너뛰어졌는지 모른다.
 
 ## 앱
 
 ```powershell
 $env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat bootRun   # http://127.0.0.1:8088
-# 화면은 연대기뿐이다 — /story
-$env:TFM_STORY_ENABLED = 'true'; .\gradlew.bat bootRun   # 기사 생성도 켠다 (키 필요)
+# 화면: /story · /story/{id}/gallery
+$env:TFM_STORY_ENABLED = 'true'; .\gradlew.bat bootRun   # 생성 버튼 셋 (키 필요)
+# 갤러리는 호출 4회다 — 나눠 누른다 (D72)
 .\gradlew.bat bootRun --args="--tfm.reingest-on-start=true"   # 수리용
 .\gradlew.bat bootRun --args="--tfm.aggregate-on-start=true"  # 위와 같이 켜지 말 것
 ```

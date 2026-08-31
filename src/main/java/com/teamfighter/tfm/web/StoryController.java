@@ -5,6 +5,8 @@ import com.teamfighter.tfm.story.StoryGenerator;
 import com.teamfighter.tfm.story.dao.ArticleCard;
 import com.teamfighter.tfm.story.dao.ArticleDao;
 import com.teamfighter.tfm.story.dao.ArticleView;
+import com.teamfighter.tfm.story.dao.GalleryDao;
+import com.teamfighter.tfm.story.dao.GalleryView;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -64,12 +66,14 @@ public class StoryController {
     private static final int PAGE_SIZE = 50;
 
     private final ArticleDao articles;
+    private final GalleryDao galleries;
     private final StoryReferenceDao slots;
     private final Optional<StoryGenerator> generator;
 
-    public StoryController(ArticleDao articles, StoryReferenceDao slots,
+    public StoryController(ArticleDao articles, GalleryDao galleries, StoryReferenceDao slots,
                            Optional<StoryGenerator> generator) {
         this.articles = articles;
+        this.galleries = galleries;
         this.slots = slots;
         this.generator = generator;
     }
@@ -139,6 +143,10 @@ public class StoryController {
                         HttpStatus.NOT_FOUND, "기사 " + id + " 가 없다"));
 
         model.addAttribute("article", article);
+        // 갤러리가 있으면 링크를 그린다. 없는데 링크를 그리면 눌러서 빈 화면을 보게 되고,
+        // 그건 "아직 안 만들었다" 가 아니라 "고장났다" 로 읽힌다.
+        model.addAttribute("galleryPages", galleries.countBatches(id));
+        model.addAttribute("canGenerate", generator.isPresent());
         return "story/detail";
     }
 
@@ -233,6 +241,81 @@ public class StoryController {
         } catch (IllegalStateException | IllegalArgumentException e) {
             return backToListWith(redirect, slot, "총평을 쓸 수 없다: " + e.getMessage(), e);
         }
+    }
+
+    /**
+     * 갤러리 — 기사 하나에 달린 게시판.
+     *
+     * <h2>왜 기사 화면 안이 아닌가</h2>
+     *
+     * 글 스무 편과 그 댓글 수백 개를 기사 아래에 이어 붙이면 「이 기사가 쓴 숫자」 블록이
+     * 화면 저 아래로 밀려난다. 그 블록은 <b>이 프로젝트의 검증 장치</b>라 묻히면 안 된다
+     * (D61 결정 2). 그래서 갤러리는 자기 화면을 갖고, 기사에서는 링크로만 간다.
+     *
+     * <p>없는 갤러리는 404 다. 빈 게시판을 200 으로 돌려주면 아직 안 만든 것인지
+     * 만들었는데 글이 안 나온 것인지 화면에서 구분되지 않는다.
+     */
+    @GetMapping("/story/{id}/gallery")
+    public String gallery(@PathVariable long id, Model model) {
+        ArticleView article = articles.find(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "기사 " + id + " 가 없다"));
+
+        GalleryView gallery = galleries.findLatest(id)
+                .orElseThrow(() -> new ResponseStatusException(
+                        HttpStatus.NOT_FOUND, "기사 " + id + " 에는 아직 갤러리가 없다"));
+
+        model.addAttribute("article", article);
+        model.addAttribute("gallery", gallery);
+        return "story/gallery";
+    }
+
+    /**
+     * <b>갤러리 트리거.</b> 갤러리가 아직 없는 최근 매치 기사 아래에 게시판 한 페이지를 만든다.
+     *
+     * <p>버튼이 셋째인 이유는 앞의 둘과 같다 — <b>비용의 단위를 사람이 고르게 한다.</b>
+     * 다만 이 버튼은 한 번에 모델 호출이 <b>넷</b>이라 앞의 둘보다 비싸다(D72).
+     * 그래서 화면의 버튼 문구에도 그 사실을 적는다.
+     */
+    @PostMapping("/story/generate-gallery")
+    public String generateGallery(@RequestParam int slot, RedirectAttributes redirect) {
+        StoryGenerator writer = generator.orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "기사 생성이 꺼져 있다 — tfm.story.enabled=true 로 켠다 (D61 결정 4)"));
+
+        try {
+            Optional<Long> batchId = writer.writeGallery(slot);
+            if (batchId.isEmpty()) {
+                // 붙일 기사가 없거나, 조각이 전부 실패했거나, 세이브에서 매치를 못 찾았다.
+                // 셋 다 예외가 아니고 로그에 이유가 남는다 — 화면에는 할 일만 적는다.
+                redirect.addFlashAttribute("notice",
+                        "갤러리를 만들지 못했다. 붙일 기사가 없거나 이번 호출이 전부 실패했다 (로그를 본다).");
+                redirect.addAttribute("slot", slot);
+                return "redirect:/story";
+            }
+            // 방금 만든 갤러리로 곧장 보낸다. 목록으로 보내면 어느 기사에 붙었는지 찾아야 한다.
+            return "redirect:/story/" + articleOf(batchId.get(), slot) + "/gallery";
+
+        } catch (StoryClient.StoryUnavailableException e) {
+            return backToListWith(redirect, slot, "갤러리 생성을 부를 수 없다: " + e.getMessage(), e);
+        } catch (StoryClient.StoryFailedException e) {
+            return backToListWith(redirect, slot, "모델 호출이 실패했다: " + e.getMessage(), e);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return backToListWith(redirect, slot, "갤러리를 만들 수 없다: " + e.getMessage(), e);
+        }
+    }
+
+    /**
+     * 방금 만든 배치가 어느 기사에 붙었나.
+     *
+     * <p>{@link StoryGenerator#writeGallery} 가 {@code batch_id} 를 주는데 화면 주소는
+     * {@code article_id} 로 되어 있어서 한 번 되짚는다. 생성기가 기사 번호를 돌려주게
+     * 바꾸지 않는 이유는, 저장된 것의 신원은 <b>배치</b>이기 때문이다 — 기사 번호를
+     * 돌려주면 "무엇을 만들었나" 와 "어디에 붙었나" 가 한 값으로 뭉개진다.
+     */
+    private long articleOf(long batchId, int slot) {
+        return galleries.articleOf(batchId).orElseThrow(() -> new IllegalStateException(
+                "방금 만든 배치 " + batchId + " 의 기사를 못 찾았다 (슬롯 " + slot + ")"));
     }
 
     /**

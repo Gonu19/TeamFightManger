@@ -328,7 +328,14 @@ public final class StoryPrompts {
      * 커뮤니티가 물고 늘어지는 것은 극단값이다 — 제일 많이 죽인 선수, 제일 많이 죽은 선수.
      * 그걸 우리가 표시해 주면 모델이 스스로 비교하다 틀릴 일이 없다.
      */
-    private static String playerTotals(MatchBrief brief, NameBook names) {
+    /**
+     * 선수별 합계 표. 세트를 가로질러 더하고 극단값에 별표를 붙인다.
+     *
+     * <p><b>갤러리 프롬프트도 이걸 쓴다</b>({@code gallery/GalleryPrompts}) — 그래서 public 이다.
+     * 표를 눈앞에 두는 것이 선수와 기록이 섞이는 것을 막는 유일한 장치이고, 두 벌로 두면
+     * 한쪽만 고쳐진다.
+     */
+    public static String playerTotals(MatchBrief brief, NameBook names) {
         record Totals(String team, int kill, int death, int assist, int dealt) {
         }
         Map<String, Totals> byPlayer = new LinkedHashMap<>();                   // 1. 선수 이름 → 합계
@@ -438,7 +445,8 @@ public final class StoryPrompts {
         return out.strip();
     }
 
-    private static String teamName(Integer id, NameBook names) {
+    /** 팀 이름. 모르면 번호를 적는다 (D57). 갤러리 프롬프트도 쓴다. */
+    public static String teamName(Integer id, NameBook names) {
         String name = id == null ? null : names.teamName(id);
         if (name != null) {
             return name;

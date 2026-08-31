@@ -78,7 +78,14 @@
             <input type="hidden" name="slot" th:value="${selectedSlot}">
             <button type="submit">그날 총평 쓰기</button>
         </form>
-        <span class="hint">각각 모델 호출 두 번. 나눠 누르면 분당 한도에 덜 걸린다.</span>
+        <form method="post" th:action="@{/story/generate-gallery}">
+            <input type="hidden" name="slot" th:value="${selectedSlot}">
+            <button type="submit">갤러리 만들기</button>
+        </form>
+        <span class="hint">
+            앞의 둘은 각각 모델 호출 두 번, 갤러리는 <b>네 번</b>이다.
+            나눠 누르면 분당 한도에 덜 걸린다.
+        </span>
     </div>
 
     <p class="empty" th:if="${cards.isEmpty()}">
