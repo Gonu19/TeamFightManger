@@ -190,6 +190,8 @@ class BriefRendererTest {
 
         assertThat(line).contains("Ember").contains("Faker")
                 .contains("MagicKnight").contains("7/2/3").contains("12000");
+        // 약어를 쓰지 않는다 — "딜/탱/힐" 은 모델이 서로 바꿔 부른다
+        assertThat(line).contains("가한피해").contains("받은피해").contains("힐량");
     }
 
     @Test

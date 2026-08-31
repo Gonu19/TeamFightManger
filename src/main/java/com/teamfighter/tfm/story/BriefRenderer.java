@@ -143,9 +143,12 @@ public final class BriefRenderer {
                     .append(" | ").append(line.champion())                      // 4. 무엇으로
                     .append(" | ").append(line.kill()).append('/')              // 5. 킬/데스/어시
                     .append(line.death()).append('/').append(line.assist())
-                    .append(" | 딜 ").append(line.dealing())                    // 6. 기여도 세 가지
-                    .append(" · 탱 ").append(line.tanking())
-                    .append(" · 힐 ").append(line.healing())
+                    // 약어를 쓰지 않는다. "딜/탱/힐" 은 모델이 서로 바꿔 부르기 쉽고,
+                    // 실제로 레퍼런스 모드가 같은 사고를 겪고 지표 정의를 프롬프트에
+                    // 못 박아 뒀다. 이름만으로 뜻이 서는 쪽이 안전하다.
+                    .append(" | 가한피해 ").append(line.dealing())               // 6. 기여도 세 가지
+                    .append(" · 받은피해 ").append(line.tanking())
+                    .append(" · 힐량 ").append(line.healing())
                     .append('\n');
         }
     }

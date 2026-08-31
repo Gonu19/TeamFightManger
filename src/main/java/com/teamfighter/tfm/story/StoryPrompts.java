@@ -1,6 +1,8 @@
 package com.teamfighter.tfm.story;
 
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Objects;
 
 /**
@@ -53,6 +55,22 @@ public final class StoryPrompts {
                   "~로 보인다" 로 쓰거나 아예 쓰지 않는다.
                 - 「사실」에 없는 개념을 끌어오지 않는다. 승점·순위·연승·상대 전적은
                   주지 않았으므로 쓰지 않는다.
+
+                지표의 뜻 — 절대 바꿔 부르지 마라:
+                - `가한피해` = 그 선수가 상대에게 <b>입힌</b> 피해. 공격 지표다.
+                - `받은피해` = 그 선수가 상대에게 <b>맞은</b> 피해. 탱킹 지표다.
+                - `힐량` = 그 선수가 <b>회복시킨</b> 양.
+                - `킬/데스/어시` 는 그 순서다.
+                딜러의 가한피해를 힐량이라 하거나, 탱커의 받은피해를 딜량이라 하면
+                명백한 오류다. <b>확실하지 않으면 수치를 쓰지 말고 두루뭉술하게 넘겨라</b> —
+                틀린 숫자를 자신 있게 쓰는 것보다 안 쓰는 편이 낫다.
+
+                「사실」 맨 위의 [맥락] 줄:
+                - 우리가 계산해 준 것이다. 순위·연승·연패·라이벌 관계가 거기 있다.
+                - <b>[맥락] 줄이 있으면 첫 문단에서 반드시 다뤄라.</b> 그게 이 경기가
+                  왜 중요한지를 정하는 유일한 근거다. 날짜와 스코어로 첫 문장을 시작하지 마라.
+                - 다만 그 문장을 그대로 옮기지는 마라. 그 사실이 이 경기에 어떤 의미인지를
+                  네 문장으로 써라.
 
                 선수를 쓴다 — 이 기사의 주인공은 팀이 아니라 사람이다:
                 - 「사실」의 선수 줄은 `팀 | 선수 | 챔피언 | 킬/데스/어시 | 딜·탱·힐` 이다.
@@ -115,6 +133,16 @@ public final class StoryPrompts {
      */
     public static StoryRequest comments(MatchBrief brief, NameBook names,
                                         Notability notability, String article) {
+        return comments(brief, names, notability, article, List.of());
+    }
+
+    /**
+     * 맥락 태그까지 넘긴다. 태그는 <b>민심의 근거</b>다 — 1위 팀이 한 번 진 것과
+     * 꼴찌가 또 진 것에 커뮤니티가 같은 반응을 하지 않는다.
+     */
+    public static StoryRequest comments(MatchBrief brief, NameBook names,
+                                        Notability notability, String article,
+                                        List<String> contextTags) {
         Objects.requireNonNull(brief, "brief");
         Objects.requireNonNull(notability, "notability");
 
@@ -124,18 +152,41 @@ public final class StoryPrompts {
 
                 말투 — 이게 제일 중요하다:
                 - 실제 커뮤니티 말투로 쓴다. 짧고 거칠고 구어체다. 반말이 기본이다.
-                - ㅋㅋ, ㅇㅇ, ㄹㅇ, ㅈㄴ, ㅅㅂ, ㄷㄷ, ~함, ~냐, ~노, ~하네 같은 표현을 섞는다.
                 - 번역투를 절대 쓰지 마라. "무조건 골든 타임이라니까", "바람이 불면
                   바람에 맞서야 한다", "존경한다", "~라 생각한다" 같은 문장은 금지다.
                 - 완성된 문장으로 점잖게 분석하지 마라. 말하다 만 것처럼 써도 된다.
 
-                누가 쓰는가 — 댓글마다 다른 사람이다. 아래를 섞어라:
+                은어를 양념처럼 뿌리지 마라 — 이게 가장 흔한 실패다:
+                - ㅅㅂ·ㅈㄴ·ㅇㅇ·ㄹㅇ 를 문장 끝에 기계적으로 붙이는 것을 금지한다.
+                  "긴장감 뿜뿜 ㅅㅂ" 처럼 <b>어울리지 않는 조합</b>이 그렇게 나온다.
+                - 은어는 감정이 실릴 때만 나온다. 화가 났을 때 욕이 나오고, 놀랐을 때
+                  ㄷㄷ 가 나온다. 아무 감정 없는 문장에 붙이면 즉시 가짜로 읽힌다.
+                - "실화냐", "레전드", "ㄹㅇ", "존버", "팝콘각" 같은 뻔한 밈을 습관적으로
+                  반복하지 마라. <b>이 경기에서만 나올 수 있는 말</b>을 지어내라.
+                - 같은 표현을 여러 댓글에 겹쳐 쓰지 마라. 겹치면 다른 말로 바꿔라.
+
+                누가 쓰는가 — 댓글마다 다른 사람이고, 톤도 달라야 한다:
                 - 밴픽 훈수충: 왜 그 조합을 뽑았냐고 화낸다
                 - 특정 팀 빠: 무지성 찬양, 져도 정신승리
                 - 안티: 이겨도 깎아내린다
                 - 싸움꾼: 위 댓글을 대놓고 받아친다 ("윗댓 뭔소리냐")
-                - 관망러: 한 줄 툭 던지고 만다
+                - 관망러: 한 줄 툭 던지고 만다. 무성의해도 된다
                 - 통계충: 숫자 하나 물고 늘어진다
+                - 순수 감탄: 분석 없이 그냥 좋아하는 사람
+                - 딴소리: 경기와 상관없는 드립 하나
+
+                욕의 강도도 섞어라. 전부 세게 가면 부자연스럽다 — 욕 없는 순한 댓글,
+                가벼운 비꼼, 센 댓글이 한 판에 같이 있어야 진짜 같다.
+                전부 까기만 해도 안 된다. 까는 쪽·쉴드 치는 쪽·중립이 공존해야 한다.
+
+                맥락에 따라 민심이 다르다 — 「이 경기의 맥락」이 주어지면 그에 맞춰라:
+                - <b>연승 중이거나 상위권인 팀이 한 번 졌다</b>: "팀 해체해라" 같은 무지성
+                  쌍욕은 안 나온다. 당혹감("이게 지네;;"), 상대 리스펙트, 아쉬움이 주류다.
+                - <b>연패 중이거나 하위권인 팀이 또 졌다</b>: 이때 극대노가 나온다.
+                  쌓인 게 터지는 톤이다.
+                - <b>순위 결정전이었다</b>: 결과의 무게를 다들 안다. 다음 순위 계산이 나온다.
+                - 이긴 팀 팬은 축제고, 진 팀 팬도 100% 초상집은 아니다 —
+                  "그래도 이 선수는 할 만큼 했다" 는 쉴드가 소수 섞인다.
 
                 허용되는 것 — 마음껏 해라:
                 - 근거 없는 단정, 과장, 편파, 감정적인 반응, 욕설에 가까운 표현
@@ -145,9 +196,11 @@ public final class StoryPrompts {
 
                 지켜야 할 것 — 이것만은:
                 - 누가 이겼는지, 스코어가 몇 대 몇인지는 틀리지 않는다.
-                - <b>선수와 기록을 바꿔 붙이지 않는다.</b> 기사에 "A가 14킬" 이라고 적혀
-                  있으면 그 14킬은 A 의 것이다. B 에게 붙이면 안 된다. 기억이 흐리면
-                  숫자를 빼고 쓴다 — 커뮤니티 댓글에 숫자가 없어도 아무도 신경 안 쓴다.
+                - <b>선수와 기록을 바꿔 붙이지 않는다.</b> 아래 「선수 성적」에 적힌 값만
+                  인용한다. 거기 없는 조합은 쓰지 마라. 확실하지 않으면 숫자를 빼고
+                  두루뭉술하게 써라("딜 좀 뽑았다" 수준). <b>틀린 수치를 자신 있게 말하는
+                  것이 이 댓글난에서 가장 나쁜 실패다</b> — 몰입이 거기서 깨진다.
+                - 지표를 바꿔 부르지 마라: 가한피해는 공격, 받은피해는 맞은 양, 힐량은 회복이다.
                 - 기사에 없는 선수 이름을 만들지 않는다.
                 - 실존 인물이나 실제 프로게임단을 끌어들이지 않는다. 이 리그 안에서만 논다.
                 - 라인전·정글·오브젝트 같은 다른 게임 용어를 쓰지 않는다. 이 게임엔 없다.
@@ -158,6 +211,10 @@ public final class StoryPrompts {
                 - 한 댓글은 두 문장을 넘지 않는다. 한 문장짜리가 많아야 자연스럽다.
                 """;
 
+        // 선수 성적 표를 <b>따로</b> 준다. 기사 본문에서 숫자를 기억해 쓰게 하면
+        // 모델이 선수와 기록을 바꿔 붙인다 — 실물에서 "Bless 14킬"(실제로는 Nemesis),
+        // "Nemesis 어시 25개"(실제로는 Bless)가 나왔다. 인용할 표가 눈앞에 있으면
+        // 기억할 필요가 없어진다. 레퍼런스 모드도 같은 구조를 쓴다.
         String user = """
                 아래 기사에 달린 댓글 %d개를 써라.
 
@@ -165,11 +222,17 @@ public final class StoryPrompts {
                 %s
 
                 --- 경기 결과 (틀리면 안 되는 것) ---
-                %s %d - %d %s""".formatted(
+                %s %d - %d %s
+                %s
+                --- 선수 성적 (숫자를 쓸 거면 여기서만 가져와라) ---
+                %s""".formatted(
                 notability.commentCount(),
                 article == null ? "" : article,
                 teamName(brief.blueTeamId(), names), brief.blueScore(),
-                brief.redScore(), teamName(brief.redTeamId(), names));
+                brief.redScore(), teamName(brief.redTeamId(), names),
+                contextTags.isEmpty() ? "" : "\n--- 이 경기의 맥락 ---\n"
+                        + String.join("\n", contextTags),
+                playerTotals(brief, names));
 
         // 온도 1.15 — 페르소나가 갈리려면 다양성이 필요하다. 댓글은 사실을 지킬
         // 의무가 거의 없으므로(스코어만 지킨다) 높여도 잃을 것이 적다.
@@ -178,6 +241,64 @@ public final class StoryPrompts {
         // 본문이 빈 채로 돌아온 적이 있다.
         return new StoryRequest(system, user,
                 Math.max(notability.commentCount() * 90, 800), 1.15);
+    }
+
+    /**
+     * 댓글용 <b>선수 성적 표</b>. 매치 전체를 선수 한 명당 한 줄로 접는다.
+     *
+     * <h2>왜 세트별이 아니라 합계인가</h2>
+     *
+     * 사실 블록은 세트마다 여덟 줄이라 5세트면 40줄이다. 그걸 댓글 프롬프트에 그대로
+     * 넣으면 토큰이 두 배가 되고(무료 티어 TPM 8,000 을 넘긴다), 무엇보다 <b>댓글은
+     * 세트별 세부까지 인용하지 않는다.</b> "누가 몇 킬 했냐" 수준이면 충분하다.
+     *
+     * <h2>가장 큰 값에 별표를 단다</h2>
+     *
+     * 커뮤니티가 물고 늘어지는 것은 극단값이다 — 제일 많이 죽인 선수, 제일 많이 죽은 선수.
+     * 그걸 우리가 표시해 주면 모델이 스스로 비교하다 틀릴 일이 없다.
+     */
+    private static String playerTotals(MatchBrief brief, NameBook names) {
+        record Totals(String team, int kill, int death, int assist, int dealt) {
+        }
+        Map<String, Totals> byPlayer = new LinkedHashMap<>();                   // 1. 선수 이름 → 합계
+
+        for (MatchBrief.SetBrief set : brief.sets()) {
+            for (MatchBrief.PlayerLine line : set.players()) {
+                String team = teamName(line.blue() ? brief.blueTeamId() : brief.redTeamId(), names);
+                String who = names.athleteName(line.athleteId());
+                if (who == null || who.isBlank()) {                             // 2. 이름을 모르면 표에 안 넣는다
+                    continue;                                                   //    댓글이 번호로 부를 일은 없다
+                }
+                Totals now = byPlayer.getOrDefault(who, new Totals(team, 0, 0, 0, 0));
+                byPlayer.put(who, new Totals(team,                              // 3. 세트를 가로질러 더한다
+                        now.kill() + line.kill(),
+                        now.death() + line.death(),
+                        now.assist() + line.assist(),
+                        now.dealt() + line.dealing()));
+            }
+        }
+        if (byPlayer.isEmpty()) {
+            return "(선수 기록 없음)";
+        }
+
+        int mostKills = byPlayer.values().stream().mapToInt(Totals::kill).max().orElse(0);
+        int mostDeaths = byPlayer.values().stream().mapToInt(Totals::death).max().orElse(0);
+
+        StringBuilder out = new StringBuilder();
+        byPlayer.forEach((who, t) -> {
+            out.append(t.team()).append(" | ").append(who)
+                    .append(" | ").append(t.kill()).append('/')
+                    .append(t.death()).append('/').append(t.assist())
+                    .append(" | 가한피해 ").append(t.dealt());
+            if (t.kill() == mostKills && mostKills > 0) {                       // 4. 극단값에 별표
+                out.append("  ★최다 킬");
+            }
+            if (t.death() == mostDeaths && mostDeaths > 0) {
+                out.append("  ★최다 데스");
+            }
+            out.append('\n');
+        });
+        return out.toString();
     }
 
     /** 댓글을 줄 단위로 자른다. 모델이 번호나 따옴표를 붙이면 떼어낸다. */

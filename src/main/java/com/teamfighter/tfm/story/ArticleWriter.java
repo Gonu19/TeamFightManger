@@ -94,7 +94,7 @@ public class ArticleWriter {
 
         List<String> comments = StoryPrompts.splitComments(                     // 7. 창작 2 — 댓글. "1. ...\n2. ..." 답을 줄 단위로 잘라 목록으로
                 client.complete(
-                        StoryPrompts.comments(brief, reference, notability, body)));
+                        StoryPrompts.comments(brief, reference, notability, body, contextTags)));
 
         ArticleDraft draft = ArticleDraft.of(                                   // 8. 저장 꼴로. fact_status 는 안 넘긴다 — 타입이 findings 로 계산한다
                 reference.slotId(), brief, notability,
