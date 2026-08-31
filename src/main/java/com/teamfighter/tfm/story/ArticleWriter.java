@@ -106,6 +106,54 @@ public class ArticleWriter {
     }
 
     /**
+     * 하루치 총평을 쓴다. 이미 있으면 덮는다.
+     *
+     * <h2>매치 기사와 같은 뼈대, 다른 재료</h2>
+     *
+     * 호출 두 번(기사·댓글) · 대조 · 저장이라는 순서는 같다. 다른 것은 재료다 —
+     * 선수도 픽도 없고 매치당 한 줄뿐이라, 대조도 그만큼 얕다(팀과 숫자만 본다).
+     *
+     * <p>{@code @Transactional} 이 없는 이유도 같다. 모델 호출이 안에 있다.
+     *
+     * @return 저장된 {@code article_id}
+     */
+    public long writeRoundSummary(StoryReference reference, RoundBrief brief) {
+        Objects.requireNonNull(reference, "reference");
+        Objects.requireNonNull(brief, "brief");
+
+        String briefText = brief.render(reference);                             // 1. 하루치 사실. 매치당 한 줄
+
+        String raw = client.complete(StoryPrompts.roundSummary(brief, reference));   // 2. 창작 1 — 총평
+        String[] split = ArticleDraft.splitHeadline(raw);                       // 3. [제목, 본문]
+        String body = split[1];
+        String headline = split[0].isBlank()                                    // 4. 제목이 비면 날짜로 짓는다
+                ? brief.season() + "시즌 " + brief.day() + "일차 " + brief.results().size() + "경기"
+                : split[0];
+
+        FactCheckResult factCheck = FactCheck.runRound(                         // 5. 대조 — 그날 없던 팀·숫자만 본다
+                brief, reference, reference.teamNames(), raw);
+
+        List<ArticleDraft.CommentLine> comments = StoryComments.parse(          // 6. 창작 2 — 댓글
+                client.complete(StoryPrompts.roundComments(brief, reference, body)));
+
+        ArticleDraft draft = ArticleDraft.ofRound(                              // 7. 팀이 없는 기사 = 총평 (V10)
+                reference.slotId(), brief.season(), brief.day(),
+                ROUND_NOTABILITY, List.of("하루 총평"),
+                headline, body, briefText, properties.model(), comments, factCheck);
+
+        return articles.save(draft);                                            // 8. 매치 기사와 같은 표에 들어간다
+    }
+
+    /**
+     * 총평의 주목도.
+     *
+     * <p>고정값이다. 주목도는 <b>매치</b>가 얼마나 볼 만한가를 재는 축이고(접전·순위·라이벌),
+     * 하루 전체에는 그 축이 없다. 목록 정렬은 시즌·일 순이라 이 값이 순서를 바꾸지도 않는다.
+     * 0 으로 두지 않는 이유는 화면이 그것을 "볼 것 없음" 으로 읽을 수 있어서다.
+     */
+    private static final double ROUND_NOTABILITY = 0.5;
+
+    /**
      * 모델이 "제목 한 줄, 빈 줄, 본문" 형식을 안 지켰을 때의 제목.
      *
      * <p>던지지 않는 이유는 {@link ArticleDraft#splitHeadline} 이 적어 둔 것과 같다 —

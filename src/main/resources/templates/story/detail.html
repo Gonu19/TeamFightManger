@@ -27,9 +27,14 @@
 
         <p class="meta">
             <span th:text="'시즌 ' + ${article.season} + ' · ' + ${article.day} + '일'">시점</span>
-            <span th:text="${article.blueTeamName} ?: ('팀 ' + ${article.blueTeamId})">블루</span>
-            <b th:text="${article.blueScore} + ' - ' + ${article.redScore}">스코어</b>
-            <span th:text="${article.redTeamName} ?: ('팀 ' + ${article.redTeamId})">레드</span>
+            <!-- 총평에는 대전 상대가 없다 (D70) -->
+            <span th:if="${article.kind().name() == 'ROUND'}"><b>하루 총평</b></span>
+            <span th:unless="${article.kind().name() == 'ROUND'}"
+                  th:text="${article.blueTeamName} ?: ('팀 ' + ${article.blueTeamId})">블루</span>
+            <b th:unless="${article.kind().name() == 'ROUND'}"
+               th:text="${article.blueScore} + ' - ' + ${article.redScore}">스코어</b>
+            <span th:unless="${article.kind().name() == 'ROUND'}"
+                  th:text="${article.redTeamName} ?: ('팀 ' + ${article.redTeamId})">레드</span>
         </p>
 
         <div class="warn banner" th:if="${article.contradicted}">

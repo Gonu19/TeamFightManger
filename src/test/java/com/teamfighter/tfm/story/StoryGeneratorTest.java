@@ -243,4 +243,98 @@ class StoryGeneratorTest {
 
         assertThat(articles.find(id).orElseThrow().season()).isEqualTo(2);
     }
+
+    @Test
+    @DisplayName("총평은 가장 최근 날을 쓴다 — 그날 경기 전부가 재료다")
+    void roundSummaryCoversTheWholeDay() {
+        int slotId = newSlot();
+        team(slotId, 33, "Seorabal Gaming");
+        team(slotId, 34, "OZ Gaming");
+        team(slotId, 35, "Anarchy");
+        team(slotId, 36, "Runaway");
+        StoryReference reference = references.load(slotId);
+
+        List<ParsedSchedule> schedules = List.of(
+                schedule(2, 40, 33, 34),        // 같은 날 두 경기
+                schedule(2, 40, 35, 36),
+                schedule(2, 10, 33, 34));       // 지난 날
+
+        long id = generatorWith(new CountingClient())
+                .writeLatestRoundSummary(reference, schedules).orElseThrow();
+
+        ArticleView view = articles.find(id).orElseThrow();
+        assertThat(view.season()).isEqualTo(2);
+        assertThat(view.day()).isEqualTo(40);
+        // 총평에는 대전 상대가 없다
+        assertThat(view.blueTeamId()).isNull();
+        assertThat(view.kind()).isEqualTo(ArticleDraft.Kind.ROUND);
+        // 사실 블록에 그날 두 경기가 다 있다
+        assertThat(view.briefText()).contains("Seorabal Gaming").contains("Anarchy");
+    }
+
+    @Test
+    @DisplayName("같은 날 총평을 두 번 쓰지 않는다 — 두 번째는 그 전날로 내려간다")
+    void secondRoundSummaryMovesToTheEarlierDay() {
+        int slotId = newSlot();
+        team(slotId, 33, "Seorabal Gaming");
+        team(slotId, 34, "OZ Gaming");
+        team(slotId, 35, "Anarchy");
+        team(slotId, 36, "Runaway");
+        StoryReference reference = references.load(slotId);
+
+        List<ParsedSchedule> schedules = List.of(
+                schedule(2, 40, 33, 34), schedule(2, 40, 35, 36),
+                schedule(2, 10, 33, 34), schedule(2, 10, 35, 36));
+
+        StoryGenerator generator = generatorWith(new CountingClient());
+        long first = generator.writeLatestRoundSummary(reference, schedules).orElseThrow();
+        long second = generator.writeLatestRoundSummary(reference, schedules).orElseThrow();
+
+        assertThat(second).isNotEqualTo(first);
+        assertThat(articles.find(first).orElseThrow().day()).isEqualTo(40);
+        assertThat(articles.find(second).orElseThrow().day()).isEqualTo(10);
+
+        // 세 번째는 쓸 날이 없다
+        assertThat(generator.writeLatestRoundSummary(reference, schedules))
+                .isEqualTo(Optional.empty());
+    }
+
+    @Test
+    @DisplayName("경기가 하나뿐인 날은 총평을 쓰지 않는다 — 매치 기사와 같은 말이 된다")
+    void skipsDaysWithASingleMatch() {
+        int slotId = newSlot();
+        team(slotId, 33, "Seorabal Gaming");
+        team(slotId, 34, "OZ Gaming");
+        StoryReference reference = references.load(slotId);
+
+        assertThat(generatorWith(new CountingClient())
+                .writeLatestRoundSummary(reference, List.of(schedule(2, 40, 33, 34))))
+                .isEqualTo(Optional.empty());
+    }
+
+    @Test
+    @DisplayName("총평과 매치 기사는 서로를 막지 않는다 — 같은 날이어도 둘 다 쓴다")
+    void roundAndMatchArticlesCoexist() {
+        int slotId = newSlot();
+        team(slotId, 33, "Seorabal Gaming");
+        team(slotId, 34, "OZ Gaming");
+        team(slotId, 35, "Anarchy");
+        team(slotId, 36, "Runaway");
+        StoryReference reference = references.load(slotId);
+
+        List<ParsedSchedule> schedules = List.of(
+                schedule(2, 40, 33, 34), schedule(2, 40, 35, 36));
+        List<ParsedGame> allSets = new ArrayList<>();
+        allSets.addAll(sets(2, 40, 33, 34));
+        allSets.addAll(sets(2, 40, 35, 36));
+
+        StoryGenerator generator = generatorWith(new CountingClient());
+        generator.writeLatestUnwritten(reference, schedules, allSets);
+        generator.writeLatestRoundSummary(reference, schedules);
+
+        // 유일 키에 kind 가 들어 있어 둘이 부딪히지 않는다 (V10)
+        assertThat(jdbc.queryForObject(
+                "SELECT count(*)::int FROM article WHERE slot_id = ?", Integer.class, slotId))
+                .isEqualTo(2);
+    }
 }

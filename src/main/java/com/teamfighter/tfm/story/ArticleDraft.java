@@ -27,12 +27,12 @@ public record ArticleDraft(
         int season,
         int day,
         Integer round,
-        int blueTeamId,
-        int redTeamId,
-        int blueScore,
-        int redScore,
-        int blueKill,
-        int redKill,
+        Integer blueTeamId,
+        Integer redTeamId,
+        Integer blueScore,
+        Integer redScore,
+        Integer blueKill,
+        Integer redKill,
         double notability,
         List<String> notabilityReasons,
         String headline,
@@ -84,6 +84,16 @@ public record ArticleDraft(
     public enum FactStatus { CLEAN, CONTRADICTED }
 
     /**
+     * 기사 종류.
+     *
+     * <p><b>레코드 컴포넌트가 아니라 팀이 있는지로 정한다</b>({@link #kind()}). 종류를 따로
+     * 받으면 "종류는 ROUND 인데 팀이 채워진" 상태가 만들어질 수 있고, 그런 상태는 DB 의
+     * CHECK 가 잡기 전까지 코드 안을 돌아다닌다. 하나에서 다른 하나가 따라 나오면
+     * 어긋날 방법이 없다 — {@code fact_status} 를 findings 에서 계산한 것과 같은 수법이다.
+     */
+    public enum Kind { MATCH, ROUND }
+
+    /**
      * 제목으로 인정할 최대 길이.
      *
      * <p>실측으로 정했다 — 실제 생성된 제목이 21자였다(`팀 33, 연장전 뒤 2-1 역전 승리`).
@@ -93,6 +103,18 @@ public record ArticleDraft(
     private static final int MAX_HEADLINE = 40;
 
     public ArticleDraft {
+        // 매치 기사면 여섯 값이 다 있어야 하고, 총평이면 팀이 둘 다 없어야 한다.
+        // DB 에도 같은 CHECK 가 있지만(V10) 여기서 먼저 막는다 — DB 까지 가면 실패가
+        // 저장 시점에 터지고, 그때는 이미 모델 호출 두 번을 쓴 뒤다.
+        boolean hasTeams = blueTeamId != null || redTeamId != null;
+        if (hasTeams && (blueTeamId == null || redTeamId == null)) {
+            throw new IllegalArgumentException("팀이 한쪽만 있다 — 매치 기사는 둘 다 있어야 한다");
+        }
+        if (hasTeams && (blueScore == null || redScore == null
+                || blueKill == null || redKill == null)) {
+            throw new IllegalArgumentException("매치 기사인데 스코어나 킬이 비었다");
+        }
+
         Objects.requireNonNull(headline, "headline");
         Objects.requireNonNull(body, "body");
         Objects.requireNonNull(briefText, "briefText");
@@ -122,6 +144,42 @@ public record ArticleDraft(
         boolean contradicted = findings.stream()
                 .anyMatch(f -> f.severity() == Severity.CONTRADICTION);
         return contradicted ? FactStatus.CONTRADICTED : FactStatus.CLEAN;
+    }
+
+    /**
+     * 매치 기사인가 총평인가. <b>팀이 있으면 매치다.</b>
+     *
+     * <p>V10 의 CHECK 두 개가 DB 쪽에서 같은 규칙을 지킨다.
+     */
+    public Kind kind() {
+        return blueTeamId == null ? Kind.ROUND : Kind.MATCH;
+    }
+
+    /**
+     * 하루치 총평. 팀도 스코어도 없다 — 매치 하나를 가리키지 않기 때문이다.
+     *
+     * <p>유일 키는 {@code (slot, ROUND, season, day, NULL, NULL)} 이 된다. NULL 이 서로
+     * 같다고 봐야 "하루에 한 편" 이 성립하는데, 그 절({@code NULLS NOT DISTINCT})이
+     * V10 에 있다. 없으면 버튼을 누를 때마다 총평이 한 편씩 쌓인다.
+     */
+    public static ArticleDraft ofRound(int slotId, int season, int day,
+                                       double notability, List<String> notabilityReasons,
+                                       String headline, String body, String briefText,
+                                       String model, List<CommentLine> comments,
+                                       FactCheckResult factCheck) {
+        Objects.requireNonNull(factCheck, "factCheck");
+
+        List<Finding> findings = new java.util.ArrayList<>();
+        factCheck.contradictions().forEach(f ->
+                findings.add(new Finding(Severity.CONTRADICTION, f.what(), f.evidence())));
+        factCheck.unverified().forEach(f ->
+                findings.add(new Finding(Severity.UNVERIFIED, f.what(), f.evidence())));
+
+        return new ArticleDraft(
+                slotId, null, null, null, season, day, null,
+                null, null, null, null, null, null,
+                notability, notabilityReasons,
+                headline, body, briefText, model, comments, findings);
     }
 
     /** 기사를 그대로 실어도 되는가. */

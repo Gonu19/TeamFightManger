@@ -51,7 +51,7 @@ public final class FactCheck {
      * 2025 와 안 붙는다.
      */
     private static final Pattern NUMBER =
-            Pattern.compile("\\d{1,3}(?:[ ,]\\d{3})+|\\d+");
+            Pattern.compile("\\d{1,3}(?:[ ,\\u00A0\\u202F\\u2009\\u2007]\\d{3})+|\\d+");
 
     /**
      * 문장 경계. 마침표·물음표·느낌표·줄바꿈에서 자른다.
@@ -249,7 +249,10 @@ public final class FactCheck {
      * "모르는 숫자" 하나로 남기는 편이 낫다.
      */
     private static int parseNumber(String raw) {
-        String digits = raw.replace(" ", "").replace(",", "");
+        // 눈에 안 보이는 공백까지 떼어낸다. 실물 기사가 "11 726" 을 쓸 때 쓴 것이
+        // ASCII 공백이 아니라 좁은 공백(U+202F 계열)이었고, 그래서 11 과 726 으로 쪼개져
+        // "brief 에 없는 숫자 726" 하나가 남았다. 소스에서는 그냥 빈칸으로 보인다.
+        String digits = raw.replaceAll("[ ,\\u00A0\\u202F\\u2009\\u2007]", "");
         try {
             return Integer.parseInt(digits);
         } catch (NumberFormatException e) {
@@ -285,6 +288,49 @@ public final class FactCheck {
             }
         });
         return out;
+    }
+
+    /**
+     * 하루치 총평을 대조한다.
+     *
+     * <p>매치 대조보다 <b>보는 것이 적다.</b> 총평에는 픽도 선수도 안 넘기므로
+     * 챔피언·관계 검사가 성립하지 않는다 — 안 넘긴 것을 틀렸다고 할 수는 없다.
+     * 남는 것은 둘이다: 그날 없던 팀을 불렀는가, 그날 없던 숫자를 썼는가.
+     *
+     * <p>그래서 이 대조는 <b>더 약하다.</b> 그 사실을 숨기지 않는다 — 총평 기사에도
+     * 「이 기사가 쓴 숫자」 블록이 붙고, 거기 담기는 사실이 애초에 얇다는 것이 보인다.
+     */
+    public static FactCheckResult runRound(RoundBrief brief, NameBook names,
+                                           Set<String> allTeamNames, String article) {
+        Objects.requireNonNull(brief, "brief");
+        Objects.requireNonNull(names, "names");
+        if (article == null || article.isBlank()) {
+            return new FactCheckResult(List.of(), List.of());
+        }
+
+        List<FactCheckResult.Finding> contradictions = new ArrayList<>();
+        List<FactCheckResult.Finding> unverified = new ArrayList<>();
+
+        Set<String> here = brief.teamNames(names);                              // 1. 그날 뛴 팀
+        for (String team : allTeamNames) {                                      // 2. 커리어의 다른 팀을 불렀으면 모순
+            if (!here.contains(team) && mentions(article, team)) {
+                contradictions.add(new FactCheckResult.Finding("이 날 경기하지 않은 팀", team));
+            }
+        }
+
+        Set<Integer> known = brief.knownNumbers();                              // 3. 그날의 숫자
+        Matcher number = NUMBER.matcher(article);
+        Set<String> seen = new LinkedHashSet<>();
+        while (number.find()) {
+            if (known.contains(parseNumber(number.group()))) {
+                continue;
+            }
+            if (seen.add(number.group())) {                                     // 4. 같은 숫자를 두 번 지적하지 않는다
+                unverified.add(new FactCheckResult.Finding(
+                        "총평에 없는 숫자", number.group()));
+            }
+        }
+        return new FactCheckResult(contradictions, unverified);
     }
 
     /**

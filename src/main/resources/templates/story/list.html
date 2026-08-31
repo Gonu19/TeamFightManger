@@ -65,13 +65,21 @@
       - POST 인 이유: 이 요청은 모델 호출 두 번이고 DB 를 바꾼다. GET 이면 새로고침만으로
         다시 나간다
       - 한 번에 한 편이다. "아직 안 쓴 매치 중 가장 최근 것" 하나만 쓴다
+      - 버튼이 둘인 이유는 분당 토큰이다 (D70). 하나로 묶으면 한 번에 모델 호출이
+        넷이 되어 무료 티어 한도에 거의 확실히 걸린다. 나눠 누르면 그 사이에
+        창이 다시 열린다
     -->
-    <form class="generate" method="post" th:action="@{/story/generate}"
-          th:if="${canGenerate and selectedSlot != null}">
-        <input type="hidden" name="slot" th:value="${selectedSlot}">
-        <button type="submit">최근 경기 기사 쓰기</button>
-        <span class="hint">한 번에 한 편. 모델 호출 두 번이 나간다.</span>
-    </form>
+    <div class="generate" th:if="${canGenerate and selectedSlot != null}">
+        <form method="post" th:action="@{/story/generate}">
+            <input type="hidden" name="slot" th:value="${selectedSlot}">
+            <button type="submit">최근 경기 기사 쓰기</button>
+        </form>
+        <form method="post" th:action="@{/story/generate-round}">
+            <input type="hidden" name="slot" th:value="${selectedSlot}">
+            <button type="submit">그날 총평 쓰기</button>
+        </form>
+        <span class="hint">각각 모델 호출 두 번. 나눠 누르면 분당 한도에 덜 걸린다.</span>
+    </div>
 
     <p class="empty" th:if="${cards.isEmpty()}">
         <span th:if="${canGenerate}">아직 쓴 기사가 없다. 위 버튼을 누르면 최근 경기부터 쓴다.</span>

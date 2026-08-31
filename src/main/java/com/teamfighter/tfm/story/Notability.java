@@ -39,9 +39,19 @@ public record Notability(double score, int paragraphs, int commentCount, List<St
      */
     private static final double CLOSE_REASON_FLOOR = 0.7;
 
-    private static final int MIN_PARAGRAPHS = 2;
+    /**
+     * 분량의 하한과 상한.
+     *
+     * <p><b>하한을 올렸다(문단 2→3 · 댓글 3→6).</b> 3-0 스윕은 접전 점수가 0 이라 늘 하한을
+     * 받는데, 실물에서 그게 2문단·댓글 3개로 나와 화면이 휑했다. 스윕도 경기고, 커뮤니티는
+     * 일방적인 경기에서 오히려 말이 많다.
+     *
+     * <p>상한은 그대로다. 늘리면 세트 나열이 다시 살아난다 — 모델은 분량을 채우려고
+     * 세트를 하나씩 훑는 쪽으로 돌아간다.
+     */
+    private static final int MIN_PARAGRAPHS = 3;
     private static final int MAX_PARAGRAPHS = 6;
-    private static final int MIN_COMMENTS = 3;
+    private static final int MIN_COMMENTS = 6;
     private static final int MAX_COMMENTS = 15;
 
     /**

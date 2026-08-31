@@ -21,16 +21,21 @@ public record ArticleCard(
         int slotId,
         int season,
         int day,
-        int blueTeamId,
-        int redTeamId,
+        Integer blueTeamId,
+        Integer redTeamId,
         String blueTeamName,
         String redTeamName,
-        int blueScore,
-        int redScore,
+        Integer blueScore,
+        Integer redScore,
         double notability,
         String headline,
         OffsetDateTime generatedAt,
         FactStatus factStatus) {
+
+    /** 총평이면 대전 상대가 없다. 목록이 스코어 대신 날짜만 그린다. */
+    public boolean isRoundSummary() {
+        return blueTeamId == null;
+    }
 
     /** 화면이 경고를 띄워야 하는가. */
     public boolean isContradicted() {

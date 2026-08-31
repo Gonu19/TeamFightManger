@@ -142,6 +142,75 @@ public class StoryGenerator {
     }
 
     /**
+     * 아직 총평이 없는 날 중 <b>가장 최근 날</b>의 총평을 쓴다.
+     *
+     * <h2>왜 버튼이 따로인가</h2>
+     *
+     * 매치 기사와 한 버튼으로 묶으면 한 번 누를 때 모델 호출이 넷이 된다. 무료 티어의
+     * 분당 토큰 한도(8,000)에서 그건 거의 확실히 걸린다 — 걸리면 기다렸다 다시 부르므로
+     * 실패는 아니지만, 한 번 누르고 20초를 보는 것보다 두 번 나눠 누르는 편이 낫다.
+     * <b>비용의 단위를 사람이 고르게 한다</b>는 수동 트리거의 취지와도 맞는다.
+     *
+     * @return 저장된 {@code article_id}. 쓸 날이 없으면 {@link Optional#empty()}
+     */
+    public Optional<Long> writeLatestRoundSummary(int slotId) {
+        Path saveFile = locateSaveFile(slotId);
+        List<ParsedSchedule> schedules;
+        try {
+            schedules = MatchScheduleParser.read(saveFile);                      // 총평은 세트를 안 본다 — 매치만 읽으면 된다
+        } catch (IOException e) {
+            throw new UncheckedIOException("세이브를 읽지 못했다: " + saveFile, e);
+        }
+        return writeLatestRoundSummary(references.load(slotId), schedules);
+    }
+
+    /** 파일을 이미 읽었을 때. 테스트가 쓰는 입구다. */
+    public Optional<Long> writeLatestRoundSummary(StoryReference reference,
+                                                  List<ParsedSchedule> schedules) {
+        Objects.requireNonNull(reference, "reference");
+        Objects.requireNonNull(schedules, "schedules");
+
+        Set<ArticleKey> written = articles.writtenRoundKeys(reference.slotId()); // 1. 이미 쓴 날
+
+        Optional<int[]> target = schedules.stream()                             // 2. 끝난 매치가 있는 날들
+                .filter(ParsedSchedule::isPlayed)
+                .filter(m -> m.season() != null && m.day() != null)
+                .map(m -> new int[] {m.season(), m.day()})
+                .filter(d -> !written.contains(roundKey(d[0], d[1])))           // 3. 총평이 아직 없는 날만
+                .max(Comparator.<int[]>comparingInt(d -> d[0])                  // 4. 그중 가장 최근
+                        .thenComparingInt(d -> d[1]));
+
+        if (target.isEmpty()) {
+            log.info("슬롯 {}: 총평을 쓸 날이 없다 (이미 쓴 날 {}개)",
+                    reference.slotId(), written.size());
+            return Optional.empty();
+        }
+
+        RoundBrief brief = RoundBrief.of(target.get()[0], target.get()[1], schedules);
+        if (!brief.isWorthSummarising()) {                                      // 5. 한 경기뿐이면 매치 기사와 같은 말이 된다
+            log.info("슬롯 {}: 시즌 {} {}일은 경기가 하나뿐이라 총평을 쓰지 않는다",
+                    reference.slotId(), brief.season(), brief.day());
+            return Optional.empty();
+        }
+
+        long articleId = writer.writeRoundSummary(reference, brief);
+        log.info("슬롯 {}: 시즌 {} {}일 총평 {} 를 썼다 (경기 {}건)",
+                reference.slotId(), brief.season(), brief.day(), articleId, brief.results().size());
+        return Optional.of(articleId);
+    }
+
+    /**
+     * 총평의 신원. 팀이 없으므로 0 으로 채운다.
+     *
+     * <p>DB 에서는 그 자리가 NULL 이고 {@code NULLS NOT DISTINCT} 로 유일성이 선다(V10).
+     * 자바 쪽 {@link ArticleKey} 는 {@code int} 라 NULL 을 담을 수 없어 0 으로 대신한다 —
+     * <b>팀 번호 0 은 DB 시퀀스가 만들지 않는 값</b>이라 매치 기사와 부딪히지 않는다.
+     */
+    private static ArticleKey roundKey(int season, int day) {
+        return new ArticleKey(season, day, 0, 0);
+    }
+
+    /**
      * 세트를 매치별로 묶는다.
      *
      * <p>{@link LinkedHashMap} 인 이유는 순서 때문이 아니라 <b>디버깅 때문</b>이다 —

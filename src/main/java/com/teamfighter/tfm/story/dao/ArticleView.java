@@ -27,14 +27,14 @@ public record ArticleView(
         int season,
         int day,
         Integer round,
-        int blueTeamId,
-        int redTeamId,
+        Integer blueTeamId,
+        Integer redTeamId,
         String blueTeamName,
         String redTeamName,
-        int blueScore,
-        int redScore,
-        int blueKill,
-        int redKill,
+        Integer blueScore,
+        Integer redScore,
+        Integer blueKill,
+        Integer redKill,
         double notability,
         List<String> notabilityReasons,
         String headline,
@@ -50,6 +50,11 @@ public record ArticleView(
         notabilityReasons = List.copyOf(notabilityReasons);
         comments = List.copyOf(comments);
         findings = List.copyOf(findings);
+    }
+
+    /** 매치 기사인가 총평인가. 화면이 스코어 줄을 그릴지 정한다. */
+    public ArticleDraft.Kind kind() {
+        return blueTeamId == null ? ArticleDraft.Kind.ROUND : ArticleDraft.Kind.MATCH;
     }
 
     /** 원댓글만. 화면이 바깥 목록으로 그린다. */

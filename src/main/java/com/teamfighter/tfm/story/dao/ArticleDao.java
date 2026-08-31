@@ -52,15 +52,15 @@ public class ArticleDao {
      */
     private static final String UPSERT = """
             INSERT INTO article
-                (slot_id, schedule_id, competition_id, competition_key, season, day, round,
+                (slot_id, kind, schedule_id, competition_id, competition_key, season, day, round,
                  blue_team_id, red_team_id, blue_score, red_score, blue_kill, red_kill,
                  notability, notability_reasons, headline, body, brief_text, model,
                  generated_at, fact_status)
-            VALUES (?, ?, ?, ?, ?, ?, ?,
+            VALUES (?, CAST(? AS article_kind), ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?,
                     ?, ?, ?, ?, ?, ?,
                     clock_timestamp(), CAST(? AS article_fact_status))
-            ON CONFLICT (slot_id, season, day, blue_team_id, red_team_id)
+            ON CONFLICT (slot_id, kind, season, day, blue_team_id, red_team_id)
             DO UPDATE SET
                 schedule_id        = EXCLUDED.schedule_id,
                 competition_id     = EXCLUDED.competition_id,
@@ -99,8 +99,8 @@ public class ArticleDao {
     private static final String SELECT_ARTICLE = """
             SELECT a.*, bt.name AS blue_team_name, rt.name AS red_team_name
             FROM article a
-            JOIN team bt ON bt.team_id = a.blue_team_id
-            JOIN team rt ON rt.team_id = a.red_team_id
+            LEFT JOIN team bt ON bt.team_id = a.blue_team_id
+            LEFT JOIN team rt ON rt.team_id = a.red_team_id
             WHERE a.article_id = ?
             """;
 
@@ -126,8 +126,8 @@ public class ArticleDao {
                    a.blue_score, a.red_score, a.notability, a.headline,
                    a.generated_at, a.fact_status
             FROM article a
-            JOIN team bt ON bt.team_id = a.blue_team_id
-            JOIN team rt ON rt.team_id = a.red_team_id
+            LEFT JOIN team bt ON bt.team_id = a.blue_team_id
+            LEFT JOIN team rt ON rt.team_id = a.red_team_id
             WHERE a.slot_id = ?
             ORDER BY a.season DESC, a.day DESC, a.article_id DESC
             LIMIT ?
@@ -144,7 +144,13 @@ public class ArticleDao {
 
     /** 매치 신원 네 값만. 본문을 안 읽는 이유는 {@link #writtenKeys} 가 적어 뒀다. */
     private static final String SELECT_KEYS = """
-            SELECT season, day, blue_team_id, red_team_id FROM article WHERE slot_id = ?
+            SELECT season, day, blue_team_id, red_team_id FROM article
+            WHERE slot_id = ? AND kind = 'MATCH'
+            """;
+
+    /** 총평을 이미 쓴 날. 팀이 없으므로 날짜만 본다. */
+    private static final String SELECT_ROUND_KEYS = """
+            SELECT season, day FROM article WHERE slot_id = ? AND kind = 'ROUND'
             """;
 
     private final JdbcTemplate jdbc;
@@ -194,6 +200,18 @@ public class ArticleDao {
                         rs.getInt("day"),
                         rs.getInt("blue_team_id"),
                         rs.getInt("red_team_id")),
+                slotId);
+        return Set.copyOf(rows);
+    }
+
+    /**
+     * 총평을 이미 쓴 날들. 팀 자리는 0 으로 채워 돌려준다 —
+     * {@link ArticleKey} 가 {@code int} 라 NULL 을 못 담고, 팀 번호 0 은 DB 가 만들지 않는다.
+     */
+    @Transactional(readOnly = true)
+    public Set<ArticleKey> writtenRoundKeys(int slotId) {
+        List<ArticleKey> rows = jdbc.query(SELECT_ROUND_KEYS,
+                (rs, rowNum) -> new ArticleKey(rs.getInt("season"), rs.getInt("day"), 0, 0),
                 slotId);
         return Set.copyOf(rows);
     }
@@ -259,12 +277,12 @@ public class ArticleDao {
                 rs.getInt("slot_id"),
                 rs.getInt("season"),
                 rs.getInt("day"),
-                rs.getInt("blue_team_id"),
-                rs.getInt("red_team_id"),
+                nullableInt(rs, "blue_team_id"),
+                nullableInt(rs, "red_team_id"),
                 rs.getString("blue_team_name"),
                 rs.getString("red_team_name"),
-                rs.getInt("blue_score"),
-                rs.getInt("red_score"),
+                nullableInt(rs, "blue_score"),
+                nullableInt(rs, "red_score"),
                 rs.getDouble("notability"),
                 rs.getString("headline"),
                 // timestamptz → OffsetDateTime. getTimestamp 로 받으면 시간대가 날아가
@@ -298,18 +316,20 @@ public class ArticleDao {
                 // 예외도 안 난다.
                 int i = 1;
                 ps.setInt(i++, draft.slotId());
+                ps.setString(i++, draft.kind().name());                         // 종류는 팀이 있는지에서 나온다
                 ps.setObject(i++, draft.scheduleId(), Types.INTEGER);
                 ps.setObject(i++, draft.competitionId(), Types.INTEGER);
                 ps.setObject(i++, draft.competitionKey(), Types.VARCHAR);
                 ps.setInt(i++, draft.season());
                 ps.setInt(i++, draft.day());
                 ps.setObject(i++, draft.round(), Types.INTEGER);
-                ps.setInt(i++, draft.blueTeamId());
-                ps.setInt(i++, draft.redTeamId());
-                ps.setInt(i++, draft.blueScore());
-                ps.setInt(i++, draft.redScore());
-                ps.setInt(i++, draft.blueKill());
-                ps.setInt(i++, draft.redKill());
+                // 총평은 팀도 스코어도 없다. setInt 는 null 을 못 받으므로 setObject 다
+                ps.setObject(i++, draft.blueTeamId(), Types.INTEGER);
+                ps.setObject(i++, draft.redTeamId(), Types.INTEGER);
+                ps.setObject(i++, draft.blueScore(), Types.INTEGER);
+                ps.setObject(i++, draft.redScore(), Types.INTEGER);
+                ps.setObject(i++, draft.blueKill(), Types.INTEGER);
+                ps.setObject(i++, draft.redKill(), Types.INTEGER);
                 ps.setDouble(i++, draft.notability());
                 ps.setArray(i++, reasons);
                 ps.setString(i++, draft.headline());
@@ -400,12 +420,12 @@ public class ArticleDao {
                 rs.getInt("season"),
                 rs.getInt("day"),
                 nullableInt(rs, "round"),
-                rs.getInt("blue_team_id"),
-                rs.getInt("red_team_id"),
+                nullableInt(rs, "blue_team_id"),
+                nullableInt(rs, "red_team_id"),
                 rs.getString("blue_team_name"),
                 rs.getString("red_team_name"),
-                rs.getInt("blue_score"),
-                rs.getInt("red_score"),
+                nullableInt(rs, "blue_score"),
+                nullableInt(rs, "red_score"),
                 rs.getInt("blue_kill"),
                 rs.getInt("red_kill"),
                 rs.getDouble("notability"),

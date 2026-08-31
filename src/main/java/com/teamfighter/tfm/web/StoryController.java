@@ -203,6 +203,39 @@ public class StoryController {
     }
 
     /**
+     * <b>라운드 총평 트리거.</b> 아직 총평이 없는 날 중 가장 최근 하루를 정리한다.
+     *
+     * <p>매치 기사와 <b>버튼을 나눈 이유</b>는 분당 토큰이다. 한 버튼으로 묶으면 한 번에
+     * 모델 호출이 넷이 되어 무료 티어 한도(8,000)에 거의 확실히 걸린다. 나누면 사람이
+     * 누르는 사이에 창이 다시 열린다 — 비용의 단위를 사람이 고르게 한다는 수동 트리거의
+     * 취지와도 맞는다.
+     */
+    @PostMapping("/story/generate-round")
+    public String generateRound(@RequestParam int slot, RedirectAttributes redirect) {
+        StoryGenerator writer = generator.orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "기사 생성이 꺼져 있다 — tfm.story.enabled=true 로 켠다 (D61 결정 4)"));
+
+        try {
+            Optional<Long> articleId = writer.writeLatestRoundSummary(slot);
+            if (articleId.isEmpty()) {
+                redirect.addFlashAttribute("notice",
+                        "총평을 쓸 날이 없다. 경기가 있는 날은 모두 정리했다.");
+                redirect.addAttribute("slot", slot);
+                return "redirect:/story";
+            }
+            return "redirect:/story/" + articleId.get();
+
+        } catch (StoryClient.StoryUnavailableException e) {
+            return backToListWith(redirect, slot, "기사 생성을 부를 수 없다: " + e.getMessage(), e);
+        } catch (StoryClient.StoryFailedException e) {
+            return backToListWith(redirect, slot, "모델 호출이 실패했다: " + e.getMessage(), e);
+        } catch (IllegalStateException | IllegalArgumentException e) {
+            return backToListWith(redirect, slot, "총평을 쓸 수 없다: " + e.getMessage(), e);
+        }
+    }
+
+    /**
      * 실패를 목록 화면의 한 줄로 돌려보낸다.
      *
      * <p>스택 트레이스는 로그에만 남긴다 — 화면에 내면 읽을 사람이 없고, 예외 메시지에

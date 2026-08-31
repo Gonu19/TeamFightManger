@@ -167,7 +167,8 @@ article h1 { font-size: 1.6rem; line-height: 1.4; margin: 2rem 0 0.5rem; }
     font-size: 0.9rem;
 }
 
-.generate { margin: 1.5rem 0 0; display: flex; align-items: center; gap: 0.7rem; }
+.generate { margin: 1.5rem 0 0; display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+.generate form { display: inline; }
 
 .generate button {
     font: inherit;
