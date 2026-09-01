@@ -25,15 +25,28 @@ $env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat test
 ## 앱
 
 ```powershell
-$env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat bootRun   # http://127.0.0.1:8088
-# 화면: /tier · /champion/{code} · /story · /gallery
-$env:TFM_STORY_ENABLED = 'true'; .\gradlew.bat bootRun   # 생성 버튼 셋 (키 필요)
-# 갤러리 한 페이지는 호출 2회 · 1분 남짓. 진행 막대가 뜬다 (D74)
-.\gradlew.bat bootRun --args="--tfm.reingest-on-start=true"   # 수리용
-.\gradlew.bat bootRun --args="--tfm.aggregate-on-start=true"  # 위와 같이 켜지 말 것
+.\run.ps1                      # http://127.0.0.1:8088 · 브라우저까지 연다
+.\run.ps1 -Story               # 기사·갤러리 생성 켜기 (키 필요)
+.\run.ps1 -Port 8099 -Story    # 사용자 인스턴스를 둔 채 하나 더
+.\run.ps1 -Aggregate           # 기동 때 집계 한 번
+.\run.ps1 -Reingest            # 수리용. Aggregate 와 같이 켜지 말 것
 ```
 
-**같이 켜면 안 되는 이유**: 집계가 따라잡기 적재보다 항상 1초 먼저 끝난다 (`decisions/OPEN.md`).
+`run.bat` 은 탐색기에서 **더블클릭**용이다(같은 인자를 받는다). 스크립트가 뜨기 전에
+<b>무엇을 쓰는지 먼저 찍는다</b> — DB 비번의 출처와, 셸의 키가 `.env` 를 가리는지.
+
+화면: `/tier` · `/champion/{code}` · `/story`(사이클) · `/gallery`
+생성은 요청 밖에서 돌고 진행 막대가 단계를 그린다. **커리어당 하나만 돈다** (D81).
+
+<details><summary>스크립트 없이 (무엇을 하는지 봐야 할 때)</summary>
+
+```powershell
+$env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat bootRun --console=plain --args="--server.port=8088"
+```
+</details>
+
+**Aggregate 와 Reingest 를 같이 켜면 안 되는 이유**: 집계가 따라잡기 적재보다 항상
+1초 먼저 끝난다 (`decisions/OPEN.md`). 스크립트가 경고만 하고 막지는 않는다.
 
 ## DB
 
@@ -61,6 +74,8 @@ python tools/patch_weight_analysis.py                       # 패치 감쇠 (D52
 | `.env` 값이 안 먹는다 | 빈 값(`TFM_X=`)은 "없음" 이 아니라 "빈 문자열" 이라 `${TFM_X:기본값}` 을 누른다 |
 | 픽스처 테스트가 조용히 건너뛰어진다 | 워크트리에 `fixtures/*.tfm` 이 없다. 메인에만 있다 |
 | 모델 호출이 404 | 모델명이 낡았다. `python`으로 `/v1/models` 를 조회해 카탈로그를 확인한다 |
+| 생성이 401 로 실패한다 | 셸의 `TFM_GROQ_API_KEY` 가 `.env` 를 가린다. `run.ps1` 이 시작할 때 어느 쪽을 쓰는지 찍는다 |
+| 포트가 이미 쓰인다 | 사용자 인스턴스가 떠 있다. `-Port` 로 다른 값을 준다 |
 
 ## 절대 하지 않는 것
 

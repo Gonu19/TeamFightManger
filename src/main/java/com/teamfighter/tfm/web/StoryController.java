@@ -304,6 +304,7 @@ public class StoryController {
                     out.put("done", status.done());
                     out.put("total", status.total());
                     out.put("message", status.message());
+                    out.put("detail", status.detail());
                     out.put("next", status.destination(slot));
                     return out;
                 })

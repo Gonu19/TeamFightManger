@@ -69,6 +69,17 @@
 
 .progress-note { margin-top: 0.5rem; font-size: 0.75rem; color: var(--faint); line-height: 1.6; }
 
+/* 할 일이 먼저. 원문은 접어 두고 작게 — 버리지 않되 첫 줄을 차지하지 않는다 (D81) */
+.progress-note .note-main { color: var(--dim); }
+.progress-note details { margin-top: 0.35rem; }
+.progress-note summary { cursor: pointer; color: var(--faint); }
+.progress-note .note-detail {
+    margin-top: 0.3rem;
+    font: 11px/1.6 Consolas, "D2Coding", monospace;
+    word-break: break-all;
+    color: var(--faint);
+}
+
 /* --- 매치 줄 --- */
 
 .cycle { list-style: none; margin: 1rem 0; padding: 0; }

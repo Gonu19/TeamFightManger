@@ -91,9 +91,28 @@
         }
     }
 
-    function setNote(text) {
-        if (note) {
-            note.textContent = text;
+    function setNote(text, detail) {
+        if (!note) {
+            return;
+        }
+        note.textContent = '';
+        var line = document.createElement('div');
+        line.className = 'note-main';
+        line.textContent = text;
+        note.appendChild(line);
+
+        // 원문은 접어 둔다 — 버리지 않되 첫 줄을 차지하지도 않는다.
+        // textContent 로만 넣는다: 모델이 돌려준 문자열이라 태그가 섞일 수 있다.
+        if (detail) {
+            var box = document.createElement('details');
+            var summary = document.createElement('summary');
+            summary.textContent = '원문 보기';
+            var body = document.createElement('div');
+            body.className = 'note-detail';
+            body.textContent = detail;
+            box.appendChild(summary);
+            box.appendChild(body);
+            note.appendChild(box);
         }
     }
 
@@ -189,7 +208,9 @@
                     if (isAwaiting()) {
                         var failed = status.state === 'FAILED';
                         showProgress((failed ? '실패 — ' : '') + status.object + ' 못 만들었다', 100);
-                        setNote(status.message || '원인을 알 수 없다. 로그를 본다.');
+                        // 할 일이 먼저, 원문은 아래 작게. 공급자 JSON 을 크게 띄우면
+                        // "무엇을 하라" 가 그 안에 묻힌다 (D81).
+                        setNote(status.message || '원인을 알 수 없다. 로그를 본다.', status.detail);
                         showDismiss(true);
                         markAwaiting(false);
                     } else {

@@ -208,21 +208,76 @@ class StoryJobsTest {
     }
 
     @Test
-    @DisplayName("실패 이유는 맨 밑의 원인까지 내려간다")
-    void theReasonReachesTheRootCause() {
-        // 겉껍질만 보여주면 "UncheckedIOException" 이 뜨는데, 그걸로는 사용자가
-        // 할 일을 못 정한다. 키가 없다 · 파일이 없다 · 429 가 안 풀린다 는 다른 대응이다.
+    @DisplayName("401 은 원문이 아니라 할 일로 바뀐다 — 키를 확인하라")
+    void anUnauthorizedResponseBecomesAnInstruction() {
+        // 실물에서 이렇게 나갔다:
+        //   StoryFailedException: 모델이 401 로 응답했다:
+        //   {"error":{"message":"Invalid API Key","type":"invalid_request_error", …
+        // 원인은 맞지만 읽는 사람이 그 다음에 무엇을 할지는 그 안에 묻힌다.
+        StoryJobs jobs = jobs(idleArticles(), new FakeGallery(
+                new CountDownLatch(0), Optional.empty(),
+                new StoryClient.StoryFailedException(
+                        "모델이 401 로 응답했다: {\"error\":{\"message\":\"Invalid API Key\"}}", 401)));
+
+        jobs.startGalleryNext(6);
+
+        await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+            Status status = jobs.status(6).orElseThrow();
+            assertThat(status.message()).contains("TFM_GROQ_API_KEY");
+            assertThat(status.message()).doesNotContain("{");        // JSON 을 크게 띄우지 않는다
+            assertThat(status.detail()).contains("Invalid API Key"); // 원문은 안 버린다
+        });
+    }
+
+    @Test
+    @DisplayName("429 와 5xx 는 서로 다른 대응을 말한다")
+    void rateLimitsAndServerErrorsSayDifferentThings() {
+        // 둘 다 "잠시 뒤" 지만 이유가 다르다 — 한도는 내 요청이 크다는 뜻이고
+        // 5xx 는 저쪽 문제다. 같은 문구로 뭉개면 사용자가 요청을 줄일 생각을 못 한다.
+        StoryJobs limited = jobs(idleArticles(), new FakeGallery(
+                new CountDownLatch(0), Optional.empty(),
+                new StoryClient.StoryFailedException("모델이 429 로 응답했다", 429)));
+        limited.startGalleryNext(1);
+
+        StoryJobs broken = jobs(idleArticles(), new FakeGallery(
+                new CountDownLatch(0), Optional.empty(),
+                new StoryClient.StoryFailedException("모델이 503 로 응답했다", 503)));
+        broken.startGalleryNext(1);
+
+        await().atMost(Duration.ofSeconds(3)).untilAsserted(() -> {
+            assertThat(limited.status(1).orElseThrow().message()).contains("분당 토큰");
+            assertThat(broken.status(1).orElseThrow().message()).contains("모델 쪽 오류");
+        });
+    }
+
+    @Test
+    @DisplayName("키가 없다는 예외는 이미 할 일을 들고 있으므로 그대로 쓴다")
+    void anUnavailableClientAlreadyKnowsWhatToDo() {
+        StoryJobs jobs = jobs(idleArticles(), new FakeGallery(
+                new CountDownLatch(0), Optional.empty(),
+                new StoryClient.StoryUnavailableException(
+                        "API 키가 없다. 환경변수 TFM_GROQ_API_KEY 또는 .env 에 넣는다.")));
+
+        jobs.startGalleryNext(8);
+
+        await().atMost(Duration.ofSeconds(3)).untilAsserted(() ->
+                assertThat(jobs.status(8).orElseThrow().message())
+                        .contains("TFM_GROQ_API_KEY 또는 .env"));
+    }
+
+    @Test
+    @DisplayName("감싸인 예외도 맨 밑까지 내려가 대응을 찾는다")
+    void wrappedCausesAreUnwrapped() {
         StoryJobs jobs = jobs(idleArticles(), new FakeGallery(
                 new CountDownLatch(0), Optional.empty(),
                 new IllegalStateException("겉껍질",
                         new java.io.UncheckedIOException(
-                                new java.io.IOException("TFM_GROQ_API_KEY 가 없다")))));
+                                new java.io.IOException("세이브를 못 읽었다")))));
 
-        jobs.startGalleryNext(6);
+        jobs.startGalleryNext(9);
 
         await().atMost(Duration.ofSeconds(3)).untilAsserted(() ->
-                assertThat(jobs.status(6).orElseThrow().message())
-                        .contains("TFM_GROQ_API_KEY"));
+                assertThat(jobs.status(9).orElseThrow().message()).contains("tfm.save-dir"));
     }
 
     @Test
@@ -264,16 +319,16 @@ class StoryJobsTest {
         assertThat(Status.running(Kind.GALLERY, "x", 0, 5).percent()).isZero();
         assertThat(Status.running(Kind.GALLERY, "x", 5, 5).percent()).isEqualTo(100);
         // total 이 0 이면 나눗셈이 터진다. 그 경우가 없어야 하지만, 있으면 0 이다.
-        assertThat(new Status(Status.State.RUNNING, Kind.GALLERY, "x", 3, 0, null, null)
+        assertThat(new Status(Status.State.RUNNING, Kind.GALLERY, "x", 3, 0, null, null, null)
                 .percent()).isZero();
     }
 
     @Test
     @DisplayName("끝나고 갈 곳은 종류가 정한다")
     void theDestinationFollowsTheKind() {
-        assertThat(new Status(Status.State.DONE, Kind.ARTICLE, "끝", 2, 2, 42L, null)
+        assertThat(new Status(Status.State.DONE, Kind.ARTICLE, "끝", 2, 2, 42L, null, null)
                 .destination(1)).isEqualTo("/story/42");
-        assertThat(new Status(Status.State.DONE, Kind.GALLERY, "끝", 2, 2, 7L, null)
+        assertThat(new Status(Status.State.DONE, Kind.GALLERY, "끝", 2, 2, 7L, null, null)
                 .destination(1)).isEqualTo("/gallery?slot=1&batch=7");
         // 아직 안 끝났으면 갈 곳이 없다 — 화면은 그 자리에 머문다.
         assertThat(Status.running(Kind.ARTICLE, "x", 0, 2).destination(1)).isNull();

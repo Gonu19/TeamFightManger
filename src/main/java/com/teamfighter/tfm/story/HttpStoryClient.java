@@ -151,7 +151,8 @@ public class HttpStoryClient implements StoryClient {
 
             if (response.statusCode() != TOO_MANY_REQUESTS || attempt > RETRIES) {
                 throw new StoryFailedException(                                 // 4. 못 고칠 실패이거나 재시도를 다 썼다
-                        "모델이 " + response.statusCode() + " 로 응답했다: " + snippet(response.body()));
+                        "모델이 " + response.statusCode() + " 로 응답했다: " + snippet(response.body()),
+                        response.statusCode());                                 //    상태를 실어 보낸다 — 화면이 할 일을 정한다 (D81)
             }
 
             Duration wait = retryAfter(response);                               // 5. 얼마나 기다릴지는 서버가 안다

@@ -76,13 +76,21 @@ public class StoryJobs {
     }
 
     /** 진행 상황 한 조각. 화면이 이걸 그린다. */
+    /**
+     * 진행 상황 한 조각. 화면이 이걸 그린다.
+     *
+     * @param message 사람이 읽고 <b>할 일을 정할 수 있는</b> 한 줄
+     * @param detail  원문. 화면이 작게, 접어서 그린다 — 없으면 {@code null}.
+     *                메시지와 나누는 이유는 공급자 JSON 을 그대로 크게 띄우면
+     *                "무엇을 하라" 가 그 안에 묻히기 때문이다
+     */
     public record Status(State state, Kind kind, String step, int done, int total,
-                         Long resultId, String message) {
+                         Long resultId, String message, String detail) {
 
         public enum State { RUNNING, DONE, NOTHING_TO_DO, FAILED }
 
         static Status running(Kind kind, String step, int done, int total) {
-            return new Status(State.RUNNING, kind, step, done, total, null, null);
+            return new Status(State.RUNNING, kind, step, done, total, null, null, null);
         }
 
         /** 몇 %인가. 화면의 진행 막대가 쓴다. */
@@ -201,16 +209,16 @@ public class StoryJobs {
 
             statuses.put(slotId, id
                     .map(value -> new Status(Status.State.DONE, kind, "끝났다",
-                            calls, calls, value, null))
+                            calls, calls, value, null, null))
                     .orElseGet(() -> new Status(Status.State.NOTHING_TO_DO, kind, "끝났다",
-                            calls, calls, null, nothingToDo(kind))));
+                            calls, calls, null, nothingToDo(kind), null)));
 
         } catch (RuntimeException e) {
             // 화면이 읽을 수 있게 메시지를 남기고, 원인은 스택과 함께 로그로 간다.
             // 삼키는 것과 다르다 — 사용자가 할 일("키를 확인한다")이 화면에서 읽혀야 한다.
             log.error("슬롯 {} {} 생성 실패", slotId, kind, e);
             statuses.put(slotId, new Status(Status.State.FAILED, kind, "실패", 0, calls, null,
-                    reason(e)));
+                    whatToDo(e), detailOf(e)));
         }
     }
 
@@ -224,19 +232,67 @@ public class StoryJobs {
     }
 
     /**
-     * 사람이 읽을 실패 이유.
+     * <b>사람이 할 일</b>로 바꾼 실패 이유.
      *
-     * <p><b>맨 밑의 원인까지 내려간다.</b> 감싸인 예외의 겉껍질만 보여주면
-     * "UncheckedIOException" 같은 말이 뜨는데, 그건 사용자가 할 일을 못 정한다.
-     * 키가 없다 · 파일이 없다 · 429 가 안 풀린다 는 서로 다른 대응을 요구한다.
+     * <p>원문을 그대로 띄우면 안 된다. 실제로 이렇게 나갔다:
+     *
+     * <pre>
+     *   StoryFailedException: 모델이 401 로 응답했다:
+     *   {"error":{"message":"Invalid API Key","type":"invalid_request_error", …
+     * </pre>
+     *
+     * 원인이 <b>맞기는 하다.</b> 그런데 읽는 사람이 그 다음에 무엇을 해야 하는지가
+     * 그 안에 묻힌다 — 이 결정(D81)이 {@code UncheckedIOException} 을 두고 지적한 것과
+     * 정확히 같은 실패를 한 셈이었다. 그래서 상태 코드를 <b>대응</b>으로 옮긴다.
+     *
+     * <p>원문은 안 버린다. {@link #detailOf} 가 들고 있고 화면이 작게 그린다.
      */
-    private static String reason(Throwable e) {
+    private static String whatToDo(Throwable e) {
+        Throwable root = root(e);
+
+        // 키가 없거나 못 쓸 값이다. 이 예외는 이미 할 일을 문장으로 들고 있다.
+        if (root instanceof StoryClient.StoryUnavailableException) {
+            return root.getMessage();
+        }
+
+        if (root instanceof StoryClient.StoryFailedException failed) {
+            return switch (failed.status()) {
+                case 401, 403 -> "API 키가 거부됐다. TFM_GROQ_API_KEY 를 확인한다 — "
+                        + "환경변수가 .env 보다 우선하므로 셸에 남은 값이 파일을 가릴 수 있다.";
+                case 429 -> "분당 토큰 한도에 걸렸고 재시도를 다 썼다. 잠시 뒤 다시 누른다 — "
+                        + "요청 하나가 한도보다 크면 몇 번을 다시 보내도 통과하지 못한다.";
+                case 404 -> "모델을 찾지 못했다. tfm.story 의 모델 이름을 확인한다.";
+                case 0 -> "모델을 부르지 못했다. 네트워크와 앱 로그를 본다.";
+                default -> failed.status() / 100 == 5
+                        ? "모델 쪽 오류다 (" + failed.status() + "). 잠시 뒤 다시 누른다."
+                        : "요청이 거부됐다 (" + failed.status() + "). 아래 원문을 본다.";
+            };
+        }
+
+        if (root instanceof java.io.IOException) {
+            return "파일을 읽지 못했다. 세이브 경로(tfm.save-dir)를 확인한다.";
+        }
+
+        String message = root.getMessage();
+        return message == null || message.isBlank()
+                ? "원인을 알 수 없다 (" + root.getClass().getSimpleName() + "). 앱 로그를 본다."
+                : message;
+    }
+
+    /** 원문. 화면이 작게 그린다 — 버리지 않되 첫 줄을 차지하지도 않는다. */
+    private static String detailOf(Throwable e) {
+        Throwable root = root(e);
+        String message = root.getMessage();
+        String type = root.getClass().getSimpleName();
+        return message == null || message.isBlank() ? type : type + ": " + message;
+    }
+
+    /** 감싸인 예외의 맨 밑. 겉껍질만 보면 대응을 못 정한다. */
+    private static Throwable root(Throwable e) {
         Throwable root = e;
         while (root.getCause() != null && root.getCause() != root) {
             root = root.getCause();
         }
-        String message = root.getMessage();
-        String type = root.getClass().getSimpleName();
-        return message == null || message.isBlank() ? type : type + ": " + message;
+        return root;
     }
 }
