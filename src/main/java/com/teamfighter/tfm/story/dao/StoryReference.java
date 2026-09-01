@@ -17,9 +17,12 @@ import java.util.Set;
  * 두 번호 공간을 한 자리에서 다루므로 여기가 섞이면 조용히 남의 팀 기사가 된다 —
  * 그래서 모르는 번호에는 {@code null} 이 아니라 예외로 답한다.
  *
- * @param championCodes 세이브에 든 코드 그대로다({@code 'Jiangshi'}). 한글 이름을 쓰면
- *                      brief 의 픽({@code ParsedGame} 에서 온 코드)과 어휘가 갈려서,
- *                      이 매치에 <b>실제로 나온</b> 챔피언이 "없는 챔피언" 으로 잡힌다
+ * @param championNameByCode 세이브 코드({@code 'Jiangshi'}) → 한글 이름({@code '강시'}).
+ *                      <b>전에는 코드 집합이었다</b> — brief 의 픽이 코드라 어휘를 맞추려던
+ *                      것인데(D66), 그러면 기사가 "DuelBlader와 Demon을" 이라고 써서
+ *                      몰입이 깨졌다. 이제 <b>렌더러와 대조가 함께</b> 이 표를 거친다:
+ *                      프롬프트도 한글, 대조 어휘도 한글이라 D66 의 요구는 그대로 지켜진다.
+ *                      한쪽만 바꾸면 기사에 나온 챔피언이 하나도 안 잡혀 검사가 조용히 죽는다 (D80)
  * @param teamNames     커리어의 팀 이름 전체. 이 매치에 없는 팀을 기사가 부르면 모순이다
  * @param playerGameTeamId 플레이어 팀의 <b>세이브 번호</b>다. 보통 0 이다(D54).
  *                      커리어에 {@code is_player} 팀이 없으면 {@code null} 이고, 그때는 주목도의
@@ -30,14 +33,14 @@ public record StoryReference(
         Integer playerGameTeamId,
         Map<Integer, Integer> teamIdByGameTeamId,
         Map<Integer, String> teamNameByGameTeamId,
-        Set<String> championCodes,
+        Map<String, String> championNameByCode,
         Set<String> teamNames,
         Map<Integer, String> athleteNameByGameAthleteId) implements NameBook {
 
     public StoryReference {
         teamIdByGameTeamId = Map.copyOf(teamIdByGameTeamId);
         teamNameByGameTeamId = Map.copyOf(teamNameByGameTeamId);
-        championCodes = Set.copyOf(championCodes);
+        championNameByCode = Map.copyOf(championNameByCode);
         teamNames = Set.copyOf(teamNames);
         athleteNameByGameAthleteId = Map.copyOf(athleteNameByGameAthleteId);
     }
@@ -51,6 +54,27 @@ public record StoryReference(
     }
 
     /** 선수 이름. 모르면 {@code null} — 렌더러가 번호를 적는다 (D57). */
+    /**
+     * 대조가 쓸 챔피언 어휘 — <b>한글 이름</b>이다.
+     *
+     * <p>렌더러가 프롬프트에 한글을 쓰므로 기사도 한글로 돌아온다. 어휘가 코드로 남으면
+     * 기사에 나온 챔피언이 하나도 안 잡혀 검사가 <b>조용히 죽는다</b> — 지적이 0건인 것과
+     * 검사가 안 도는 것이 화면에서 똑같이 보인다 (D66 · D80).
+     */
+    public Set<String> championNames() {
+        return Set.copyOf(championNameByCode.values());
+    }
+
+    /** 코드 → 한글 이름. 모르는 코드는 코드를 그대로 — 빈 칸을 남기지 않는다 (D57). */
+    @Override
+    public String championName(String code) {
+        if (code == null) {
+            return null;
+        }
+        String name = championNameByCode.get(code);
+        return name != null && !name.isBlank() ? name : code;
+    }
+
     @Override
     public String athleteName(Integer athleteId) {
         return athleteId == null ? null : athleteNameByGameAthleteId.get(athleteId);

@@ -86,7 +86,7 @@ public class ArticleWriter {
 
         FactCheckResult factCheck = FactCheck.run(                              // 6. 대조 — 제목을 떼기 전 원문(raw)을 본다. 제목에 든 숫자도 잡으려고
                 brief, reference,
-                reference.championCodes(),                                      //    챔피언 어휘는 코드다. name_ko 를 쓰면 대조가 반대로 작동한다 (D66 ①)
+                reference.championNames(),                                      //    챔피언 어휘는 한글이다. 렌더러가 한글로 쓰므로 코드를 쓰면 검사가 조용히 죽는다 (D66 · D80)
                 reference.teamNames(),
                 reference.athleteNames(),                                       //    선수 이름을 넘겨야 관계 검사(선수↔챔피언)가 돈다
                 contextTags,                                                    //    태그의 숫자도 "아는 숫자" 다

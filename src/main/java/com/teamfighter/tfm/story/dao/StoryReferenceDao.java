@@ -29,11 +29,14 @@ public class StoryReferenceDao {
             """;
 
     /**
-     * 세이브에 든 코드 그대로다. 한글 이름({@code name_ko})이 아니다 —
-     * {@link StoryReference#championCodes()} 가 이유를 적어 뒀다.
+     * 코드와 한글 이름을 <b>같이</b> 읽는다.
+     *
+     * <p>전에는 코드만 읽었다 — brief 의 픽이 코드라 대조 어휘를 거기 맞추려던 것인데,
+     * 그러면 기사가 "DuelBlader와 Demon을" 이라고 써서 몰입이 깨졌다. 이제 렌더러가
+     * 한글로 쓰고 대조도 한글로 본다 ({@link StoryReference#championNames()} · D80).
      */
-    private static final String CHAMPION_CODES = """
-            SELECT code FROM champion ORDER BY champion_id
+    private static final String CHAMPIONS = """
+            SELECT code, name_ko FROM champion ORDER BY champion_id
             """;
 
     /**
@@ -112,8 +115,12 @@ public class StoryReferenceDao {
             }
         }, slotId);
 
-        Set<String> champions = new LinkedHashSet<>(
-                jdbc.queryForList(CHAMPION_CODES, String.class));
+        // 코드 → 한글 이름. 렌더러도 대조도 이 표 하나를 거친다 — 둘이 다른 어휘를
+        // 쓰면 기사에 나온 챔피언이 안 잡혀 검사가 조용히 죽는다 (D80).
+        Map<String, String> champions = new LinkedHashMap<>();
+        jdbc.query(CHAMPIONS, rs -> {
+            champions.put(rs.getString("code"), rs.getString("name_ko"));
+        });
 
         Map<Integer, String> athletes = new LinkedHashMap<>();
         jdbc.query(ATHLETES, rs -> {

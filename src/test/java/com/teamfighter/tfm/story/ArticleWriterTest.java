@@ -189,8 +189,12 @@ class ArticleWriterTest {
         team(slotId, 34, "OZ Gaming");
 
         StoryReference reference = references.load(slotId);
-        String absent = reference.championCodes().stream()
-                .filter(code -> !code.equals("Jiangshi") && !code.equals("Wolfman"))
+        // 대조 어휘가 한글 이름이 됐다 (D80). 기사도 한글로 쓰이므로 여기서 코드를 쓰면
+        // 이 검사가 통과하지 못한다 — 그게 바로 D80 이 막으려는 어휘 갈림이다.
+        String here = reference.championName("Jiangshi");
+        String alsoHere = reference.championName("Wolfman");
+        String absent = reference.championNames().stream()
+                .filter(name -> !name.equals(here) && !name.equals(alsoHere))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("챔피언 시드가 비어 있다"));
 

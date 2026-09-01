@@ -167,8 +167,8 @@ public final class FactCheck {
         }
 
         // --- 2. 챔피언 ---
-        Set<String> picked = championsPicked(brief);
-        Set<String> banned = championsBanned(brief);
+        Set<String> picked = championsPicked(brief, names);
+        Set<String> banned = championsBanned(brief, names);
         for (String champion : allChampions) {
             if (picked.contains(champion) || !mentions(article, champion)) {
                 continue;
@@ -418,7 +418,7 @@ public final class FactCheck {
                     continue;
                 }
                 played.computeIfAbsent(name, k -> new LinkedHashSet<>())        // 4. 이름 → 챔피언 집합
-                        .add(line.champion());
+                        .add(names.championName(line.champion()));
             }
         }
         return played;
@@ -478,20 +478,28 @@ public final class FactCheck {
         }
     }
 
-    private static Set<String> championsPicked(MatchBrief brief) {
+    /**
+     * 이 매치에서 뽑힌 챔피언 — <b>기사에 적힌 것과 같은 말로</b>.
+     *
+     * <p>{@code brief} 는 코드를 들고 있고 기사는 한글로 쓰인다(D80). 여기서 이름표를
+     * 안 거치면 뽑힌 챔피언이 하나도 안 잡혀서, 실제로 나온 챔피언이 전부 "이 매치에
+     * 나오지 않은 챔피언" 으로 찍히거나 — 어휘가 아예 안 겹쳐 <b>검사가 통째로 조용해진다.</b>
+     * 어느 쪽이든 D66 이 말한 그 실패다.
+     */
+    private static Set<String> championsPicked(MatchBrief brief, NameBook names) {
         Set<String> out = new HashSet<>();
         brief.sets().forEach(s -> {
-            out.addAll(s.bluePick());
-            out.addAll(s.redPick());
+            s.bluePick().forEach(code -> out.add(names.championName(code)));
+            s.redPick().forEach(code -> out.add(names.championName(code)));
         });
         return out;
     }
 
-    private static Set<String> championsBanned(MatchBrief brief) {
+    private static Set<String> championsBanned(MatchBrief brief, NameBook names) {
         Set<String> out = new HashSet<>();
         brief.sets().forEach(s -> {
-            out.addAll(s.blueBan());
-            out.addAll(s.redBan());
+            s.blueBan().forEach(code -> out.add(names.championName(code)));
+            s.redBan().forEach(code -> out.add(names.championName(code)));
         });
         return out;
     }

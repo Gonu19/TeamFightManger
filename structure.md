@@ -75,10 +75,12 @@ A:\project\TeamFighter\
 │   │   ├─ MatchBrief                       사실 — 세트 합 = 스케줄 스코어를 강제
 │   │   ├─ Notability · NotabilityContext   해석 — 아는 축만으로 분량을 정한다
 │   │   ├─ SeasonBook                       순위·업셋·라이벌. 미래를 안 본다
-│   │   ├─ BriefRenderer · NameBook         프롬프트와 화면이 같은 문자열
+│   │   ├─ BriefRenderer · NameBook         프롬프트·화면·대조가 같은 문자열
+│   │   │                                    챔피언은 한글로 부른다 (D80)
 │   │   ├─ StoryPrompts · StoryRequest · StoryClient   창작 — 두 목소리
 │   │   ├─ HttpStoryClient · StoryProperties          JDK HttpClient + Jackson 3
 │   │   ├─ FactCheck · FactCheckResult      대조 — 모순 / 미확인 2등급
+│   │   │                                    어휘는 렌더러와 같아야 산다 (D66 · D80)
 │   │   ├─ ArticleDraft                     fact_status 를 타입이 계산한다
 │   │   ├─ ArticleWriter                    넷을 잇기만 한다. @Transactional 없음
 │   │   ├─ StoryComments · JsonSalvage      깨진 JSON 배열을 건진다 (댓글·게시글 공용)

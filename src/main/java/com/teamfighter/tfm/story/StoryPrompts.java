@@ -336,7 +336,8 @@ public final class StoryPrompts {
      * 한쪽만 고쳐진다.
      */
     public static String playerTotals(MatchBrief brief, NameBook names) {
-        record Totals(String team, int kill, int death, int assist, int dealt) {
+        record Totals(String team, int kill, int death, int assist, int dealt,
+                      java.util.LinkedHashSet<String> champions) {
         }
         Map<String, Totals> byPlayer = new LinkedHashMap<>();                   // 1. 선수 이름 → 합계
 
@@ -347,12 +348,17 @@ public final class StoryPrompts {
                 if (who == null || who.isBlank()) {                             // 2. 이름을 모르면 표에 안 넣는다
                     continue;                                                   //    댓글이 번호로 부를 일은 없다
                 }
-                Totals now = byPlayer.getOrDefault(who, new Totals(team, 0, 0, 0, 0));
+                Totals now = byPlayer.getOrDefault(who,
+                        new Totals(team, 0, 0, 0, 0, new java.util.LinkedHashSet<>()));
+                // 세트마다 다른 챔피언을 할 수 있으므로 모은다. 하나로 줄이면 남의 세트의
+                // 챔피언이 그 선수 것으로 굳는다.
+                now.champions().add(names.championName(line.champion()));
                 byPlayer.put(who, new Totals(team,                              // 3. 세트를 가로질러 더한다
                         now.kill() + line.kill(),
                         now.death() + line.death(),
                         now.assist() + line.assist(),
-                        now.dealt() + line.dealing()));
+                        now.dealt() + line.dealing(),
+                        now.champions()));
             }
         }
         if (byPlayer.isEmpty()) {
@@ -365,6 +371,11 @@ public final class StoryPrompts {
         StringBuilder out = new StringBuilder();
         byPlayer.forEach((who, t) -> {
             out.append(t.team()).append(" | ").append(who)
+                    // 챔피언을 선수 <b>옆에</b> 붙인다 (D80). 전에는 갤러리 프롬프트에
+                    // 챔피언이 아예 없었고, 그래서 갤 글이 "Exorcist" 같은 이름을
+                    // 학습 지식에서 지어냈다 — 이 매치에 없는 챔피언이 나오는 것도,
+                    // 영어로 나오는 것도 같은 구멍에서 왔다.
+                    .append(" | ").append(String.join("·", t.champions()))
                     .append(" | ").append(t.kill()).append('/')
                     .append(t.death()).append('/').append(t.assist())
                     .append(" | 가한피해 ").append(t.dealt());

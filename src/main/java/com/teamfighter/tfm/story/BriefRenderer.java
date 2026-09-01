@@ -98,16 +98,16 @@ public final class BriefRenderer {
             // 있으면 모델이 둘을 대조하다 섞는다 — 픽 목록은 선수 줄에 이미 다 들어 있다.
             if (set.players().isEmpty()) {
                 out.append("  픽  ").append(blue).append(": ")
-                        .append(champs(set.bluePick())).append('\n');
+                        .append(champs(set.bluePick(), names)).append('\n');
                 out.append("      ").append(red).append(": ")
-                        .append(champs(set.redPick())).append('\n');
+                        .append(champs(set.redPick(), names)).append('\n');
             } else {
                 appendPlayers(out, set, blue, red, names);
             }
             out.append("  밴  ").append(blue).append(": ")
-                    .append(champs(set.blueBan())).append('\n');
+                    .append(champs(set.blueBan(), names)).append('\n');
             out.append("      ").append(red).append(": ")
-                    .append(champs(set.redBan())).append('\n');
+                    .append(champs(set.redBan(), names)).append('\n');
         }
         return out.toString();
     }
@@ -140,7 +140,7 @@ public final class BriefRenderer {
             out.append("  ")
                     .append(line.blue() ? blue : red)                           // 2. 어느 팀인지를 줄 맨 앞에
                     .append(" | ").append(athlete(line.athleteId(), names))     // 3. 누가
-                    .append(" | ").append(line.champion())                      // 4. 무엇으로
+                    .append(" | ").append(names.championName(line.champion()))  // 4. 무엇으로 (한글, D80)
                     .append(" | ").append(line.kill()).append('/')              // 5. 킬/데스/어시
                     .append(line.death()).append('/').append(line.assist())
                     // 약어를 쓰지 않는다. "딜/탱/힐" 은 모델이 서로 바꿔 부르기 쉽고,
@@ -183,7 +183,12 @@ public final class BriefRenderer {
         return id == null ? "팀 미상" : "팀 " + id;
     }
 
-    private static String champs(List<String> list) {
-        return list == null || list.isEmpty() ? "없음" : String.join(SEP, list);
+    private static String champs(List<String> list, NameBook names) {
+        if (list == null || list.isEmpty()) {
+            return "없음";
+        }
+        // 코드가 아니라 한글 이름으로 적는다 (D80). 프롬프트와 화면이 같은 문자열을
+        // 보는 규칙은 그대로다 — 이 블록이 곧 「이 기사가 쓴 숫자」로 저장된다.
+        return list.stream().map(names::championName).collect(java.util.stream.Collectors.joining(SEP));
     }
 }
