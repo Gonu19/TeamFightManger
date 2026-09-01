@@ -337,4 +337,96 @@ class StoryGeneratorTest {
                 "SELECT count(*)::int FROM article WHERE slot_id = ?", Integer.class, slotId))
                 .isEqualTo(2);
     }
+
+    // --- 지정한 매치를 쓴다 (D79) -------------------------------------------
+
+    /**
+     * 화면이 넘기는 DB 팀 번호. {@code ArticleKey} 에 담기는 것이 이 번호이고
+     * 세이브의 {@code game_team_id} 가 아니다 — 두 번호 공간이 섞이면 "이미 쓴 기사"
+     * 판정이 조용히 어긋난다.
+     */
+    private int teamId(StoryReference reference, int gameTeamId) {
+        return reference.teamId(gameTeamId);
+    }
+
+    @Test
+    @DisplayName("지정한 매치를 쓴다 — 가장 최근이 아니어도")
+    void writesTheMatchTheScreenPointsAt() {
+        // 이것이 D79 의 전부다. 줄마다 버튼이 붙은 뒤로 사용자가 이미 골랐는데
+        // 생성기가 다시 고르면, 3일차 버튼을 눌렀을 때 40일차 기사가 나온다.
+        // 그 어긋남은 화면에 "기사가 하나 생겼다" 로만 보인다.
+        int slotId = newSlot();
+        team(slotId, 33, "Seorabal Gaming");
+        team(slotId, 34, "OZ Gaming");
+        StoryReference reference = references.load(slotId);
+
+        List<ParsedSchedule> schedules = List.of(
+                schedule(2, 40, 33, 34), schedule(2, 10, 33, 34));
+        List<ParsedGame> allSets = new ArrayList<>();
+        allSets.addAll(sets(2, 40, 33, 34));
+        allSets.addAll(sets(2, 10, 33, 34));
+
+        Optional<Long> id = generatorWith(new CountingClient()).writeFor(
+                reference, schedules, allSets,
+                2, 10, teamId(reference, 33), teamId(reference, 34));   // 오래된 쪽을 콕 집는다
+
+        assertThat(articles.find(id.orElseThrow()).orElseThrow().day()).isEqualTo(10);
+    }
+
+    @Test
+    @DisplayName("두 팀의 순서가 바뀌어도 같은 매치를 찾는다")
+    void theTeamPairIsUnordered() {
+        // 화면이 넘기는 두 팀은 match_record 를 LEAST/GREATEST 로 정렬해 묶은 것이라
+        // 세이브의 진영 순서와 다를 수 있다 — 실측 294세트 중 122건이 반대다.
+        // 진영을 그대로 비교하면 증상이 "버튼을 눌렀는데 아무 일도 안 일어난다" 로
+        // 나온다: 예외도 로그도 없이 조용하다.
+        int slotId = newSlot();
+        team(slotId, 33, "Seorabal Gaming");
+        team(slotId, 34, "OZ Gaming");
+        StoryReference reference = references.load(slotId);
+
+        List<ParsedSchedule> schedules = List.of(schedule(2, 40, 33, 34));
+        List<ParsedGame> allSets = sets(2, 40, 33, 34);
+
+        Optional<Long> id = generatorWith(new CountingClient()).writeFor(
+                reference, schedules, allSets,
+                2, 40, teamId(reference, 34), teamId(reference, 33));   // 뒤집어 넘긴다
+
+        assertThat(id).isPresent();
+        assertThat(articles.find(id.orElseThrow()).orElseThrow().day()).isEqualTo(40);
+    }
+
+    @Test
+    @DisplayName("없는 매치를 가리키면 빈 값이다 — 예외가 아니다")
+    void pointingAtAMatchThatIsNotInTheSaveReturnsEmpty() {
+        // DB 에는 있는데 세이브에 없다는 것은 세이브가 바뀌었거나 그 매치의 세트가
+        // 버려졌다는 뜻이다(D6). 오류가 아니라 화면이 알려야 할 사실이다.
+        int slotId = newSlot();
+        team(slotId, 33, "Seorabal Gaming");
+        team(slotId, 34, "OZ Gaming");
+        StoryReference reference = references.load(slotId);
+
+        Optional<Long> id = generatorWith(new CountingClient()).writeFor(
+                reference, List.of(schedule(2, 40, 33, 34)), sets(2, 40, 33, 34),
+                2, 99, teamId(reference, 33), teamId(reference, 34));
+
+        assertThat(id).isEmpty();
+    }
+
+    @Test
+    @DisplayName("안 끝난 매치는 지정해도 안 쓴다 — 결과를 지어내게 된다")
+    void anUnfinishedMatchIsStillRefusedWhenPointedAt() {
+        // "지정" 이 검사를 건너뛰는 문이 되면 안 된다. 진행 중인 매치의 기사를 쓰면
+        // 모델이 아직 없는 결과를 만들어 낸다.
+        int slotId = newSlot();
+        team(slotId, 33, "Seorabal Gaming");
+        team(slotId, 34, "OZ Gaming");
+        StoryReference reference = references.load(slotId);
+
+        Optional<Long> id = generatorWith(new CountingClient()).writeFor(
+                reference, List.of(unfinished(3, 5, 33, 34)), sets(3, 5, 33, 34),
+                3, 5, teamId(reference, 33), teamId(reference, 34));
+
+        assertThat(id).isEmpty();
+    }
 }
