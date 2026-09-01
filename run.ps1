@@ -20,8 +20,16 @@
     기본 8088. 이미 쓰고 있으면 다른 값을 준다 — 사용자 인스턴스가 떠 있는 채로
     검증용을 하나 더 띄울 때 쓴다.
 
-.PARAMETER Story
-    기사·갤러리 생성을 켠다 (tfm.story.enabled). 키가 있어야 실제로 나간다.
+.PARAMETER NoStory
+    기사·갤러리 생성을 끈다. <b>기본은 켬</b>이다.
+
+    앱 자체의 기본값은 여전히 꺼짐이다(application.yml). D61 결정 4 가 "켜지 않은
+    설치에서 생성기가 우연히 불릴 경로가 아예 없어야 한다" 로 정해 둔 것이고,
+    그건 이 스크립트가 바꿀 것이 아니다.
+
+    바꾼 것은 <b>주인의 실행 스크립트</b>다. 이 파일을 쓰는 사람은 이 앱을 만든
+    사람이고, 켜려고 띄운다 — 매번 -Story 를 붙이는 것은 그 사실을 반복해 적는 일이다.
+    끄고 띄울 이유가 있으면(회귀만 볼 때) -NoStory 로 끈다.
 
 .PARAMETER Aggregate
     기동 때 집계를 한 번 돌린다. Reingest 와 <b>같이 켜지 않는다</b> —
@@ -34,15 +42,15 @@
     다 뜬 뒤 브라우저를 열지 않는다.
 
 .EXAMPLE
-    .\run.ps1
-    .\run.ps1 -Story
-    .\run.ps1 -Port 8099 -Story
+    .\run.ps1                 # 생성 켜짐 · 브라우저까지 연다
+    .\run.ps1 -Port 8099
+    .\run.ps1 -NoStory        # 생성 끄고 (회귀만 볼 때)
     .\run.ps1 -Aggregate
 #>
 [CmdletBinding()]
 param(
     [int]$Port = 8088,
-    [switch]$Story,
+    [switch]$NoStory,
     [switch]$Aggregate,
     [switch]$Reingest,
     [switch]$NoBrowser
@@ -68,16 +76,27 @@ if (-not $env:TFM_DB_PASSWORD) {
 # --- 생성 키 -----------------------------------------------------------------
 # .env 는 앱이 직접 읽는다. 여기서는 <b>무엇이 이길지</b>만 알려준다 —
 # 환경변수가 .env 보다 우선하므로, 셸에 남은 값이 파일을 조용히 가릴 수 있다.
-$keyNote = '없음 (.env 를 읽는다)'
-if ($env:TFM_GROQ_API_KEY) {
+$hasEnvKey = [bool]$env:TFM_GROQ_API_KEY
+$hasDotEnv = (Test-Path '.env') -and
+             (Select-String -Path '.env' -Pattern '^\s*TFM_GROQ_API_KEY\s*=\s*\S' -Quiet)
+
+if ($hasEnvKey) {
     $shown = $env:TFM_GROQ_API_KEY
     if ($shown.Length -gt 4) { $shown = $shown.Substring(0, 4) }
     $keyNote = "환경변수 '$shown…' — .env 보다 우선한다"
+} elseif ($hasDotEnv) {
+    $keyNote = '.env 에 있다'
+} else {
+    # 생성을 켜고 띄우는데 키가 아무 데도 없으면, 버튼은 보이지만 누르는 순간 실패한다.
+    # 그 사실을 <b>누르기 전에</b> 말한다 — 눌러야 아는 버튼은 버튼이 아니다.
+    $keyNote = '없음 — 생성 버튼은 보이지만 누르면 실패한다'
 }
 
 # --- 인자 --------------------------------------------------------------------
+$story = -not $NoStory
+
 $appArgs = @("--server.port=$Port")
-if ($Story)     { $appArgs += '--tfm.story.enabled=true' }
+if ($story)     { $appArgs += '--tfm.story.enabled=true' }
 if ($Aggregate) { $appArgs += '--tfm.aggregate-on-start=true' }
 if ($Reingest)  { $appArgs += '--tfm.reingest-on-start=true' }
 
@@ -93,7 +112,7 @@ Write-Host ''
 Write-Host '  TeamFighter' -ForegroundColor Yellow
 Write-Host "  주소     $url"
 Write-Host "  DB 비번  $dbSource"
-Write-Host "  생성     $(if ($Story) { '켬' } else { '끔 (-Story 로 켠다)' })"
+Write-Host "  생성     $(if ($story) { '켬' } else { '끔 (-NoStory)' })"
 Write-Host "  키       $keyNote"
 Write-Host ''
 Write-Host '  Ctrl+C 로 끝낸다.' -ForegroundColor DarkGray

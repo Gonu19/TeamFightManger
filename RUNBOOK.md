@@ -25,15 +25,19 @@ $env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat test
 ## 앱
 
 ```powershell
-.\run.ps1                      # http://127.0.0.1:8088 · 브라우저까지 연다
-.\run.ps1 -Story               # 기사·갤러리 생성 켜기 (키 필요)
-.\run.ps1 -Port 8099 -Story    # 사용자 인스턴스를 둔 채 하나 더
-.\run.ps1 -Aggregate           # 기동 때 집계 한 번
-.\run.ps1 -Reingest            # 수리용. Aggregate 와 같이 켜지 말 것
+.\run.ps1                # 8088 · 생성 켜짐 · 브라우저까지 연다
+.\run.ps1 -Port 8099     # 사용자 인스턴스를 둔 채 하나 더
+.\run.ps1 -NoStory       # 생성 끄고 (회귀만 볼 때)
+.\run.ps1 -Aggregate     # 기동 때 집계 한 번
+.\run.ps1 -Reingest      # 수리용. Aggregate 와 같이 켜지 말 것
 ```
 
 `run.bat` 은 탐색기에서 **더블클릭**용이다(같은 인자를 받는다). 스크립트가 뜨기 전에
-<b>무엇을 쓰는지 먼저 찍는다</b> — DB 비번의 출처와, 셸의 키가 `.env` 를 가리는지.
+<b>무엇을 쓰는지 먼저 찍는다</b> — DB 비번의 출처와, 키가 어디서 오는지(셸의 값이
+`.env` 를 가리는지), 아예 없으면 그 사실까지.
+
+**생성은 기본이 켬**이다. 앱 자체의 기본값은 여전히 꺼짐이고(D61 결정 4), 바꾼 것은
+주인의 실행 스크립트다 — 이 파일을 쓰는 사람은 켜려고 띄운다.
 
 화면: `/tier` · `/champion/{code}` · `/story`(사이클) · `/gallery`
 생성은 요청 밖에서 돌고 진행 막대가 단계를 그린다. **커리어당 하나만 돈다** (D81).
