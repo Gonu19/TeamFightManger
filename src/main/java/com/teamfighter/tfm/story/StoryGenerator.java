@@ -161,6 +161,12 @@ public class StoryGenerator {
      * @return 저장된 {@code article_id}. 그런 매치가 없으면 {@link Optional#empty()}
      */
     public Optional<Long> writeFor(int slotId, int season, int day, int teamA, int teamB) {
+        return writeFor(slotId, season, day, teamA, teamB, Progress.NONE);
+    }
+
+    /** 진행 상황을 흘리며 쓴다. 요청 밖에서 도는 작업이 이 입구를 쓴다 (D81). */
+    public Optional<Long> writeFor(int slotId, int season, int day, int teamA, int teamB,
+                                   Progress progress) {
         Path saveFile = locateSaveFile(slotId);
         List<ParsedSchedule> schedules;
         List<ParsedGame> sets;
@@ -170,13 +176,21 @@ public class StoryGenerator {
         } catch (IOException e) {
             throw new UncheckedIOException("세이브를 읽지 못했다: " + saveFile, e);
         }
-        return writeFor(references.load(slotId), schedules, sets, season, day, teamA, teamB);
+        return writeFor(references.load(slotId), schedules, sets,
+                season, day, teamA, teamB, progress);
     }
 
     /** 파일을 이미 읽었을 때. 테스트가 쓰는 입구다. */
     public Optional<Long> writeFor(StoryReference reference, List<ParsedSchedule> schedules,
                                    List<ParsedGame> sets, int season, int day,
                                    int teamA, int teamB) {
+        return writeFor(reference, schedules, sets, season, day, teamA, teamB, Progress.NONE);
+    }
+
+    /** 파일을 이미 읽었을 때 + 진행 상황. */
+    public Optional<Long> writeFor(StoryReference reference, List<ParsedSchedule> schedules,
+                                   List<ParsedGame> sets, int season, int day,
+                                   int teamA, int teamB, Progress progress) {
         Objects.requireNonNull(reference, "reference");
         Map<ParsedSchedule.MatchKey, List<ParsedGame>> setsByMatch = groupSets(sets);
 
@@ -198,7 +212,7 @@ public class StoryGenerator {
         MatchBrief brief = MatchBrief.of(match, setsByMatch.get(match.matchKey()));
         List<String> tags = book.tagsFor(match, reference);
 
-        long articleId = writer.write(reference, brief, context, tags);
+        long articleId = writer.write(reference, brief, context, tags, progress);
         log.info("슬롯 {}: 시즌 {} {}일 매치로 기사 {} 를 썼다 (지정)",
                 reference.slotId(), match.season(), match.day(), articleId);
         return Optional.of(articleId);
@@ -233,6 +247,11 @@ public class StoryGenerator {
      * @return 저장된 {@code article_id}. 쓸 날이 없으면 {@link Optional#empty()}
      */
     public Optional<Long> writeLatestRoundSummary(int slotId) {
+        return writeLatestRoundSummary(slotId, Progress.NONE);
+    }
+
+    /** 진행 상황을 흘리며 쓴다 (D81). */
+    public Optional<Long> writeLatestRoundSummary(int slotId, Progress progress) {
         Path saveFile = locateSaveFile(slotId);
         List<ParsedSchedule> schedules;
         try {
@@ -240,12 +259,19 @@ public class StoryGenerator {
         } catch (IOException e) {
             throw new UncheckedIOException("세이브를 읽지 못했다: " + saveFile, e);
         }
-        return writeLatestRoundSummary(references.load(slotId), schedules);
+        return writeLatestRoundSummary(references.load(slotId), schedules, progress);
     }
 
     /** 파일을 이미 읽었을 때. 테스트가 쓰는 입구다. */
     public Optional<Long> writeLatestRoundSummary(StoryReference reference,
                                                   List<ParsedSchedule> schedules) {
+        return writeLatestRoundSummary(reference, schedules, Progress.NONE);
+    }
+
+    /** 파일을 이미 읽었을 때 + 진행 상황. */
+    public Optional<Long> writeLatestRoundSummary(StoryReference reference,
+                                                  List<ParsedSchedule> schedules,
+                                                  Progress progress) {
         Objects.requireNonNull(reference, "reference");
         Objects.requireNonNull(schedules, "schedules");
 
@@ -272,7 +298,7 @@ public class StoryGenerator {
             return Optional.empty();
         }
 
-        long articleId = writer.writeRoundSummary(reference, brief);
+        long articleId = writer.writeRoundSummary(reference, brief, progress);
         log.info("슬롯 {}: 시즌 {} {}일 총평 {} 를 썼다 (경기 {}건)",
                 reference.slotId(), brief.season(), brief.day(), articleId, brief.results().size());
         return Optional.of(articleId);

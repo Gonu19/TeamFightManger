@@ -1,5 +1,6 @@
 package com.teamfighter.tfm.story.gallery;
 
+import com.teamfighter.tfm.story.Progress;
 import com.teamfighter.tfm.ingest.watcher.TfmProperties;
 import com.teamfighter.tfm.parser.common.MatchScheduleParser;
 import com.teamfighter.tfm.parser.common.ParsedSchedule;
@@ -74,7 +75,7 @@ public class GalleryGenerator {
      * @return 저장된 {@code batch_id}. 뽑을 매치가 없으면 {@link Optional#empty()} —
      *         <b>예외가 아니다.</b> "다 뽑았다" 는 정상 상태다
      */
-    public Optional<Long> writeNext(int slotId, GalleryWriter.Progress progress) {
+    public Optional<Long> writeNext(int slotId, Progress progress) {
         Path saveFile = locateSaveFile(slotId);                                 // 1. 슬롯 → 파일 경로 (slot_key 가 곧 파일명이다)
 
         List<ParsedSchedule> schedules;
@@ -94,7 +95,7 @@ public class GalleryGenerator {
      * 이 메서드는 디스크를 모르므로 세이브 파일 없이 매치 고르는 규칙만 검증할 수 있다.
      */
     public Optional<Long> writeNext(StoryReference reference, List<ParsedSchedule> schedules,
-                                    List<ParsedGame> sets, GalleryWriter.Progress progress) {
+                                    List<ParsedGame> sets, Progress progress) {
         Objects.requireNonNull(reference, "reference");
         Objects.requireNonNull(schedules, "schedules");
         Objects.requireNonNull(sets, "sets");
@@ -125,7 +126,7 @@ public class GalleryGenerator {
     private Optional<Long> write(StoryReference reference, ParsedSchedule match,
                                  Map<ParsedSchedule.MatchKey, List<ParsedGame>> setsByMatch,
                                  List<ParsedSchedule> schedules,
-                                 GalleryWriter.Progress progress) {
+                                 Progress progress) {
         MatchBrief brief = MatchBrief.of(match, setsByMatch.get(match.matchKey()));      // 사실만 모은다. 두 등식이 안 맞으면 여기서 던진다
         List<String> tags = new SeasonBook(schedules).tagsFor(match, reference);         // 맥락 태그 (순위·연패·라이벌). 최대 2개
 
@@ -152,7 +153,7 @@ public class GalleryGenerator {
      * 묶은 것이라 세이브의 진영 순서와 다를 수 있다.
      */
     public Optional<Long> writeFor(int slotId, int season, int day, int teamA, int teamB,
-                                   GalleryWriter.Progress progress) {
+                                   Progress progress) {
         Path saveFile = locateSaveFile(slotId);
         List<ParsedSchedule> schedules;
         List<ParsedGame> sets;
@@ -169,7 +170,7 @@ public class GalleryGenerator {
     /** 파일을 이미 읽었을 때. 테스트가 쓰는 입구다. */
     public Optional<Long> writeFor(StoryReference reference, List<ParsedSchedule> schedules,
                                    List<ParsedGame> sets, int season, int day,
-                                   int teamA, int teamB, GalleryWriter.Progress progress) {
+                                   int teamA, int teamB, Progress progress) {
         Objects.requireNonNull(reference, "reference");
         Map<ParsedSchedule.MatchKey, List<ParsedGame>> setsByMatch = groupSets(sets);
 

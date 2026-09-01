@@ -69,14 +69,28 @@ public class ArticleWriter {
      */
     public long write(StoryReference reference, MatchBrief brief, NotabilityContext context,
                       List<String> contextTags) {
+        return write(reference, brief, context, contextTags, Progress.NONE);
+    }
+
+    /**
+     * 진행 상황을 흘리며 쓴다.
+     *
+     * <p>호출 둘이 20~30초를 쓰고 429 를 맞으면 더 간다. 그동안 화면에 아무 신호가
+     * 없으면 <b>도는 중인지 멈춘 것인지 구분되지 않는다</b> — 갤러리가 먼저 겪고
+     * 고친 병인데 기사에는 그 장치가 없었다 (D81).
+     */
+    public long write(StoryReference reference, MatchBrief brief, NotabilityContext context,
+                      List<String> contextTags, Progress progress) {
         Objects.requireNonNull(reference, "reference");
         Objects.requireNonNull(brief, "brief");
         Objects.requireNonNull(context, "context");
         Objects.requireNonNull(contextTags, "contextTags");
+        Objects.requireNonNull(progress, "progress");
 
         Notability notability = Notability.of(brief, context);                  // 1. 해석 — 분량(문단 수)을 정한다. 이유 문자열은 프롬프트로 안 간다 (D66 ②)
         String briefText = BriefRenderer.render(brief, reference, contextTags); // 2. 사실 + 맥락 태그. 프롬프트와 화면이 이 같은 문자열을 쓴다
 
+        progress.at("기사를 쓰는 중", 0, 2);
         String raw = client.complete(                                           // 3. 창작 1 — 기사. 프롬프트는 "제목 한 줄, 빈 줄, 본문" 을 요구한다
                 StoryPrompts.article(brief, reference, notability));
         String[] split = ArticleDraft.splitHeadline(raw);                       // 4. [제목, 본문] 두 칸. 형식을 어긴 답이면 제목 칸이 빈 문자열이다
@@ -92,9 +106,12 @@ public class ArticleWriter {
                 contextTags,                                                    //    태그의 숫자도 "아는 숫자" 다
                 raw);
 
+        progress.at("댓글을 다는 중", 1, 2);
         List<ArticleDraft.CommentLine> comments = StoryComments.parse(          // 7. 창작 2 — 댓글. JSON 배열을 닉네임·대댓글까지 살려 편다
                 client.complete(
                         StoryPrompts.comments(brief, reference, notability, body, contextTags)));
+
+        progress.at("대조하고 저장하는 중", 2, 2);
 
         ArticleDraft draft = ArticleDraft.of(                                   // 8. 저장 꼴로. fact_status 는 안 넘긴다 — 타입이 findings 로 계산한다
                 reference.slotId(), brief, notability,
@@ -118,11 +135,18 @@ public class ArticleWriter {
      * @return 저장된 {@code article_id}
      */
     public long writeRoundSummary(StoryReference reference, RoundBrief brief) {
+        return writeRoundSummary(reference, brief, Progress.NONE);
+    }
+
+    /** 진행 상황을 흘리며 쓴다. 매치 기사와 같은 이유다 (D81). */
+    public long writeRoundSummary(StoryReference reference, RoundBrief brief, Progress progress) {
         Objects.requireNonNull(reference, "reference");
         Objects.requireNonNull(brief, "brief");
+        Objects.requireNonNull(progress, "progress");
 
         String briefText = brief.render(reference);                             // 1. 하루치 사실. 매치당 한 줄
 
+        progress.at("총평을 쓰는 중", 0, 2);
         String raw = client.complete(StoryPrompts.roundSummary(brief, reference));   // 2. 창작 1 — 총평
         String[] split = ArticleDraft.splitHeadline(raw);                       // 3. [제목, 본문]
         String body = split[1];
@@ -133,8 +157,11 @@ public class ArticleWriter {
         FactCheckResult factCheck = FactCheck.runRound(                         // 5. 대조 — 그날 없던 팀·숫자만 본다
                 brief, reference, reference.teamNames(), raw);
 
+        progress.at("댓글을 다는 중", 1, 2);
         List<ArticleDraft.CommentLine> comments = StoryComments.parse(          // 6. 창작 2 — 댓글
                 client.complete(StoryPrompts.roundComments(brief, reference, body)));
+
+        progress.at("대조하고 저장하는 중", 2, 2);
 
         ArticleDraft draft = ArticleDraft.ofRound(                              // 7. 팀이 없는 기사 = 총평 (V10)
                 reference.slotId(), brief.season(), brief.day(),

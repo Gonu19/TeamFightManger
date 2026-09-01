@@ -41,6 +41,29 @@
     <p class="notice" th:if="${notice}" th:text="${notice}">알림</p>
 
     <!--
+      진행 막대 (D81). 생성은 요청 밖에서 돌기 때문에 이 화면이 몇 초마다
+      /story/status 를 물어 단계를 갱신한다. 이게 없으면 기사 하나에 20~30초 동안
+      아무 신호가 없고, 그건 사용자에게 "멈췄다" 와 구분되지 않는다.
+
+      끝나면 화면이 결과로 데려간다 — 기사는 /story/{id}, 갤러리는 그 배치로.
+      실패하면 그 자리에 원인이 남는다.
+
+      서버가 이미 "도는 중" 이라고 알려줬으면(busy) 처음부터 펼쳐 둔다. 새로고침해도
+      진행 상황을 잃지 않는다.
+    -->
+    <div class="progress-box" id="progressBox" th:classappend="${busy} ? '' : 'hidden'">
+        <div class="progress-head">
+            <span class="progress-step" id="progressStep">시작하는 중…</span>
+            <button class="btn tiny" type="button" id="progressDismiss" hidden>닫기</button>
+        </div>
+        <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+        <div class="progress-note" id="progressNote">
+            모델 호출이 끝날 때까지 다른 생성은 시작할 수 없다 — 분당 토큰이 하나다.
+            이 창을 닫아도 생성은 계속된다.
+        </div>
+    </div>
+
+    <!--
       사이클 안내. 버튼 옆에 두지 않고 위에 한 번만 그린다 — 줄마다 반복하면
       마흔 번 읽히고, 그러면 아무도 안 읽는다.
     -->
@@ -124,7 +147,8 @@
                     <input type="hidden" name="day" th:value="${m.day}">
                     <input type="hidden" name="teamA" th:value="${m.homeTeamId}">
                     <input type="hidden" name="teamB" th:value="${m.awayTeamId}">
-                    <button class="btn primary" type="submit">기사 쓰기</button>
+                    <button class="btn primary" type="submit"
+                            th:disabled="${busy}" data-gen>기사 쓰기</button>
                 </form>
 
                 <!-- ④ 갤러리 -->
@@ -139,7 +163,8 @@
                     <input type="hidden" name="day" th:value="${m.day}">
                     <input type="hidden" name="teamA" th:value="${m.homeTeamId}">
                     <input type="hidden" name="teamB" th:value="${m.awayTeamId}">
-                    <button class="btn primary" type="submit">반응 생성</button>
+                    <button class="btn primary" type="submit"
+                            th:disabled="${busy}" data-gen>반응 생성</button>
                 </form>
             </div>
         </li>
@@ -153,7 +178,7 @@
     <div class="round" th:if="${canGenerate and selectedSlot != null}">
         <form method="post" th:action="@{/story/generate-round}">
             <input type="hidden" name="slot" th:value="${selectedSlot}">
-            <button class="btn" type="submit">그날 총평 쓰기</button>
+            <button class="btn" type="submit" th:disabled="${busy}" data-gen>그날 총평 쓰기</button>
         </form>
         <span class="faint">경기가 둘 이상인 날을 하루씩 정리한다. 매치 기사와 호출을 나눠 쓴다.</span>
     </div>
@@ -195,5 +220,16 @@
         </ol>
     </details>
 </main>
+
+<script th:src="@{/js/story.js}"></script>
+<script th:inline="javascript">
+    // 서버가 아는 값만 넘긴다. 나머지는 story.js 가 /story/status 에서 읽는다.
+    // 스크립트를 먼저 실어야 startCycle 이 정의돼 있다 — 순서가 뒤집히면
+    // "startCycle is not defined" 로 조용히 아무 일도 안 일어난다.
+    startCycle({
+        slot: /*[[${selectedSlot}]]*/ null,
+        busy: /*[[${busy}]]*/ false
+    });
+</script>
 </body>
 </html>

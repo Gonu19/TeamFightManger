@@ -85,6 +85,7 @@ A:\project\TeamFighter\
 │   │   ├─ ArticleWriter                    넷을 잇기만 한다. @Transactional 없음
 │   │   ├─ StoryComments · JsonSalvage      깨진 JSON 배열을 건진다 (댓글·게시글 공용)
 │   │   ├─ StoryGenerator                   수동 트리거 셋. 기사 · 총평 · 갤러리
+│   │   ├─ StoryJobs · Progress             요청 밖에서 돈다 · 커리어당 한 자리 (D81)
 │   │   ├─ StoryConfiguration               플래그를 켜야 빈이 생긴다 (D61)
 │   │   ├─ gallery/     게시판 (D72~D74). 기사와 독립이다
 │   │   │    ├─ GalleryPostKind             유형 10종 — 할당량과 짝인 ENUM
@@ -94,7 +95,6 @@ A:\project\TeamFighter\
 │   │   │    ├─ GalleryPosts                항목 단위 복구 — 하나 깨져도 나머지는 산다
 │   │   │    ├─ GalleryWriter               호출 둘. 조각 실패를 밖으로 안 내보낸다
 │   │   │    ├─ GalleryGenerator            매치를 고른다. 세이브를 다시 읽는다
-│   │   │    └─ GalleryJobs                 요청 밖에서 돈다 + 진행 상황 (D73)
 │   │   └─ dao/         ArticleDao          업서트 — 재생성이 갱신이 된다
 │   │                    ArticleView · ArticleCard    상세용 · 목록용
 │   │                    StoryReference · StoryReferenceDao  이름표 (NameBook 구현)
@@ -108,7 +108,8 @@ A:\project\TeamFighter\
 │   ├─ web/
 │   │   ├─ StatsController                  /tier · /champion/{code}  (D76 · D77)
 │   │   ├─ StoryController                  / → /tier · /story(사이클, D79) · /story/{id}
-│   │   │                                    POST generate · -round · -match · -gallery
+│   │   │                                    POST -match · -gallery · -round · aggregate
+│   │   │                                    GET /story/status (JSON, D81)
 │   │   ├─ GalleryController                 /gallery(?batch= 로 신원 열기, D75)
 │   │   │                                    /gallery/status (JSON)
 │   │   │                                    POST /gallery/generate (비동기, D73)
@@ -139,7 +140,8 @@ A:\project\TeamFighter\
 │   ├─ templates/fragments/nav.html         상단 탭 — 두 세계가 만나는 유일한 자리
 │   ├─ templates/fragments/filters.html     커리어 칩 — 셋이 같이 쓴다 (D79)
 │   ├─ templates/story/                    list.html · detail.html · gallery.html
-│   └─ static/css/app.css(껍데기) + stats · story · gallery.css · js/gallery.js
+│   └─ static/css/app.css(껍데기) + stats · story · gallery.css
+│       static/js/story.js(진행 막대, D81) · gallery.js
 │
 └─ src/test/java/...                        main 과 거울 구조
 ```

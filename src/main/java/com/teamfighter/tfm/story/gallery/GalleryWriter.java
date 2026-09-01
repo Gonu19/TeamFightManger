@@ -1,6 +1,7 @@
 package com.teamfighter.tfm.story.gallery;
 
 import com.teamfighter.tfm.story.MatchBrief;
+import com.teamfighter.tfm.story.Progress;
 import com.teamfighter.tfm.story.NameBook;
 import com.teamfighter.tfm.story.StoryClient;
 import com.teamfighter.tfm.story.StoryProperties;
@@ -44,21 +45,6 @@ import java.util.Optional;
 public class GalleryWriter {
 
     private static final Logger log = LoggerFactory.getLogger(GalleryWriter.class);
-
-    /** 진행 상황을 받는 쪽. 화면이 폴링해서 읽는다. */
-    @FunctionalInterface
-    public interface Progress {
-
-        /**
-         * @param step  사람이 읽을 단계 이름 ("이슈 취재 중")
-         * @param done  끝낸 호출 수
-         * @param total 이 페이지가 낼 총 호출 수
-         */
-        void at(String step, int done, int total);
-
-        /** 아무 데도 안 알린다. 테스트가 쓴다. */
-        Progress NONE = (step, done, total) -> { };
-    }
 
     private final StoryClient client;
     private final GalleryDao gallery;

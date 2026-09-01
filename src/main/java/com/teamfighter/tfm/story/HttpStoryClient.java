@@ -56,7 +56,7 @@ public class HttpStoryClient implements StoryClient {
      * 아무리 길어도 이만큼만 기다린다.
      *
      * <p>원래 20초였다. "더 길면 멈춘 것처럼 보인다" 가 이유였는데, 이제 화면이 단계를
-     * 그리므로 멈춘 것처럼 보이지 않는다({@code GalleryJobs}). 분당 한도가 리셋되는 데
+     * 그리므로 멈춘 것처럼 보이지 않는다({@code StoryJobs}). 분당 한도가 리셋되는 데
      * 실제로 그만큼 걸리는 일이 있어 40초로 올린다.
      */
     private static final Duration MAX_RETRY_WAIT = Duration.ofSeconds(40);

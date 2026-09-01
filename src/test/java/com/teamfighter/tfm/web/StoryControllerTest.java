@@ -225,9 +225,33 @@ class StoryControllerTest {
     @Test
     @DisplayName("꺼진 상태로 생성을 부르면 503 이다 — 조용히 아무 일도 안 일어나지 않는다")
     void generateWhenDisabledIsServiceUnavailable() throws Exception {
+        // 입구 셋이 전부 같아야 한다. 하나만 조용히 200 을 주면 화면은 "시작됐다" 로
+        // 읽고 영원히 기다린다 (D81).
         mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
-                        .post("/story/generate").param("slot", "1"))
+                        .post("/story/generate-match")
+                        .param("slot", "1").param("season", "2026").param("day", "7")
+                        .param("teamA", "1").param("teamB", "2"))
                 .andExpect(status().isServiceUnavailable());
+
+        mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/story/generate-gallery")
+                        .param("slot", "1").param("season", "2026").param("day", "7")
+                        .param("teamA", "1").param("teamB", "2"))
+                .andExpect(status().isServiceUnavailable());
+
+        mvc().perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders
+                        .post("/story/generate-round").param("slot", "1"))
+                .andExpect(status().isServiceUnavailable());
+    }
+
+    @Test
+    @DisplayName("생성이 꺼져 있어도 상태 조회는 200 이다 — 폴링이 콘솔을 빨갛게 물들이지 않는다")
+    void statusIsAlwaysReadable() throws Exception {
+        // 404 를 주면 화면의 폴링이 실패로 읽고 "진행 상황을 읽지 못했다" 를 띄운다.
+        // 꺼져 있는 것은 고장이 아니다.
+        mvc().perform(get("/story/status").param("slot", "1"))
+                .andExpect(status().isOk())
+                .andExpect(content().string(org.hamcrest.Matchers.containsString("IDLE")));
     }
 
     @Test

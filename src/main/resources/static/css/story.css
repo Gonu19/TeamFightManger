@@ -31,6 +31,44 @@
 .inline-form { display: inline-flex; margin: 0; flex: none; }
 .btn.tiny { padding: 0.1rem 0.5rem; font-size: 0.72rem; white-space: nowrap; }
 
+/* --- 진행 막대 (D81) --- */
+
+/*
+ * 생성은 요청 밖에서 돌기 때문에 이 자리가 단계를 그린다. 없으면 기사 하나에
+ * 20~30초 동안 아무 신호가 없고, 그건 사용자에게 "멈췄다" 와 구분되지 않는다.
+ */
+.progress-box {
+    margin: 1rem 0;
+    padding: 0.75rem 0.9rem;
+    background: var(--panel-2);
+    border: 1px solid var(--gold);
+    border-radius: 4px;
+}
+
+.progress-box.hidden { display: none; }
+
+.progress-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    margin-bottom: 0.5rem;
+}
+
+.progress-step { font-size: 0.85rem; font-weight: 600; color: var(--gold); }
+
+.progress-track { height: 6px; background: var(--bg); border-radius: 3px; overflow: hidden; }
+
+.progress-fill {
+    height: 100%;
+    width: 0;
+    background: var(--gold);
+    border-radius: 3px;
+    transition: width 0.4s ease;
+}
+
+.progress-note { margin-top: 0.5rem; font-size: 0.75rem; color: var(--faint); line-height: 1.6; }
+
 /* --- 매치 줄 --- */
 
 .cycle { list-style: none; margin: 1rem 0; padding: 0; }

@@ -4,7 +4,7 @@ import com.teamfighter.tfm.story.dao.GalleryDao;
 import com.teamfighter.tfm.story.dao.GalleryView;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import com.teamfighter.tfm.story.gallery.GalleryComment;
-import com.teamfighter.tfm.story.gallery.GalleryJobs;
+import com.teamfighter.tfm.story.StoryJobs;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -49,11 +49,11 @@ public class GalleryController {
 
     private final GalleryDao galleries;
     private final StoryReferenceDao slots;
-    private final Optional<GalleryJobs> jobs;
+    private final Optional<StoryJobs> jobs;
     private final ObjectMapper mapper;
 
     public GalleryController(GalleryDao galleries, StoryReferenceDao slots,
-                             Optional<GalleryJobs> jobs, ObjectMapper mapper) {
+                             Optional<StoryJobs> jobs, ObjectMapper mapper) {
         this.galleries = galleries;
         this.slots = slots;
         this.jobs = jobs;
@@ -148,13 +148,15 @@ public class GalleryController {
      */
     @PostMapping("/gallery/generate")
     public String generate(@RequestParam int slot, RedirectAttributes redirect) {
-        GalleryJobs runner = jobs.orElseThrow(() -> new ResponseStatusException(
+        StoryJobs runner = jobs.orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "갤러리 생성이 꺼져 있다 — tfm.story.enabled=true 로 켠다 (D61 결정 4)"));
 
-        if (!runner.start(slot)) {
+        if (!runner.startGalleryNext(slot)) {
             // 두 번 누른 것은 오류가 아니다. 이미 도는 작업을 그대로 두고 알리기만 한다.
-            redirect.addFlashAttribute("notice", "이미 만드는 중이다. 아래 진행 상황을 본다.");
+            // 무엇이 도는지를 말한다 — 기사가 도는 중일 수도 있다 (D81: 자리는 하나다).
+            String what = runner.status(slot).map(x -> x.kind().object()).orElse("다른 작업을");
+            redirect.addFlashAttribute("notice", what + " 이미 만드는 중이다. 아래 진행 상황을 본다.");
         }
         redirect.addAttribute("slot", slot);
         return "redirect:/gallery";
@@ -174,9 +176,10 @@ public class GalleryController {
         return jobs.flatMap(runner -> runner.status(slot))
                 .<Map<String, Object>>map(s -> Map.of(
                         "state", s.state().name(),
+                        "kind", s.kind().name(),
                         "step", s.step(),
                         "percent", s.percent(),
-                        "batchId", s.batchId() == null ? 0L : s.batchId(),
+                        "batchId", s.resultId() == null ? 0L : s.resultId(),
                         "message", s.message() == null ? "" : s.message()))
                 .orElse(Map.of("state", "IDLE"));
     }

@@ -1,13 +1,12 @@
 package com.teamfighter.tfm.web;
 
 import com.teamfighter.tfm.analysis.AggregationService;
-import com.teamfighter.tfm.story.StoryClient;
 import com.teamfighter.tfm.story.StoryGenerator;
 import com.teamfighter.tfm.story.dao.ArticleCard;
 import com.teamfighter.tfm.story.dao.ArticleDao;
 import com.teamfighter.tfm.story.dao.ArticleView;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
-import com.teamfighter.tfm.story.gallery.GalleryJobs;
+import com.teamfighter.tfm.story.StoryJobs;
 import com.teamfighter.tfm.web.dao.CycleDao;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -72,18 +71,18 @@ public class StoryController {
     private final CycleDao cycles;
     private final AggregationService aggregation;
     private final Optional<StoryGenerator> generator;
-    private final Optional<GalleryJobs> galleryJobs;
+    private final Optional<StoryJobs> jobs;
 
     public StoryController(ArticleDao articles, StoryReferenceDao slots, CycleDao cycles,
                            AggregationService aggregation,
                            Optional<StoryGenerator> generator,
-                           Optional<GalleryJobs> galleryJobs) {
+                           Optional<StoryJobs> jobs) {
         this.articles = articles;
         this.slots = slots;
         this.cycles = cycles;
         this.aggregation = aggregation;
         this.generator = generator;
-        this.galleryJobs = galleryJobs;
+        this.jobs = jobs;
     }
 
     /**
@@ -138,7 +137,10 @@ public class StoryController {
 
         // 생성기가 없으면(=story 가 꺼져 있으면) 버튼을 안 그린다
         model.addAttribute("canGenerate", generator.isPresent());
-        model.addAttribute("canGenerateGallery", galleryJobs.isPresent());
+        model.addAttribute("canGenerateGallery", jobs.isPresent());
+        // 도는 중이면 화면이 버튼을 잠그고 진행 막대를 그린다 (D81).
+        model.addAttribute("busy", selected != null
+                && jobs.map(runner -> runner.isBusy(selected)).orElse(false));
         return "story/list";
     }
 
@@ -164,116 +166,30 @@ public class StoryController {
         return "story/detail";
     }
 
-    /**
-     * <b>수동 트리거.</b> 아직 안 쓴 매치 중 가장 최근 것 한 편을 만든다.
+    /*
+     * POST /story/generate 를 걷어냈다 (D81).
      *
-     * <h2>왜 POST 인가</h2>
+     * "아직 안 쓴 매치 중 가장 최근 것" 을 동기로 쓰던 입구다. 화면이 매치를 줄로 세운
+     * 뒤로(D79) 부르는 곳이 없어졌고, 남겨 두면 주소로는 여전히 닿는 <b>30초짜리 동기
+     * 경로</b>가 된다 — 진행 상황도 없고 작업 잠금도 안 거치는, 이번에 고치려던 바로 그 길.
      *
-     * 이 요청은 <b>돈이 나가고 DB 가 바뀐다.</b> GET 이면 브라우저가 미리 가져오거나
-     * 사용자가 새로고침만 해도 다시 나간다 — 새로고침 한 번이 모델 호출 두 번이 된다.
-     *
-     * <h2>왜 끝나고 리다이렉트인가</h2>
-     *
-     * POST 응답으로 HTML 을 그대로 그리면, 사용자가 새로고침할 때 브라우저가 "양식을 다시
-     * 제출할까요" 를 묻고 예를 누르면 기사를 또 만든다. POST → 302 → GET 으로 끊으면
-     * 새로고침이 <b>목록 조회</b>가 된다 (Post/Redirect/Get).
-     *
-     * <h2>실패를 삼키지 않는다</h2>
-     *
-     * 모델 호출이 실패하면 예외가 그대로 올라가 오류 화면이 뜬다. "조용히 아무 일도 안 일어남"
-     * 이 이 프로젝트에서 가장 비싼 실패였다(D31). 다만 <b>쓸 매치가 없는 것은 실패가 아니다</b> —
-     * 그건 정상이라 메시지로만 알린다.
+     * 고르는 규칙 자체는 안 사라졌다. StoryGenerator.writeLatestUnwritten 이 그대로 있고
+     * StoryGeneratorTest 가 그것을 지킨다. 없어진 것은 <b>그 규칙으로 가는 HTTP 문</b>뿐이다.
      */
-    @PostMapping("/story/generate")
-    public String generate(@RequestParam int slot, RedirectAttributes redirect) {
-        StoryGenerator writer = generator.orElseThrow(() -> new ResponseStatusException(
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "기사 생성이 꺼져 있다 — tfm.story.enabled=true 로 켠다 (D61 결정 4)"));
-
-        try {
-            Optional<Long> articleId = writer.writeLatestUnwritten(slot);
-
-            if (articleId.isEmpty()) {
-                // 다 썼다. 화면에 한 줄 남기고 목록으로 돌아간다.
-                // addFlashAttribute 는 리다이렉트 <b>한 번</b>만 살아남는 모델 값이다 —
-                // 세션에 담았다가 다음 요청에서 꺼내고 지운다. 쿼리스트링으로 넘기면
-                // 그 주소를 북마크했을 때 메시지가 영원히 따라다닌다.
-                redirect.addFlashAttribute("notice", "새로 쓸 매치가 없다. 끝난 매치를 모두 썼다.");
-                redirect.addAttribute("slot", slot);
-                return "redirect:/story";
-            }
-
-            // 방금 쓴 기사를 곧바로 보여준다. 목록으로 보내면 사용자가 그중 어느 것이
-            // 새로 생긴 것인지 찾아야 한다.
-            return "redirect:/story/" + articleId.get();
-
-        } catch (StoryClient.StoryUnavailableException e) {
-            // 부를 수 없는 상태(키가 없거나 헤더로 못 쓰는 값). 오류 화면보다 목록 위의
-            // 한 줄이 낫다 — 사용자가 할 일이 "설정을 고친다" 로 분명하기 때문이다.
-            return backToListWith(redirect, slot, "기사 생성을 부를 수 없다: " + e.getMessage(), e);
-
-        } catch (StoryClient.StoryFailedException e) {
-            // 불렀는데 실패했다(네트워크·4xx·5xx). 이것도 500 흰 화면으로 두지 않는다.
-            // 삼키는 것과는 다르다 — 메시지를 화면에 띄우고 스택은 로그에 남긴다.
-            return backToListWith(redirect, slot, "모델 호출이 실패했다: " + e.getMessage(), e);
-
-        } catch (IllegalStateException e) {
-            // 세이브 파일을 못 찾는 경우가 여기로 온다(경로 설정·적재 안 된 팀 등).
-            // 원인이 사용자 환경이라 화면에서 읽을 수 있어야 한다.
-            return backToListWith(redirect, slot, "기사를 쓸 수 없다: " + e.getMessage(), e);
-        }
-    }
-
-    /**
-     * <b>라운드 총평 트리거.</b> 아직 총평이 없는 날 중 가장 최근 하루를 정리한다.
-     *
-     * <p>매치 기사와 <b>버튼을 나눈 이유</b>는 분당 토큰이다. 한 버튼으로 묶으면 한 번에
-     * 모델 호출이 넷이 되어 무료 티어 한도(8,000)에 거의 확실히 걸린다. 나누면 사람이
-     * 누르는 사이에 창이 다시 열린다 — 비용의 단위를 사람이 고르게 한다는 수동 트리거의
-     * 취지와도 맞는다.
-     */
-    @PostMapping("/story/generate-round")
-    public String generateRound(@RequestParam int slot, RedirectAttributes redirect) {
-        StoryGenerator writer = generator.orElseThrow(() -> new ResponseStatusException(
-                HttpStatus.SERVICE_UNAVAILABLE,
-                "기사 생성이 꺼져 있다 — tfm.story.enabled=true 로 켠다 (D61 결정 4)"));
-
-        try {
-            Optional<Long> articleId = writer.writeLatestRoundSummary(slot);
-            if (articleId.isEmpty()) {
-                redirect.addFlashAttribute("notice",
-                        "총평을 쓸 날이 없다. 경기가 있는 날은 모두 정리했다.");
-                redirect.addAttribute("slot", slot);
-                return "redirect:/story";
-            }
-            return "redirect:/story/" + articleId.get();
-
-        } catch (StoryClient.StoryUnavailableException e) {
-            return backToListWith(redirect, slot, "기사 생성을 부를 수 없다: " + e.getMessage(), e);
-        } catch (StoryClient.StoryFailedException e) {
-            return backToListWith(redirect, slot, "모델 호출이 실패했다: " + e.getMessage(), e);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return backToListWith(redirect, slot, "총평을 쓸 수 없다: " + e.getMessage(), e);
-        }
-    }
 
     /**
      * <b>사이클 ② — 집계를 다시 돌린다.</b>
      *
-     * <h2>왜 버튼인가</h2>
-     *
-     * 적재는 워처가 자동으로 한다. 집계는 <b>안 한다</b> — {@code tfm.aggregate-on-start}
-     * 는 기본이 꺼져 있고, 켜도 기동 때 한 번뿐이다. 그래서 경기를 하고 세이브를 저장하면
-     * 매치는 목록에 뜨는데 <b>티어와 쌍 효과는 어제 값 그대로</b>다. 그 어긋남은
-     * 화면 어디에도 안 보인다 — 숫자가 여전히 그럴듯하기 때문이다.
+     * <p>적재는 워처가 자동으로 한다. 집계는 <b>안 한다</b> — 그래서 경기를 하고 세이브를
+     * 저장하면 매치는 목록에 뜨는데 티어와 쌍 효과는 어제 값 그대로다. 그 어긋남은
+     * 화면 어디에도 안 보인다(숫자가 여전히 그럴듯하다).
      *
      * <p>적재 완료를 신호로 자동으로 돌리는 것이 자연스러워 보이지만, 그러면 워처가
-     * 저장을 감지할 때마다 집계가 돈다. 그 비용을 아직 안 쟀고, 게다가 기동 시 두
-     * {@code ApplicationRunner} 의 순서가 정의돼 있지 않아 <b>집계가 따라잡기보다 먼저
-     * 끝나는</b> 문제가 실측으로 남아 있다({@code decisions/OPEN.md}).
+     * 저장을 감지할 때마다 집계가 돈다. 그 비용을 아직 안 쟀고, 기동 시 두
+     * {@code ApplicationRunner} 의 순서 문제도 남아 있다({@code decisions/OPEN.md}).
      *
-     * <p>그래서 지금은 사람이 누른다. 요청 안에서 돌려도 되는 이유는 <b>1초 남짓</b>이기
-     * 때문이다 — 모델 호출과 달리 돈이 나가지도 않는다.
+     * <p>요청 안에서 돌려도 되는 이유는 <b>1초 남짓</b>이기 때문이다 — 모델 호출과 달리
+     * 바깥으로 나가지 않는다. 그래서 이것만은 작업 잠금을 안 쓴다.
      */
     @PostMapping("/story/aggregate")
     public String aggregate(@RequestParam(required = false) Integer slot,
@@ -291,81 +207,129 @@ public class StoryController {
     /**
      * <b>사이클 ③ — 이 매치의 기사를 쓴다.</b> 연대기 목록의 줄마다 붙은 버튼이다.
      *
+     * <h2>시작만 하고 곧바로 돌아온다 (D81)</h2>
+     *
+     * 전에는 여기서 모델을 두 번 부르고 끝날 때까지 기다렸다 — 브라우저가 20~30초 동안
+     * 흰 화면을 물고 있었고, 그건 사용자에게 <b>멈춘 것과 구분되지 않는다.</b> 그동안
+     * 갤러리 버튼도 멀쩡히 눌렸고, 둘이 동시에 돌면 분당 토큰을 서로 잡아먹었다.
+     *
+     * <p>이제 작업만 띄우고 연대기로 돌아간다. 그 화면이 상태를 폴링해 단계를 그리고,
+     * 끝나면 기사로 데려가며, 실패하면 <b>원인을 그 자리에 남긴다.</b>
+     *
      * <h2>왜 "가장 최근" 이 아닌가</h2>
      *
-     * {@code /story/generate} 는 생성기가 대상을 고른다. 화면이 매치를 줄로 세운
-     * 뒤로는 <b>사용자가 이미 골랐는데</b> 생성기가 다시 고르면 3일차 버튼을 눌렀을 때
-     * 5일차 기사가 나온다. 그리고 그 어긋남은 "기사가 하나 생겼다" 로만 보인다.
-     *
-     * <p>두 팀은 순서가 바뀌어도 같은 매치를 가리킨다 — 화면이 넘기는 값은
-     * {@code match_record} 를 정렬해 묶은 것이라 세이브의 진영과 다를 수 있다.
+     * 화면이 매치를 줄로 세운 뒤로는 <b>사용자가 이미 골랐다.</b> 생성기가 다시 고르면
+     * 3일차 버튼을 눌렀을 때 5일차 기사가 나오고, 그 어긋남은 "기사가 하나 생겼다"
+     * 로만 보인다 (D79).
      */
     @PostMapping("/story/generate-match")
     public String generateMatch(@RequestParam int slot,
                                 @RequestParam int season, @RequestParam int day,
                                 @RequestParam int teamA, @RequestParam int teamB,
                                 RedirectAttributes redirect) {
-        StoryGenerator writer = generator.orElseThrow(() -> new ResponseStatusException(
+        StoryJobs runner = jobs.orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "기사 생성이 꺼져 있다 — tfm.story.enabled=true 로 켠다 (D61 결정 4)"));
 
-        try {
-            Optional<Long> articleId = writer.writeFor(slot, season, day, teamA, teamB);
-            if (articleId.isEmpty()) {
-                // 세이브에서 그 매치를 못 찾았다. DB 에는 있는데 세이브에 없다는 것은
-                // 세이브가 바뀌었다는 뜻이다 — 오류가 아니라 알려야 할 사실이다.
-                redirect.addFlashAttribute("notice",
-                        "시즌 " + season + " " + day + "일 매치를 세이브에서 못 찾았다. "
-                                + "세이브가 바뀌었거나 그 매치의 세트 기록이 버려졌다 (D6).");
-                redirect.addAttribute("slot", slot);
-                return "redirect:/story";
-            }
-            return "redirect:/story/" + articleId.get();
-
-        } catch (StoryClient.StoryUnavailableException e) {
-            return backToListWith(redirect, slot, "기사 생성을 부를 수 없다: " + e.getMessage(), e);
-        } catch (StoryClient.StoryFailedException e) {
-            return backToListWith(redirect, slot, "모델 호출이 실패했다: " + e.getMessage(), e);
-        } catch (IllegalStateException | IllegalArgumentException e) {
-            return backToListWith(redirect, slot, "기사를 쓸 수 없다: " + e.getMessage(), e);
+        if (!runner.startArticle(slot, season, day, teamA, teamB)) {
+            // 종류를 안 가리는 거절이다 — 분당 토큰이 하나라 기사와 갤러리는
+            // 서로의 경쟁자다 (D81).
+            redirect.addFlashAttribute("notice", busyNotice(runner, slot));
         }
+        redirect.addAttribute("slot", slot);
+        return "redirect:/story";
     }
 
     /**
      * <b>사이클 ④ — 이 매치의 갤러리 반응을 뽑는다.</b>
      *
-     * <p>요청 밖에서 돈다 (D73) — 페이지 하나가 모델 호출 둘이고 1분 남짓이라, 요청
-     * 안에서 돌리면 브라우저가 그동안 스피너만 돈다. 그래서 시작만 시키고 갤러리
-     * 화면으로 보낸다. 거기서 진행 막대가 단계를 그린다.
+     * <p>기사와 같은 자리를 쓴다. 끝나면 화면이 그 배치로 데려간다.
      */
     @PostMapping("/story/generate-gallery")
     public String generateGallery(@RequestParam int slot,
                                   @RequestParam int season, @RequestParam int day,
                                   @RequestParam int teamA, @RequestParam int teamB,
                                   RedirectAttributes redirect) {
-        GalleryJobs jobs = galleryJobs.orElseThrow(() -> new ResponseStatusException(
+        StoryJobs runner = jobs.orElseThrow(() -> new ResponseStatusException(
                 HttpStatus.SERVICE_UNAVAILABLE,
                 "갤러리 생성이 꺼져 있다 — tfm.story.enabled=true 로 켠다 (D61 결정 4)"));
 
-        if (!jobs.startFor(slot, season, day, teamA, teamB)) {
-            // 이미 돌고 있다. 버튼을 두 번 누른 것은 오류가 아니다.
-            redirect.addFlashAttribute("notice", "이미 뽑는 중이다. 진행 상황은 갤러리 화면에 있다.");
+        if (!runner.startGallery(slot, season, day, teamA, teamB)) {
+            redirect.addFlashAttribute("notice", busyNotice(runner, slot));
         }
+        // 연대기에 머문다. 진행 막대가 여기 있고, 끝나면 화면이 갤러리로 데려간다.
         redirect.addAttribute("slot", slot);
-        return "redirect:/gallery";
+        return "redirect:/story";
     }
 
     /**
-     * 실패를 목록 화면의 한 줄로 돌려보낸다.
+     * <b>라운드 총평 트리거.</b> 아직 총평이 없는 날 중 가장 최근 하루를 정리한다.
      *
-     * <p>스택 트레이스는 로그에만 남긴다 — 화면에 내면 읽을 사람이 없고, 예외 메시지에
-     * 설정값이 섞여 있으면 그것까지 같이 노출된다.
+     * <p>매치 기사와 <b>버튼을 나눈 이유</b>는 분당 토큰이다. 한 버튼으로 묶으면 한 번에
+     * 모델 호출이 넷이 되어 무료 티어 한도(8,000)에 거의 확실히 걸린다. 나누면 사람이
+     * 누르는 사이에 창이 다시 열린다 — 비용의 단위를 사람이 고르게 한다는 수동 트리거의
+     * 취지와도 맞는다.
      */
-    private String backToListWith(RedirectAttributes redirect, int slot,
-                                  String notice, Exception cause) {
-        log.warn("기사 생성 실패 (슬롯 {})", slot, cause);                        // 1. 원인은 스택까지 로그로
-        redirect.addFlashAttribute("notice", notice);                           // 2. 사람이 읽을 한 줄은 화면으로
-        redirect.addAttribute("slot", slot);                                    // 3. 보던 커리어를 유지한 채 목록으로
+    @PostMapping("/story/generate-round")
+    public String generateRound(@RequestParam int slot, RedirectAttributes redirect) {
+        StoryJobs runner = jobs.orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.SERVICE_UNAVAILABLE,
+                "기사 생성이 꺼져 있다 — tfm.story.enabled=true 로 켠다 (D61 결정 4)"));
+
+        if (!runner.startRound(slot)) {
+            redirect.addFlashAttribute("notice", busyNotice(runner, slot));
+        }
+        redirect.addAttribute("slot", slot);
         return "redirect:/story";
     }
+
+    /**
+     * 지금 무엇이 도는가. 화면이 몇 초마다 물어 진행 막대를 갱신한다 (D81).
+     *
+     * <p>생성이 꺼져 있으면 <b>빈 상태</b>를 돌려준다 — 404 가 아니다. 화면의 폴링은
+     * 기능이 꺼져 있어도 도는데, 404 를 주면 콘솔이 빨갛게 물들고 그건 고장으로 읽힌다.
+     */
+    @GetMapping("/story/status")
+    @org.springframework.web.bind.annotation.ResponseBody
+    public java.util.Map<String, Object> status(@RequestParam int slot) {
+        return jobs.flatMap(runner -> runner.status(slot))
+                .<java.util.Map<String, Object>>map(status -> {
+                    java.util.Map<String, Object> out = new java.util.LinkedHashMap<>();
+                    out.put("state", status.state().name());
+                    out.put("kind", status.kind().name());
+                    out.put("label", status.kind().label());
+                    out.put("object", status.kind().object());
+                    out.put("step", status.step());
+                    out.put("percent", status.percent());
+                    out.put("done", status.done());
+                    out.put("total", status.total());
+                    out.put("message", status.message());
+                    out.put("next", status.destination(slot));
+                    return out;
+                })
+                .orElse(java.util.Map.of("state", "IDLE"));
+    }
+
+    /**
+     * 이미 도는 중일 때 보여줄 한 줄.
+     *
+     * <p><b>무엇이 도는지를 말한다.</b> "이미 돌고 있다" 만 쓰면 사용자는 자기가 방금
+     * 누른 것이 시작된 줄 안다 — 갤러리가 도는 중에 기사를 누른 경우가 그렇다.
+     */
+    private static String busyNotice(StoryJobs runner, int slot) {
+        String what = runner.status(slot)
+                .map(status -> status.kind().object())
+                .orElse("다른 작업을");
+        return what + " 이미 뽑는 중이다. 분당 토큰이 하나라 한 번에 하나만 돈다 — "
+                + "끝나면 다시 누른다.";
+    }
+
+    /*
+     * backToListWith 도 같이 걷어냈다 (D81).
+     *
+     * 동기 생성이 던진 예외를 목록의 한 줄로 바꾸던 자리다. 이제 실패는 요청이 아니라
+     * <b>작업</b> 안에서 나고, StoryJobs 가 그것을 FAILED 상태와 원인 메시지로 들고 있는다 —
+     * 화면은 진행 막대 자리에서 그 메시지를 읽는다. 실패를 사람이 읽게 한다는 목적은
+     * 그대로이고, 읽는 자리가 바뀌었다.
+     */
 }

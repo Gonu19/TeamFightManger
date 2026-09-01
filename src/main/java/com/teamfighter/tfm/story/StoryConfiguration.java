@@ -4,7 +4,6 @@ import com.teamfighter.tfm.ingest.watcher.TfmProperties;
 import com.teamfighter.tfm.story.dao.ArticleDao;
 import com.teamfighter.tfm.story.dao.GalleryDao;
 import com.teamfighter.tfm.story.gallery.GalleryGenerator;
-import com.teamfighter.tfm.story.gallery.GalleryJobs;
 import com.teamfighter.tfm.story.gallery.GalleryWriter;
 import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -66,7 +65,11 @@ public class StoryConfiguration {
     }
 
     /**
-     * 갤러리 생성을 요청 밖에서 돌린다.
+     * 기사 · 총평 · 갤러리를 <b>요청 밖에서</b> 돌린다. 셋이 한 자리를 나눠 쓴다 (D81).
+     *
+     * <p>분당 토큰이 하나라 동시에 돌리면 서로 429 를 만든다 — 그래서 커리어 하나에
+     * 작업 하나다. 전에는 갤러리만 이 장치를 갖고 있었고 기사는 동기 POST 라,
+     * 갤러리가 도는 중에도 기사 버튼이 멀쩡히 눌렸다.
      *
      * <p>이것도 플래그 뒤에 둔다. 꺼진 설치에 작업 큐만 떠 있으면 화면이 "시작할 수 있다"
      * 고 믿게 되고, 눌러야 비로소 "생성이 꺼져 있다" 를 알게 된다 — 눌러야 알 수 있는
@@ -74,8 +77,8 @@ public class StoryConfiguration {
      */
     @ConditionalOnProperty(prefix = "tfm.story", name = "enabled", havingValue = "true")
     @Bean
-    public GalleryJobs galleryJobs(GalleryGenerator generator) {
-        return new GalleryJobs(generator);
+    public StoryJobs storyJobs(StoryGenerator articles, GalleryGenerator galleries) {
+        return new StoryJobs(articles, galleries);
     }
 
     /**
