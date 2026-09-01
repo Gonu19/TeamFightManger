@@ -1,7 +1,7 @@
 /*
  * 앱 공통 — 네 화면(티어 · 챔피언 · 연대기 · 갤러리)이 같이 쓰는 것.
  *
- * 여기 있는 것은 <b>화면이 아니라 껍데기</b>다: 색 토큰 · 바탕 · 상단 탭 · 커리어 칩 ·
+ * 여기 있는 것은 <b>화면이 아니라 껍데기</b>다: 색 토큰 · 바탕 · 상단 탭 · 커리어 고르개 ·
  * 버튼 · 알림 · 빈 상태. 화면마다 다른 것(표의 칸 나눔, 게시판의 밀도)은 각자의
  * 파일에 남는다.
  *
@@ -92,6 +92,42 @@ h2 { font-size: 0.95rem; font-weight: 600; margin: 0; }
 
 .filters .label { color: var(--faint); margin-right: 0.15rem; }
 
+/* --- 커리어 고르개 --- */
+
+/*
+ * 폼이지만 상자가 아니다.
+ *
+ * display:contents 는 이 요소의 상자를 없애고 <b>자식들을 부모의 자식처럼</b>
+ * 배치한다. 그래서 form 안의 라벨·select·숨은 인자가 바깥 .filters 의 flex 항목이
+ * 되어 경기·역할군 칩과 한 줄에 선다. form 을 없앨 수는 없다 — GET 제출로 커리어를
+ * 바꾸는 것이 이 고르개의 동작이고, 그래야 자바스크립트 없이도 돈다.
+ *
+ * 대안은 조각이 스스로 .filters 패널이 되는 것인데, 그러면 티어에서 패널이 둘로
+ * 쌓여 커리어 줄의 높이가 이 화면에서만 달라진다 (D79 가 맞춰 둔 통일이 깨진다).
+ */
+.picker-form { display: contents; }
+
+.picker {
+    padding: 0.2rem 0.5rem;
+    background: var(--panel-2);
+    color: var(--ink);
+    border: 1px solid var(--line);
+    border-radius: 3px;
+    font: inherit;
+    font-size: 0.85rem;
+    cursor: pointer;
+}
+
+.picker:hover { border-color: var(--gold); }
+.picker:focus-visible { outline: 1px solid var(--gold); outline-offset: 1px; }
+
+/*
+ * 목록은 브라우저가 그리므로 option 의 색은 OS 마다 다르게 나온다 — 다크 테마에서
+ * 흰 배경이 튀지 않도록 값을 직접 준다. 그래도 안 먹는 브라우저가 있는데,
+ * "(비어 있음)" 을 <b>색이 아니라 글자로</b> 말하는 이유가 그것이다.
+ */
+.picker option { background: var(--panel-2); color: var(--ink); }
+
 .chip {
     display: inline-block;
     padding: 0.2rem 0.65rem;
@@ -105,10 +141,11 @@ h2 { font-size: 0.95rem; font-weight: 600; margin: 0; }
 .chip.on { color: var(--gold); border-color: var(--gold); background: transparent; }
 
 /*
- * 내용이 없는 커리어도 칩으로 보인다. 목록에서 빼면 첫 기사를 쓸 길이 없어진다 —
- * 기사가 있어야 칩이 보이고 칩을 눌러야 기사가 생기는 순환이다.
+ * .chip.void 는 여기 있었다. 내용이 없는 커리어를 흐린 칩으로 그리던 규칙인데,
+ * 커리어가 드롭다운이 되면서 쓸 곳이 없어졌다 — 닫힌 드롭다운은 색을 안 보여주므로
+ * 비었다는 말은 이제 라벨 글자가 한다 (SlotOption.label). 남은 .chip 은 티어의
+ * 경기·역할군 탭이 쓴다.
  */
-.chip.void { color: var(--faint); }
 
 /* --- 버튼 --- */
 

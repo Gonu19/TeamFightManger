@@ -2,9 +2,10 @@ package com.teamfighter.tfm.web;
 
 import com.teamfighter.tfm.story.dao.GalleryDao;
 import com.teamfighter.tfm.story.dao.GalleryView;
-import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import com.teamfighter.tfm.story.gallery.GalleryComment;
 import com.teamfighter.tfm.story.StoryJobs;
+import com.teamfighter.tfm.web.dao.SlotDao;
+import com.teamfighter.tfm.web.view.SlotOption;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
 import org.springframework.ui.Model;
@@ -48,11 +49,11 @@ import java.util.Optional;
 public class GalleryController {
 
     private final GalleryDao galleries;
-    private final StoryReferenceDao slots;
+    private final SlotDao slots;
     private final Optional<StoryJobs> jobs;
     private final ObjectMapper mapper;
 
-    public GalleryController(GalleryDao galleries, StoryReferenceDao slots,
+    public GalleryController(GalleryDao galleries, SlotDao slots,
                              Optional<StoryJobs> jobs, ObjectMapper mapper) {
         this.galleries = galleries;
         this.slots = slots;
@@ -76,13 +77,15 @@ public class GalleryController {
                         @RequestParam(required = false) Long batch,
                         Model model) {
         // 커리어 목록은 <b>적재된 것 전부</b>다. 전에는 "갤이 있는 슬롯" 만 넣었고
-        // 화면에는 칩도 없었다 — 그러면 슬롯 2의 첫 갤을 뽑으러 갈 길이 없다.
-        // 비어 있다는 사실은 목록에서 빼서가 아니라 흐리게 그려서 말한다.
-        List<Integer> slotIds = slots.slotIds();
-        java.util.Set<Integer> withGalleries = java.util.Set.copyOf(galleries.slotsWithGalleries());
+        // 화면에는 고르개도 없었다 — 그러면 슬롯 2의 첫 갤을 뽑으러 갈 길이 없다.
+        // 비어 있다는 사실은 목록에서 빼서가 아니라 "(비어 있음)" 이라고 적어서 말한다.
+        List<SlotOption> options =
+                slots.options(java.util.Set.copyOf(galleries.slotsWithGalleries()));
         Integer selected = slot != null ? slot
-                : slotIds.stream().filter(withGalleries::contains).findFirst()
-                        .orElseGet(() -> slotIds.isEmpty() ? null : slotIds.get(0));
+                : options.stream().filter(SlotOption::filled).findFirst()
+                        .or(() -> options.stream().findFirst())
+                        .map(SlotOption::slotId)
+                        .orElse(null);
 
         List<GalleryView> pages = selected == null ? List.of() : galleries.pages(selected);
         int index = indexOf(pages, batch, page);
@@ -93,9 +96,12 @@ public class GalleryController {
                 ? Optional.empty()
                 : galleries.find(pages.get(index).batchId());
 
-        model.addAttribute("slots", slotIds);
-        model.addAttribute("filledSlots", withGalleries);
+        model.addAttribute("slots", options);
         model.addAttribute("selectedSlot", selected);
+
+        // 커리어를 바꾸면 페이지는 0(가장 최근)으로 돌아가는 것이 맞고, batch 는 옛
+        // 커리어의 배치 번호라 들고 가면 남의 글을 연다. 그래서 실어 보낼 것이 없다.
+        model.addAttribute("carry", Map.of());
         model.addAttribute("pageCount", pages.size());
         model.addAttribute("pageIndex", index);
         model.addAttribute("gallery", current.orElse(null));

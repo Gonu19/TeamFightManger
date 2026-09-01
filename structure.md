@@ -115,9 +115,10 @@ A:\project\TeamFighter\
 │   │   │                                    POST /gallery/generate (비동기, D73)
 │   │   ├─ 아직 없는 컨트롤러: Gaps · Draft · Slot
 │   │   ├─ sse/                             실시간 갱신
-│   │   ├─ dao/StatsDao · CycleDao          화면은 계산하지 않는다. 정렬만 한다
+│   │   ├─ dao/StatsDao · CycleDao · SlotDao   화면은 계산하지 않는다. 정렬만 한다
 │   │   │                                    CycleDao: 세트를 매치로 묶는다 (D79)
-│   │   └─ view/TierRow · PairRow · PairBucket · CycleRow   표시 모델
+│   │   │                                    SlotDao: 커리어 목록의 유일한 출처 (D82)
+│   │   └─ view/TierRow · PairRow · PairBucket · CycleRow · SlotOption   표시 모델
 │   └─ common/
 │
 ├─ src/main/resources/
@@ -138,7 +139,7 @@ A:\project\TeamFighter\
 │   │   └─ V14__champion_pair_effect.sql   방향 있는 쌍 × 지표 (D63~D65 · D76)
 │   ├─ templates/stats/                    tier.html · champion.html   순위 · 세 묶음 (D77)
 │   ├─ templates/fragments/nav.html         상단 탭 — 두 세계가 만나는 유일한 자리
-│   ├─ templates/fragments/filters.html     커리어 칩 — 셋이 같이 쓴다 (D79)
+│   ├─ templates/fragments/filters.html     커리어 드롭다운 — 셋이 같이 쓴다 (D82)
 │   ├─ templates/story/                    list.html · detail.html · gallery.html
 │   └─ static/css/app.css(껍데기) + stats · story · gallery.css
 │       static/js/story.js(진행 막대, D81) · gallery.js

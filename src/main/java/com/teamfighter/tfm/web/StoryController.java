@@ -5,9 +5,10 @@ import com.teamfighter.tfm.story.StoryGenerator;
 import com.teamfighter.tfm.story.dao.ArticleCard;
 import com.teamfighter.tfm.story.dao.ArticleDao;
 import com.teamfighter.tfm.story.dao.ArticleView;
-import com.teamfighter.tfm.story.dao.StoryReferenceDao;
 import com.teamfighter.tfm.story.StoryJobs;
 import com.teamfighter.tfm.web.dao.CycleDao;
+import com.teamfighter.tfm.web.dao.SlotDao;
+import com.teamfighter.tfm.web.view.SlotOption;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,7 @@ import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.servlet.mvc.support.RedirectAttributes;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -67,13 +69,13 @@ public class StoryController {
     private static final int PAGE_SIZE = 50;
 
     private final ArticleDao articles;
-    private final StoryReferenceDao slots;
+    private final SlotDao slots;
     private final CycleDao cycles;
     private final AggregationService aggregation;
     private final Optional<StoryGenerator> generator;
     private final Optional<StoryJobs> jobs;
 
-    public StoryController(ArticleDao articles, StoryReferenceDao slots, CycleDao cycles,
+    public StoryController(ArticleDao articles, SlotDao slots, CycleDao cycles,
                            AggregationService aggregation,
                            Optional<StoryGenerator> generator,
                            Optional<StoryJobs> jobs) {
@@ -111,20 +113,22 @@ public class StoryController {
     @GetMapping("/story")
     public String list(@RequestParam(required = false) Integer slot, Model model) {
         // 커리어 목록은 <b>적재된 것 전부</b>다. 전에는 "기사가 있는 슬롯" 만 넣었는데,
-        // 그러면 슬롯 2로 첫 기사를 쓰러 갈 길이 없다 — 기사가 있어야 칩이 보이고
-        // 칩을 눌러야 기사가 생기는 순환이다. 비어 있다는 사실은 칩을 빼서가 아니라
-        // 흐리게 그려서 말한다 (fragments/filters.html).
-        List<Integer> slots = this.slots.slotIds();
+        // 그러면 슬롯 2로 첫 기사를 쓰러 갈 길이 없다 — 기사가 있어야 줄이 보이고
+        // 그 줄을 눌러야 기사가 생기는 순환이다. 비어 있다는 사실은 목록에서 빼서가
+        // 아니라 "(비어 있음)" 이라고 적어서 말한다 (fragments/filters.html).
         Set<Integer> withArticles = Set.copyOf(articles.slotsWithArticles());
+        List<SlotOption> options = slots.options(withArticles);
 
         // 사용자가 고른 값이 1순위. 없으면 기사가 있는 첫 슬롯, 그것도 없으면 첫 슬롯.
         // null 을 그대로 뷰까지 보내는 이유는 "고를 것이 없다" 와 "안 골랐다" 가
         // 화면에서 같은 그림이기 때문이다.
-        Integer selected = slot != null ? slot : firstSlot(slots, withArticles);
+        Integer selected = slot != null ? slot : firstSlot(options);
 
-        model.addAttribute("slots", slots);
-        model.addAttribute("filledSlots", withArticles);
+        model.addAttribute("slots", options);
         model.addAttribute("selectedSlot", selected);
+
+        // 커리어 말고는 이 화면에 거르개가 없다. 고르개가 같이 실을 인자도 없다.
+        model.addAttribute("carry", Map.of());
 
         // 사이클 목록 — 매치 하나가 한 줄이고, 그 줄이 적재·기사·갤러리를 다 들고 있다.
         model.addAttribute("cycle", selected == null
@@ -145,9 +149,11 @@ public class StoryController {
     }
 
     /** 내용이 있는 커리어를 먼저 보여준다. 없으면 첫 커리어, 그것도 없으면 {@code null}. */
-    private static Integer firstSlot(List<Integer> slots, Set<Integer> filled) {
-        return slots.stream().filter(filled::contains).findFirst()
-                .orElseGet(() -> slots.isEmpty() ? null : slots.get(0));
+    private static Integer firstSlot(List<SlotOption> options) {
+        return options.stream().filter(SlotOption::filled).findFirst()
+                .or(() -> options.stream().findFirst())
+                .map(SlotOption::slotId)
+                .orElse(null);
     }
 
     /**

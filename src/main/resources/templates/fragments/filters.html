@@ -1,38 +1,70 @@
 <!DOCTYPE html>
 <!--
-  거르개 조각 — 네 화면이 같은 모양의 커리어 칩을 쓴다.
+  커리어 고르개 — 세 화면이 같은 조각을 쓴다.
 
-  <b>내용이 없는 커리어도 칩으로 그린다.</b> 이게 이 조각이 생긴 이유다.
-  전에는 연대기가 "기사가 있는 슬롯" 만, 갤러리가 "갤이 있는 슬롯" 만 목록에 넣었고,
-  갤러리는 아예 칩이 없었다. 그러면 슬롯 2로 첫 기사를 쓰러 갈 길이 없다 —
-  기사가 있어야 칩이 보이고 칩을 눌러야 기사가 생기는 순환이다.
+  <b>칩 여러 개에서 드롭다운 하나로 바꿨다.</b> 칩은 슬롯이 셋일 때는 괜찮았는데
+  커리어가 늘수록 한 줄을 넘겨 줄바꿈이 생기고, 그러면 그 아래 거르개(경기·역할군)와
+  섞여 어디까지가 커리어인지 안 보인다. 고르는 것이 하나뿐인 목록은 탭이 아니라 목록이다.
 
-  대신 비어 있다는 사실은 흐린 색과 제목말이 말한다. 목록에서 빼는 것과 흐리게
-  그리는 것은 다르다: 빠지면 "없는 커리어" 이고, 흐리면 "아직 안 쓴 커리어" 다.
+  <b>목록의 출처는 save_slot 하나다.</b> 전에는 티어만 champion_performance(집계 결과)를
+  봐서, 새 커리어를 적재해도 집계 전이면 티어 고르개에서 통째로 사라졌다 — 사용자에게
+  그것은 "적재가 안 됐나" 로 읽힌다. 적재는 됐고 집계가 안 됐을 뿐인데.
+
+  <b>비어 있다는 사실은 글자로 말한다.</b> 칩일 때는 흐린 색이었는데, 드롭다운은 닫혀
+  있으면 색이 안 보인다 — 고른 뒤에야 "왜 빈 화면이지" 가 된다.
 -->
 <html xmlns:th="http://www.thymeleaf.org" lang="ko">
 <body>
 
 <!--
-  @{${base}(slot=${s})} — base 는 문자열 변수다(예: '/story'). 링크식의 앞부분에
-  식을 그대로 넣을 수 있어서 화면마다 다른 주소를 한 조각으로 쓸 수 있다.
+  자바스크립트 없이 돈다. onchange 로 폼을 제출하니 GET base?slot=N 이 되고,
+  화면이 그 커리어로 다시 그려진다.
 
-  @param base     칩이 가리킬 경로. 예: '/story' · '/gallery'
-  @param slots    적재된 커리어 전부. 내용 유무와 무관하다
-  @param selected 지금 보고 있는 커리어. null 이면 아무것도 안 켜진다
-  @param filled   내용이 있는 커리어의 집합. 여기 없으면 흐리게 그린다
+  <b>폼은 자기 상자를 안 그린다</b> — app.css 의 .picker-form 이 display:contents 라
+  라벨·고르개·숨은 인자가 <b>부르는 쪽 .filters 의 자식처럼</b> 늘어선다.
+  껍데기를 부르는 쪽이 그리는 이유는 티어 때문이다: 티어는 이 고르개와 경기·역할군 칩을
+  한 줄에 놓아야 하는데 폼이 스스로 패널이 되면 패널 둘이 세로로 쌓이고, 그러면
+  화면마다 커리어 줄의 높이가 달라져 D79 가 맞춰 둔 통일이 다시 깨진다.
+
+  carry 는 <b>같이 실어 보낼 다른 거르개</b>다. 티어의 스크림·역할군처럼 지금 보고
+  있는 조건을 커리어만 바꿔도 유지해야 한다 — 안 넘기면 커리어를 고를 때마다
+  역할군 탭이 조용히 "전체" 로 돌아간다.
+
+  @param base     폼이 갈 경로. 예: '/story' · '/gallery'
+  @param slots    SlotOption 목록. 적재된 것 전부다
+  @param selected 지금 보고 있는 커리어. null 이면 아무것도 안 골라진다
+  @param carry    같이 넘길 질의 인자 (Map). 없으면 빈 Map
 -->
-<div th:fragment="slots(base, slots, selected, filled)"
-     class="filters" th:if="${slots != null and !slots.isEmpty()}">
-    <span class="label">커리어</span>
-    <a th:each="s : ${slots}"
-       class="chip"
-       th:href="@{${base}(slot=${s})}"
-       th:text="'슬롯 ' + ${s}"
-       th:title="${filled != null and filled.contains(s)} ? null : '아직 비어 있다'"
-       th:classappend="${s == selected} ? 'on'
-                       : (${filled != null and filled.contains(s)} ? '' : 'void')">슬롯 1</a>
-</div>
+<form th:fragment="slots(base, slots, selected, carry)"
+      class="picker-form" method="get" th:action="@{${base}}"
+      th:if="${slots != null and !slots.isEmpty()}">
+
+    <label class="label" for="slot">커리어</label>
+
+    <select id="slot" name="slot" class="picker" onchange="this.form.submit()">
+        <!--
+          th:selected 는 조건이 참일 때만 속성이 붙는 불리언 속성이다 —
+          거짓이면 selected="false" 가 아니라 속성 자체가 안 나간다.
+        -->
+        <option th:each="s : ${slots}"
+                th:value="${s.slotId}"
+                th:selected="${s.slotId == selected}"
+                th:text="${s.label()}">슬롯 1</option>
+    </select>
+
+    <!-- 값이 있는 것만 싣는다. null 을 넘기면 ?category= 처럼 빈 인자가 붙는다 -->
+    <th:block th:each="p : ${carry}">
+        <input type="hidden" th:if="${p.value != null}"
+               th:name="${p.key}" th:value="${p.value}">
+    </th:block>
+
+    <!-- 스크립트가 막힌 환경을 위해. onchange 가 돌면 이 버튼은 안 보인다 -->
+    <!--
+      .btn 만 쓴다 — .tiny 는 story.css 에 있고 티어 화면은 그 파일을 안 읽는다.
+      조각이 세 화면 공용이므로 공용 껍데기(app.css)에 있는 것만 쓴다.
+    -->
+    <noscript><button class="btn" type="submit">이동</button></noscript>
+</form>
 
 </body>
 </html>

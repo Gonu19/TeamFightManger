@@ -3,9 +3,11 @@ package com.teamfighter.tfm.web;
 import com.teamfighter.tfm.analysis.pair.PairEffectCalculator;
 import com.teamfighter.tfm.analysis.pair.PairEffectCalculator.Side;
 import com.teamfighter.tfm.ingest.entity.ChampionCategory;
+import com.teamfighter.tfm.web.dao.SlotDao;
 import com.teamfighter.tfm.web.dao.StatsDao;
 import com.teamfighter.tfm.web.view.PairBucket;
 import com.teamfighter.tfm.web.view.PairRow;
+import com.teamfighter.tfm.web.view.SlotOption;
 import com.teamfighter.tfm.web.view.TierRow;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Controller;
@@ -16,7 +18,10 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 
 /**
@@ -53,9 +58,38 @@ public class StatsController {
     private static final int PAIRS_SHOWN = 10;
 
     private final StatsDao stats;
+    private final SlotDao slots;
 
-    public StatsController(StatsDao stats) {
+    public StatsController(StatsDao stats, SlotDao slots) {
         this.stats = stats;
+        this.slots = slots;
+    }
+
+    /**
+     * 고르개에 그릴 커리어 목록. <b>적재된 것 전부</b>이고, 집계된 것에만 표시가 붙는다.
+     *
+     * <p>전에는 목록 자체를 {@code champion_performance}(집계 <b>결과</b> 표)에서
+     * 뽑았다. 그러면 적재는 됐는데 집계를 안 돌린 커리어가 <b>고르개에서 통째로
+     * 사라진다</b> — 사용자에게 그것은 "적재가 안 됐나" 로 읽힌다. 목록에서 빼는 것과
+     * "(비어 있음)" 이라고 적는 것은 다른 말이다: 빠지면 없는 커리어이고, 적히면
+     * 아직 집계 안 한 커리어다. D82 가 고친 것이 이것이다.
+     */
+    private List<SlotOption> options() {
+        return slots.options(Set.copyOf(stats.slots()));
+    }
+
+    /**
+     * 목록에서 기본 커리어를 고른다. <b>집계된 것</b>을 먼저 본다.
+     *
+     * <p>첫 줄을 그냥 집으면 하필 그것이 집계 전인 커리어일 때 티어가 빈 화면으로
+     * 열린다 — 다른 커리어에는 볼 것이 있는데도. 연대기가 "기사 있는 슬롯" 을 먼저
+     * 고르는 것과 같은 규칙이다.
+     */
+    private static Integer firstSlot(List<SlotOption> options) {
+        return options.stream().filter(SlotOption::filled).findFirst()
+                .or(() -> options.stream().findFirst())
+                .map(SlotOption::slotId)
+                .orElse(null);
     }
 
     /**
@@ -69,12 +103,26 @@ public class StatsController {
                        @RequestParam(defaultValue = "false") boolean scrim,
                        @RequestParam(required = false) String category,
                        Model model) {
-        List<Integer> slots = stats.slots();
-        Integer selected = slot != null ? slot : (slots.isEmpty() ? null : slots.get(0));
+        Set<Integer> aggregated = Set.copyOf(stats.slots());
+        List<SlotOption> options = slots.options(aggregated);
+        Integer selected = slot != null ? slot : firstSlot(options);
         String tab = normalize(category);
 
-        model.addAttribute("slots", slots);
+        model.addAttribute("slots", options);
         model.addAttribute("selectedSlot", selected);
+
+        /*
+         * 빈 표에는 두 가지 뜻이 있다. 적재는 됐는데 집계를 안 돌렸거나, 집계는
+         * 돌렸는데 이 역할군에 챔피언이 없거나. 화면에는 둘 다 "빈 표" 로 똑같이
+         * 보이는데 <b>할 일이 정반대</b>다 — 앞은 ② 를 누르는 것이고 뒤는 기다리는
+         * 것이다. 그래서 어느 쪽인지를 모델이 말해 준다.
+         */
+        model.addAttribute("notAggregated", selected != null && !aggregated.contains(selected));
+
+        // 커리어를 바꿔도 지금 보고 있는 조건은 따라간다. 안 넘기면 역할군 탭이
+        // 조용히 "전체" 로 돌아가고, 사용자는 자기가 안 누른 변화를 보게 된다.
+        model.addAttribute("carry", carry("scrim", scrim, "category", tab));
+
         model.addAttribute("scrim", scrim);
         model.addAttribute("categories", ChampionCategory.values());
         model.addAttribute("selectedCategory", tab);
@@ -102,6 +150,20 @@ public class StatsController {
     }
 
     /**
+     * 고르개가 같이 실어 보낼 질의 인자.
+     *
+     * <p>{@code Map.of} 를 못 쓴다 — 널 값에 예외를 던지기 때문이다. 역할군은
+     * "전체" 일 때 널이고 그건 정상이다. 널은 조각이 {@code th:if} 로 걸러
+     * {@code ?category=} 같은 빈 인자가 주소에 안 붙는다.
+     */
+    private static Map<String, Object> carry(String k1, Object v1, String k2, Object v2) {
+        Map<String, Object> out = new LinkedHashMap<>();
+        out.put(k1, v1);
+        out.put(k2, v2);
+        return out;
+    }
+
+    /**
      * 챔피언 하나 — <b>세 묶음</b>으로 보여준다.
      *
      * <pre>
@@ -124,8 +186,8 @@ public class StatsController {
     public String champion(@PathVariable String code,
                            @RequestParam(required = false) Integer slot,
                            Model model) {
-        List<Integer> slots = stats.slots();
-        Integer selected = slot != null ? slot : (slots.isEmpty() ? null : slots.get(0));
+        List<SlotOption> options = options();
+        Integer selected = slot != null ? slot : firstSlot(options);
 
         TierRow champion = stats.champion(code, selected)
                 .orElseThrow(() -> new ResponseStatusException(
@@ -137,7 +199,7 @@ public class StatsController {
                 : stats.pairs(selected, champion.championId(), Side.FOE);
 
         model.addAttribute("champion", champion);
-        model.addAttribute("slots", slots);
+        model.addAttribute("slots", options);
         model.addAttribute("selectedSlot", selected);
 
         // 접힌 표가 쓰는 원본. 묶음은 여기서 잘라낸 것이고, 여섯 지표는 안 사라진다

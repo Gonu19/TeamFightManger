@@ -28,12 +28,12 @@
     <h1>챔피언 랭킹</h1>
 
     <div class="filters">
-        <span class="label">커리어</span>
-        <a th:each="s : ${slots}"
-           class="chip"
-           th:href="@{/tier(slot=${s}, scrim=${scrim}, category=${selectedCategory})}"
-           th:text="'슬롯 ' + ${s}"
-           th:classappend="${s == selectedSlot} ? 'on' : ''">슬롯 1</a>
+        <!--
+          커리어 고르개 — 세 화면이 같은 조각을 쓴다. 여기서만 조각을 <b>이 패널 안에</b>
+          넣는 이유는 티어에만 다른 거르개(경기·역할군)가 더 있기 때문이다. 조각이 자기
+          패널을 그렸다면 패널 둘이 세로로 쌓여, 커리어 줄의 높이가 티어에서만 달라진다.
+        -->
+        <div th:replace="~{fragments/filters :: slots('/tier', ${slots}, ${selectedSlot}, ${carry})}"></div>
 
         <!-- 스크림 포함/제외 두 벌이 미리 만들어져 있다 (D47). 켜고 끄는 데 재계산이 없다 -->
         <span class="label">경기</span>
@@ -59,11 +59,25 @@
            th:classappend="${c.name() == selectedCategory} ? 'on' : ''">전사</a>
     </div>
 
-    <p class="empty" th:if="${rows.isEmpty()}">
+    <!--
+      집계 전인 커리어에는 <b>표를 안 그린다.</b>
+
+      표가 비는 것이 아니라는 점이 함정이다. 티어 질의는 champion 을 왼쪽에 두고
+      성적을 붙이므로, 집계가 한 번도 안 돈 커리어에서도 <b>40여 줄이 전부 "—" 로</b>
+      나온다. 그 화면은 "볼 것이 없다" 가 아니라 "값이 깨졌다" 로 읽힌다 — 사용자는
+      세이브를 다시 넣는 헛수고를 하고, 정작 할 일(연대기 ②)은 안 한다.
+
+      줄 없는 표와 줄만 있고 값이 없는 표는 다른 그림이지만 <b>쓸모는 똑같이 없다.</b>
+      그래서 둘 다 문구로 바꾸고, 문구는 상태가 아니라 <b>다음에 누를 것</b>을 말한다.
+    -->
+    <p class="empty" th:if="${notAggregated}">
+        이 커리어는 아직 집계 전이다 — 연대기의 ② 「다시 돌리기」 로 집계를 돌린다.
+    </p>
+    <p class="empty" th:if="${!notAggregated and rows.isEmpty()}">
         아직 집계된 것이 없다. 세이브를 적재하고 집계를 돌린다.
     </p>
 
-    <div class="tier-scroll" th:unless="${rows.isEmpty()}">
+    <div class="tier-scroll" th:unless="${notAggregated or rows.isEmpty()}">
     <table class="tier-table">
         <thead>
         <tr>
@@ -125,7 +139,8 @@
     </table>
     </div>
 
-    <p class="note" th:unless="${rows.isEmpty()}">
+    <!-- 표가 없으면 표를 읽는 법도 없다. 조건은 위 .tier-scroll 과 같아야 한다 -->
+    <p class="note" th:unless="${notAggregated or rows.isEmpty()}">
         <b>순위는 추정 승률 순이다.</b> 등급(S·A·B)은 아직 안 매긴다 — 기저 승률의
         흩어짐(표준편차 3.3%p)이 표본 오차(±3.4%p)와 비슷해서, 지금 컷을 그으면 잡음에
         등급을 매기는 것이 된다 (D51). 순위는 컷라인 없이도 말할 수 있는 사실이라 대신 쓴다.

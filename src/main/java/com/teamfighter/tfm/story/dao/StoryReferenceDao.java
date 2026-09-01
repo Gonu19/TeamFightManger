@@ -55,19 +55,12 @@ public class StoryReferenceDao {
         this.jdbc = jdbc;
     }
 
-    /**
-     * 적재된 커리어 전부.
-     *
-     * <p>화면의 <b>부트스트랩</b>용이다. 기사가 한 편도 없으면 {@code article} 에서 뽑는
-     * 슬롯 목록이 비고, 그러면 "어느 커리어에 기사를 쓸까" 를 고를 수 없어 첫 기사를 영영
-     * 못 쓴다 — 기사가 있어야 버튼이 보이고 버튼을 눌러야 기사가 생기는 순환이다.
-     * 그 순환을 여기서 끊는다.
+    /*
+     * slotIds() 는 여기 있었다. 화면의 커리어 목록을 뽑는 자리였는데, 같은 질의를
+     * 통계 화면도 따로 갖고 있었고 그쪽만 집계 결과 표를 봐서 새 커리어를 놓쳤다.
+     * 목록의 출처를 하나로 모으면서 com.teamfighter.tfm.web.dao.SlotDao 로 옮겼다 (D82).
+     * 이 클래스는 기사가 쓸 사실을 읽는 곳이지 화면의 고르개를 채우는 곳이 아니다.
      */
-    @Transactional(readOnly = true)
-    public List<Integer> slotIds() {
-        return jdbc.queryForList(
-                "SELECT slot_id FROM save_slot ORDER BY slot_id", Integer.class);
-    }
 
     /**
      * 슬롯의 세이브 파일명. {@code slot_key} 는 파일명 그대로 저장돼 있다(D28) —

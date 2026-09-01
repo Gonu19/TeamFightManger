@@ -27,7 +27,14 @@
 
 <div class="layout-wrap">
     <div class="main-col">
-        <div th:replace="~{fragments/filters :: slots('/gallery', ${slots}, ${selectedSlot}, ${filledSlots})}"></div>
+        <!--
+          껍데기(.filters 패널)는 부르는 쪽이 그린다 — 조각은 라벨과 고르개만 낸다.
+          carry 는 비어 있다: 커리어를 바꾸면 페이지는 0(가장 최근)으로 돌아가는 것이 맞고,
+          batch 는 옛 커리어의 배치 번호라 들고 가면 남의 글을 열게 된다.
+        -->
+        <div class="filters">
+            <div th:replace="~{fragments/filters :: slots('/gallery', ${slots}, ${selectedSlot}, ${carry})}"></div>
+        </div>
 
         <div class="gallery-title">
             <h2>

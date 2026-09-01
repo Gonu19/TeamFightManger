@@ -32,7 +32,10 @@
 <main>
     <h1>연대기</h1>
 
-    <div th:replace="~{fragments/filters :: slots('/story', ${slots}, ${selectedSlot}, ${filledSlots})}"></div>
+    <!-- 껍데기(.filters 패널)는 부르는 쪽이 그린다 — 조각은 라벨과 고르개만 낸다 -->
+    <div class="filters">
+        <div th:replace="~{fragments/filters :: slots('/story', ${slots}, ${selectedSlot}, ${carry})}"></div>
+    </div>
 
     <!--
       flash 메시지. POST 가 리다이렉트하면서 한 번만 실어 보낸 값이라 새로고침하면 사라진다
