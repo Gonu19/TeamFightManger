@@ -1,14 +1,3 @@
----
-title: 팀파이트 매니저 티어 분석 - 요구사항
-created: 2026-08-10
-updated: 2026-08-25
-para:
-project:
-areas: []
-status:
-tags: [teamfight-manager, requirements, spring-boot, data-analysis]
----
-
 # 팀파이트 매니저 티어 분석 웹
 
 ## 무엇을 만드나
@@ -307,4 +296,4 @@ E:\SteamLibrary\steamapps\common\Teamfight Manager\            # 게임 설치 �
 
 ---
 
-[[teamFighterManger.README]]
+← [README](README.md)

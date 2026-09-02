@@ -1,14 +1,3 @@
----
-title: 팀파이트 매니저 티어 분석 - 파일 구조
-created: 2026-08-25
-updated: 2026-08-28
-para:
-project:
-areas: []
-status:
-tags: [teamfight-manager, architecture, structure]
----
-
 # 파일 구조
 
 패키지를 **기능/도메인으로 나눈다.** 타입별(`controller/`, `service/`, `dto/`)로 나누지 않는다.
@@ -209,4 +198,4 @@ Spring Boot 4.1.1 · Framework 7.0.9 · Thymeleaf 3.1.5 · Gradle 9.5.1 · Java 
 
 ---
 
-[[teamFighterManger.README]]
+← [README](README.md)

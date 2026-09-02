@@ -1,14 +1,3 @@
----
-title: 팀파이트 매니저 세이브 파일 구조
-created: 2026-08-10
-updated: 2026-08-10
-para:
-project:
-areas: []
-status:
-tags: [teamfight-manager, reverse-engineering, savefile, binaryformatter]
----
-
 # 세이브 파일 구조
 
 실제 세이브 3개를 파싱해서 확인한 내용이다. 추측이 아니라 관측값이다.
@@ -332,4 +321,4 @@ Pythoness Shadowmancer ShieldBearer Sniper Swordman Taoist Vampire Werewolf
 
 ---
 
-[[teamFighterManger.README]]
+← [README](README.md)

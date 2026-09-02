@@ -1,14 +1,3 @@
----
-title: 팀파이트 매니저 티어 분석 - 아키텍처
-created: 2026-08-29
-updated: 2026-08-29
-para:
-project:
-areas: []
-status:
-tags: [teamfight-manager, architecture, design]
----
-
 # 아키텍처
 
 ## 이 문서의 자리
@@ -498,4 +487,4 @@ brief 는 **순수 레코드**다. LLM 도 HTTP 도 모른다. 그래서 DB 없�
 
 ---
 
-[[teamFighterManger.README]]
+← [README](README.md)

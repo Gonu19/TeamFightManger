@@ -1,14 +1,3 @@
----
-title: 팀파이트 매니저 티어 분석 - 밴픽 시뮬레이터 설계
-created: 2026-08-25
-updated: 2026-08-25
-para:
-project:
-areas: []
-status:
-tags: [teamfight-manager, banpick, draft, design]
----
-
 # 밴픽 시뮬레이터
 
 D13 이 2차로 미뤄뒀던 기능이다. 우선순위가 올라와 다음 구현이 됐다.
@@ -137,4 +126,4 @@ HTMX 로 후보 목록 조각만 교체한다. 점수 계산은 전부 서버.
 
 ---
 
-[[teamFighterManger.README]]
+← [README](README.md)

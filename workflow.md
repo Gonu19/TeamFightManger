@@ -1,14 +1,3 @@
----
-title: 팀파이트 매니저 티어 분석 - 작업 형식
-created: 2026-08-25
-updated: 2026-08-29
-para:
-project:
-areas: []
-status:
-tags: [teamfight-manager, workflow, agents]
----
-
 # 작업 형식
 
 한 사람이 총괄하고, **범위가 좁고 판단이 필요 없는 검증만** 서브에이전트에 배분한다.

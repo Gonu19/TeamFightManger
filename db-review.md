@@ -1,14 +1,3 @@
----
-title: 팀파이트 매니저 티어 분석 - DB 스키마 검토
-created: 2026-08-10
-updated: 2026-08-10
-para:
-project:
-areas: []
-status:
-tags: [database, schema-design, teamfight-manager]
----
-
 # DB 스키마 검토
 
 > **[폐기됨 · 2026-08-10]** 이 문서는 "스크린샷 OCR로 데이터를 수집한다"는 전제로 작성됐다.
@@ -90,4 +79,4 @@ tags: [database, schema-design, teamfight-manager]
 
 ---
 
-[[teamFighterManger.README]]
+← [README](README.md)

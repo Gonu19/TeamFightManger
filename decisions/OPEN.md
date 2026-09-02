@@ -70,4 +70,4 @@ title: "아직 안 정한 것"
 
 ---
 
-[[teamFighterManger.README]]
+← [README](../README.md)
