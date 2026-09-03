@@ -356,6 +356,18 @@ public final class FactCheck {
                 out.add(line.healing());
             }
         });
+        // 매치 합계도 우리가 준 사실이다. 프롬프트가 「선수 합계」 표로 보여주므로
+        // (StoryPrompts.playerTotals) 기사는 그 값을 그대로 인용한다. 여기 안 넣으면
+        // 수훈 선수 문단의 숫자가 통째로 "brief 에 없는 숫자" 로 지적된다 —
+        // 우리가 준 숫자를 우리가 지적하는 것이고, 거짓 양성이 이 장치를 죽인다.
+        for (MatchBrief.AthleteTotals t : brief.athleteTotals()) {
+            out.add(t.kill());
+            out.add(t.death());
+            out.add(t.assist());
+            out.add(t.dealing());
+            out.add(t.tanking());
+            out.add(t.healing());
+        }
         return out;
     }
 

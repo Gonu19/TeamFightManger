@@ -40,10 +40,23 @@ public final class SeasonBook {
     /**
      * 프롬프트에 넘길 맥락 태그의 최대 개수.
      *
-     * <p>둘이다. 셋을 넘기면 기사가 태그를 차례로 소개하기 시작한다 — 세트를 나열하던
-     * 실패와 같은 모양이고, 그때 첫 문장의 힘이 오히려 죽는다.
+     * <p><b>둘이었다가 넷으로 올렸다.</b> 기사의 첫 문단이 "이 경기가 리그에 무엇을
+     * 했나" 를 다루는 자리가 되면서 태그가 <b>재료가 아니라 주제</b>가 됐기 때문이다.
+     *
+     * <p>그래도 상한을 없애지는 않는다. 다 붙이면 기사가 태그를 차례로 소개하기
+     * 시작한다 — 세트를 나열하던 실패와 같은 모양이고, 그때 첫 문장의 힘이 오히려 죽는다.
+     * 순서가 곧 우선순위다: <b>우리 팀 → 순위 → 연승·연패 → 라이벌</b>.
      */
-    private static final int MAX_TAGS = 2;
+    private static final int MAX_TAGS = 4;
+
+    /**
+     * 연속이라고 부르기 위한 최소 횟수.
+     *
+     * <p><b>1은 연속이 아니다.</b> 지난 경기에 한 번 진 것을 "1연패" 라고 부르면
+     * 기사가 「1연패 종결」을 제목으로 뽑는다 — 실물에서 그렇게 나왔다.
+     * 그리고 모든 경기가 연승/연패 태그를 달게 되므로 태그가 흔해져 무게를 잃는다.
+     */
+    private static final int STREAK_MIN = 2;
 
     private final List<ParsedSchedule> schedules;
 
@@ -60,34 +73,34 @@ public final class SeasonBook {
     public NotabilityContext contextFor(ParsedSchedule match, Integer playerTeamId) {
         Objects.requireNonNull(match, "match");
 
-        Map<Integer, Integer> winsBefore = new java.util.LinkedHashMap<>(winsBefore(match));
+        Map<Integer, TeamRecord> recordsBefore = new java.util.LinkedHashMap<>(recordsBefore(match));
         Map<Integer, Integer> playedBefore = playedBefore(match);
 
         // 아직 한 번도 이기지 못한 팀은 앞선 경기 기록에 안 잡힌다. 그렇다고 순위표에서
         // 빼면 "꼴찌가 1위를 잡았다" 를 영영 말할 수 없다. 지금 뛰고 있으니 이 대회 소속인
         // 것은 확실하므로 0승으로 넣는다. 단, 앞선 결과가 하나도 없으면 넣지 않는다 —
         // 0승끼리의 순위는 근거가 아니다.
-        if (!winsBefore.isEmpty()) {
-            winsBefore.putIfAbsent(match.blueTeamId(), 0);
-            winsBefore.putIfAbsent(match.redTeamId(), 0);
+        if (!recordsBefore.isEmpty()) {
+            recordsBefore.putIfAbsent(match.blueTeamId(), new TeamRecord(0, 0, 0));
+            recordsBefore.putIfAbsent(match.redTeamId(), new TeamRecord(0, 0, 0));
         }
 
         // 브래킷은 순위표가 없다. 승수로 줄을 세우면 "1위 대 1위"(둘 다 1라운드 통과)
         // 같은 말이 나온다 — 사실은 맞지만 리그 순위와 다른 뜻이라 기사에서 거짓이 된다.
         if (isBracket(match)) {
-            winsBefore = Map.of();
+            recordsBefore = Map.of();
         }
 
-        Integer size = winsBefore.isEmpty() ? null : winsBefore.size();
-        Integer blueRank = rank(winsBefore, match.blueTeamId());
-        Integer redRank = rank(winsBefore, match.redTeamId());
+        Integer size = recordsBefore.isEmpty() ? null : recordsBefore.size();
+        Integer blueRank = rank(recordsBefore, match.blueTeamId());
+        Integer redRank = rank(recordsBefore, match.redTeamId());
 
         return new NotabilityContext(
                 playerTeamId,
                 blueRank,
                 redRank,
                 size,
-                winProbability(winsBefore, playedBefore, match),
+                winProbability(recordsBefore, playedBefore, match),
                 metInPastBracket(match));
     }
 
@@ -117,53 +130,173 @@ public final class SeasonBook {
      * 몇 라운드까지 올라왔나이기 때문이다 — {@link #isBracket} 이 적어 둔 그대로다.
      */
     public List<String> tagsFor(ParsedSchedule match, NameBook names) {
+        return tagsFor(match, names, null);
+    }
+
+    /**
+     * 플레이어 팀까지 아는 태그.
+     *
+     * @param playerTeamId 플레이어 팀 번호(D54). 모르면 {@code null} — 그때는 우리 팀
+     *                     관점 태그를 만들지 않는다
+     */
+    public List<String> tagsFor(ParsedSchedule match, NameBook names, Integer playerTeamId) {
         Objects.requireNonNull(match, "match");
         Objects.requireNonNull(names, "names");
 
         List<String> tags = new ArrayList<>();
-        Map<Integer, Integer> wins = winsBefore(match);                         // 1. 이 매치 <b>전</b>까지의 승수
+        Map<Integer, TeamRecord> recordsBefore = recordsBefore(match);
         boolean bracket = isBracket(match);
 
         String blue = label(match.blueTeamId(), names);
         String red = label(match.redTeamId(), names);
+        Integer winnerId = match.winnerTeamId();
+        Integer loserId = winnerId == null ? null : (Objects.equals(winnerId, match.blueTeamId()) ? match.redTeamId() : match.blueTeamId());
 
-        if (!wins.isEmpty() && !bracket) {                                      // 2. 순위 다툼 — 리그일 때만
-            Integer blueRank = rank(wins, match.blueTeamId());
-            Integer redRank = rank(wins, match.redTeamId());
-            int teams = wins.size();
+        if (!recordsBefore.isEmpty() && !bracket) {
+            Map<Integer, TeamRecord> recordsAfter = new java.util.LinkedHashMap<>(recordsBefore);
+            if (winnerId != null) {
+                TeamRecord winnerRec = recordsAfter.getOrDefault(winnerId, new TeamRecord(0, 0, 0));
+                TeamRecord loserRec = recordsAfter.getOrDefault(loserId, new TeamRecord(0, 0, 0));
+                
+                int blueScore = match.blueScore();
+                int redScore = match.redScore();
+                int setDiffBlue = blueScore - redScore;
+                int setDiffRed = redScore - blueScore;
+                
+                int blueKill = match.blueKill();
+                int redKill = match.redKill();
+                int kdDiffBlue = blueKill - redKill;
+                int kdDiffRed = redKill - blueKill;
 
-            if (blueRank != null && redRank != null) {
-                if (blueRank == 1 && redRank == 1) {                            // 2-1. 공동 1위끼리 — 승자가 단독 1위
-                    tags.add("공동 1위끼리 맞붙는다. 이기는 쪽이 단독 1위가 된다"
-                            + " (" + blue + " " + wins.get(match.blueTeamId()) + "승 · "
-                            + red + " " + wins.get(match.redTeamId()) + "승)");
-                } else if (blueRank <= 2 && redRank <= 2) {                     // 2-2. 1위 대 2위
-                    tags.add("선두 다툼이다. " + blue + " " + blueRank + "위 · "
-                            + red + " " + redRank + "위");
-                } else if (blueRank == teams && redRank == teams) {             // 2-3. 공동 최하위
-                    tags.add("공동 최하위끼리 맞붙는다 (" + teams + "팀 중)");
-                } else if (blueRank >= teams - 1 && redRank >= teams - 1) {     // 2-4. 하위권 맞대결
-                    tags.add("하위권 맞대결이다. " + blue + " " + blueRank + "위 · "
-                            + red + " " + redRank + "위 (" + teams + "팀 중)");
+                if (Objects.equals(winnerId, match.blueTeamId())) {
+                    recordsAfter.put(winnerId, new TeamRecord(winnerRec.wins() + 1, winnerRec.setDiff() + setDiffBlue, winnerRec.kdDiff() + kdDiffBlue));
+                    recordsAfter.put(loserId, new TeamRecord(loserRec.wins(), loserRec.setDiff() + setDiffRed, loserRec.kdDiff() + kdDiffRed));
+                } else {
+                    recordsAfter.put(winnerId, new TeamRecord(winnerRec.wins() + 1, winnerRec.setDiff() + setDiffRed, winnerRec.kdDiff() + kdDiffRed));
+                    recordsAfter.put(loserId, new TeamRecord(loserRec.wins(), loserRec.setDiff() + setDiffBlue, loserRec.kdDiff() + kdDiffBlue));
                 }
             }
-        }
+            Integer blueRankBefore = rank(recordsBefore, match.blueTeamId());
+            Integer redRankBefore = rank(recordsBefore, match.redTeamId());
+            Integer blueRankAfter = rank(recordsAfter, match.blueTeamId());
+            Integer redRankAfter = rank(recordsAfter, match.redTeamId());
+            int teams = recordsBefore.size();
 
-        for (Integer team : List.of(match.blueTeamId(), match.redTeamId())) {   // 3. 연패·연승
-            int streak = streakBefore(match, team);
-            String who = label(team, names);
-            if (streak <= -3) {
-                tags.add(who + " " + (-streak) + "연패 중이다");
-            } else if (streak >= 3) {
-                tags.add(who + " " + streak + "연승 중이다");
+            if (blueRankBefore != null && redRankBefore != null) {
+                int blueWinsBefore = recordsBefore.containsKey(match.blueTeamId()) ? recordsBefore.get(match.blueTeamId()).wins() : 0;
+                int redWinsBefore = recordsBefore.containsKey(match.redTeamId()) ? recordsBefore.get(match.redTeamId()).wins() : 0;
+
+                // 전·후를 <b>한 태그</b>로 붙인다. 둘로 나누면 태그 두 자리를 쓰는데
+                // 사실은 한 가지 이야기("이 경기가 순위를 어떻게 움직였나")다.
+                // 태그가 늘수록 기사는 그것을 차례로 소개하기 시작한다.
+                StringBuilder rankTag = new StringBuilder("순위: ")
+                        .append(blue).append(' ').append(blueRankBefore).append("위(")
+                        .append(blueWinsBefore).append("승)");
+                if (winnerId != null) {
+                    rankTag.append(" → ").append(blueRankAfter).append('위');
+                }
+                rankTag.append(", ").append(red).append(' ').append(redRankBefore).append("위(")
+                        .append(redWinsBefore).append("승)");
+                if (winnerId != null) {
+                    rankTag.append(" → ").append(redRankAfter).append('위');
+                }
+                rankTag.append(" (").append(teams).append("팀 중");
+
+                // 남은 경기 수가 순위의 무게를 정한다. 32경기 남은 1위와 2경기 남은 1위는
+                // 같은 1위가 아니다. 그 차이를 안 주면 기사가 매번 "굳혔다" 로만 쓴다.
+                int remaining = remainingInCompetition(match);
+                if (remaining > 0) {
+                    rankTag.append(" · 이 대회 ").append(remaining).append("경기 남음");
+                }
+                tags.add(rankTag.append(')').toString());
             }
         }
 
-        if (metInPastBracket(match)) {                                          // 4. 라이벌 (이미 있던 판정을 재사용)
-            tags.add("두 팀은 앞선 토너먼트에서도 만났다");
+        for (Integer team : List.of(match.blueTeamId(), match.redTeamId())) {
+            int streakBefore = streakBefore(match, team);
+            String who = label(team, names);
+            int count = Math.abs(streakBefore);
+
+            // 1은 연속이 아니다. 지난 경기에 한 번 진 것을 "1연패" 라고 부르면
+            // 기사가 "1연패 종결" 을 제목으로 뽑는다 — 실물에서 그렇게 나왔다.
+            // 연속이라는 말이 성립하려면 최소 둘이다.
+            if (count < STREAK_MIN) {
+                continue;
+            }
+            boolean wonThis = Objects.equals(team, winnerId);
+            boolean lostThis = Objects.equals(team, loserId);
+
+            if (streakBefore > 0 && wonThis) {
+                tags.add(String.format("%s: 경기 전 %d연승 중이었으며, 이 승리로 %d연승을 달성함", who, count, count + 1));
+            } else if (streakBefore > 0 && lostThis) {
+                tags.add(String.format("%s: 경기 전 %d연승 중이었으나, 이 패배로 연승이 끊김", who, count));
+            } else if (streakBefore < 0 && wonThis) {
+                tags.add(String.format("%s: 경기 전 %d연패 중이었으나, 이 승리로 연패를 끊어냄", who, count));
+            } else if (streakBefore < 0 && lostThis) {
+                tags.add(String.format("%s: 경기 전 %d연패 중이었으며, 이 패배로 %d연패의 수렁에 빠짐", who, count, count + 1));
+            }
         }
 
+        if (metInPastBracket(match)) {
+            tags.add("두 팀은 과거 토너먼트(플레이오프/월즈) 등 큰 무대에서 맞붙은 전적이 있는 라이벌 관계다");
+        }
+
+        // 우리 팀 관점을 <b>맨 뒤가 아니라 맨 앞에</b> 놓는다. 이 앱은 커리어 게임이고,
+        // 같은 2:0 도 내 팀이 뛰었는지에 따라 완전히 다른 기사가 된다.
+        // 넣지 않으면 기사가 남의 리그 중계처럼 읽힌다 — 실물이 정확히 그랬다.
+        perspective(match, names, playerTeamId, recordsBefore, bracket).ifPresent(t -> tags.add(0, t));
+
         return tags.size() <= MAX_TAGS ? List.copyOf(tags) : List.copyOf(tags.subList(0, MAX_TAGS));
+    }
+
+    /**
+     * 이 경기가 <b>플레이어에게</b> 무엇인가.
+     *
+     * <p>세 갈래다. 내 팀이 뛰었으면 그 결과가 곧 내 결과이고, 안 뛰었으면 이 경기는
+     * <b>내 순위에 일어난 일</b>이다 — 내가 안 뛴 경기가 내 순위를 떨어뜨린다는 것이
+     * 리그의 긴장이고, 그걸 말해 주지 않으면 남의 경기는 그냥 남의 경기로 읽힌다.
+     *
+     * <p>플레이어 팀을 모르면({@code null}) 아무 말도 하지 않는다. 모르는 것으로
+     * 기사를 키우지 않는다 — {@link NotabilityContext} 가 세운 규칙 그대로다.
+     */
+    private java.util.Optional<String> perspective(ParsedSchedule match, NameBook names,
+                                                   Integer playerTeamId,
+                                                   Map<Integer, TeamRecord> recordsBefore,
+                                                   boolean bracket) {
+        if (playerTeamId == null) {
+            return java.util.Optional.empty();
+        }
+        boolean plays = Objects.equals(playerTeamId, match.blueTeamId())
+                || Objects.equals(playerTeamId, match.redTeamId());
+        String me = label(playerTeamId, names);
+
+        if (plays) {
+            Integer winnerId = match.winnerTeamId();
+            String outcome = winnerId == null ? "무승부다"
+                    : (Objects.equals(winnerId, playerTeamId) ? "우리가 이겼다" : "우리가 졌다");
+            return java.util.Optional.of("이 경기는 우리 팀(" + me + ")의 경기다 — " + outcome);
+        }
+
+        // 안 뛴 경기. 순위표가 없으면(브래킷·시즌 초반) 그 사실만 말한다.
+        if (bracket || recordsBefore.isEmpty() || !recordsBefore.containsKey(playerTeamId)) {
+            return java.util.Optional.of("우리 팀(" + me + ")은 이 경기에 없다");
+        }
+        Integer myRank = rank(recordsBefore, playerTeamId);
+        int myWins = recordsBefore.get(playerTeamId).wins();
+        Integer winnerId = match.winnerTeamId();
+        if (winnerId == null || !recordsBefore.containsKey(winnerId)) {
+            return java.util.Optional.of(
+                    "우리 팀(" + me + ", " + myRank + "위)은 이 경기에 없다");
+        }
+        // 승자가 우리보다 아래였다면 이 경기가 우리를 쫓아온 것이다. 승차로 말한다 —
+        // "몇 위" 보다 "몇 경기 차" 가 남은 일정과 이어진다.
+        int winnerWinsAfter = recordsBefore.get(winnerId).wins() + 1;
+        int gap = myWins - winnerWinsAfter;
+        String gapText = gap > 0 ? gap + "경기 앞선다"
+                : gap == 0 ? "승수가 같아졌다"
+                : (-gap) + "경기 뒤진다";
+        return java.util.Optional.of("우리 팀(" + me + ", " + myRank + "위 " + myWins + "승)은 이 경기에 없다 — "
+                + label(winnerId, names) + "가 이겨 우리가 " + gapText);
     }
 
     /**
@@ -206,18 +339,74 @@ public final class SeasonBook {
         return name != null ? name : "팀 " + teamId;
     }
 
-    private Map<Integer, Integer> winsBefore(ParsedSchedule match) {
+    /** 팀별 승수, 세트 득실차, 그리고 킬-데스 득실차를 담는다 */
+    private record TeamRecord(int wins, int setDiff, int kdDiff) implements Comparable<TeamRecord> {
+        @Override
+        public int compareTo(TeamRecord o) {
+            if (this.wins != o.wins) {
+                return Integer.compare(this.wins, o.wins);
+            }
+            if (this.setDiff != o.setDiff) {
+                return Integer.compare(this.setDiff, o.setDiff);
+            }
+            return Integer.compare(this.kdDiff, o.kdDiff);
+        }
+    }
+
+    private Map<Integer, TeamRecord> recordsBefore(ParsedSchedule match) {
         Map<Integer, Integer> wins = new java.util.LinkedHashMap<>();
+        Map<Integer, Integer> setDiffs = new java.util.LinkedHashMap<>();
+        Map<Integer, Integer> kdDiffs = new java.util.LinkedHashMap<>();
+
         for (ParsedSchedule other : earlierInSameCompetition(match)) {
             Integer winner = other.winnerTeamId();
             for (Integer team : List.of(other.blueTeamId(), other.redTeamId())) {
                 wins.putIfAbsent(team, 0);
+                setDiffs.putIfAbsent(team, 0);
+                kdDiffs.putIfAbsent(team, 0);
             }
             if (winner != null) {
                 wins.merge(winner, 1, Integer::sum);
             }
+            setDiffs.merge(other.blueTeamId(), other.blueScore() - other.redScore(), Integer::sum);
+            setDiffs.merge(other.redTeamId(), other.redScore() - other.blueScore(), Integer::sum);
+            
+            kdDiffs.merge(other.blueTeamId(), other.blueKill() - other.redKill(), Integer::sum);
+            kdDiffs.merge(other.redTeamId(), other.redKill() - other.blueKill(), Integer::sum);
         }
-        return wins;
+        
+        Map<Integer, TeamRecord> records = new java.util.LinkedHashMap<>();
+        for (Integer team : wins.keySet()) {
+            records.put(team, new TeamRecord(wins.get(team), setDiffs.get(team), kdDiffs.get(team)));
+        }
+        return records;
+    }
+
+    /**
+     * 이 대회에서 <b>아직 안 치른</b> 매치 수.
+     *
+     * <p>순위의 무게를 정하는 값이다. 32경기 남은 1위와 2경기 남은 1위는 같은 1위가
+     * 아닌데, 그 차이를 안 주면 기사가 매번 "굳혔다" 로만 쓴다.
+     *
+     * <p><b>미래를 보지만 결과는 안 본다.</b> 이 클래스의 다른 메서드가 미래를 안 보는
+     * 이유는 <i>결과</i>가 새어 들어오기 때문이다. 일정의 존재 자체는 경기 전에도
+     * 알 수 있는 사실이라 그 규칙에 걸리지 않는다.
+     */
+    private int remainingInCompetition(ParsedSchedule match) {
+        if (match.competitionId() == null) {
+            return 0;
+        }
+        int count = 0;
+        for (ParsedSchedule other : schedules) {
+            if (other == match || other.isPlayed()) {
+                continue;
+            }
+            if (Objects.equals(other.competitionId(), match.competitionId())
+                    && Objects.equals(other.season(), match.season())) {
+                count++;
+            }
+        }
+        return count;
     }
 
     private Map<Integer, Integer> playedBefore(ParsedSchedule match) {
@@ -282,13 +471,13 @@ public final class SeasonBook {
         return !teams.isEmpty() && all.size() == teams.size() - 1;
     }
 
-    /** 승수 내림차순 순위. 같은 승수면 같은 등수다. 그 팀이 표에 없으면 {@code null}. */
-    private static Integer rank(Map<Integer, Integer> wins, Integer teamId) {
-        Integer mine = wins.get(teamId);
+    /** 승수, 득실차 내림차순 순위. 같은 기록이면 같은 등수다. 그 팀이 표에 없으면 {@code null}. */
+    private static Integer rank(Map<Integer, TeamRecord> records, Integer teamId) {
+        TeamRecord mine = records.get(teamId);
         if (mine == null) {
             return null;
         }
-        long ahead = wins.values().stream().filter(w -> w > mine).count();
+        long ahead = records.values().stream().filter(r -> r.compareTo(mine) > 0).count();
         return (int) ahead + 1;
     }
 
@@ -298,11 +487,11 @@ public final class SeasonBook {
      *
      * <p>표본이 모자란 팀이 하나라도 있으면 {@code null} 이다.
      */
-    private static Double winProbability(Map<Integer, Integer> wins,
+    private static Double winProbability(Map<Integer, TeamRecord> records,
                                          Map<Integer, Integer> played,
                                          ParsedSchedule match) {
-        Double blue = rate(wins, played, match.blueTeamId());
-        Double red = rate(wins, played, match.redTeamId());
+        Double blue = rate(records, played, match.blueTeamId());
+        Double red = rate(records, played, match.redTeamId());
         if (blue == null || red == null) {
             return null;
         }
@@ -314,13 +503,15 @@ public final class SeasonBook {
         return numerator / denominator;
     }
 
-    private static Double rate(Map<Integer, Integer> wins, Map<Integer, Integer> played,
+    private static Double rate(Map<Integer, TeamRecord> records, Map<Integer, Integer> played,
                                Integer teamId) {
         int n = played.getOrDefault(teamId, 0);
         if (n < MIN_MATCHES_FOR_STRENGTH) {
             return null;
         }
-        return (double) wins.getOrDefault(teamId, 0) / n;
+        TeamRecord rec = records.get(teamId);
+        int wins = rec == null ? 0 : rec.wins();
+        return (double) wins / n;
     }
 
     /**

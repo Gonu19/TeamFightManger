@@ -92,7 +92,7 @@ public class ArticleWriter {
 
         progress.at("기사를 쓰는 중", 0, 2);
         String raw = client.complete(                                           // 3. 창작 1 — 기사. 프롬프트는 "제목 한 줄, 빈 줄, 본문" 을 요구한다
-                StoryPrompts.article(brief, reference, notability));
+                StoryPrompts.article(brief, reference, notability, contextTags));
         String[] split = ArticleDraft.splitHeadline(raw);                       // 4. [제목, 본문] 두 칸. 형식을 어긴 답이면 제목 칸이 빈 문자열이다
         String body = split[1];
         String headline = split[0].isBlank()                                    // 5. 제목이 비면 스코어라인으로 짓는다 — 지어낸 말을 안 넣는다

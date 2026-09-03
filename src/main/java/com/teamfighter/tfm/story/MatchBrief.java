@@ -264,4 +264,71 @@ public record MatchBrief(
     public int setCount() {
         return sets.size();
     }
+
+    /**
+     * 선수 한 명의 <b>매치 전체</b> 합계.
+     *
+     * @param champions 이 매치에서 그 선수가 쓴 챔피언. 세트마다 다를 수 있어서 목록이다.
+     *                  <b>코드 그대로</b>다 — 한글 이름으로 바꾸는 것은 이름표를 아는
+     *                  쪽(렌더러)의 몫이고, 이 레코드는 이름표를 모른다
+     */
+    public record AthleteTotals(
+            Integer athleteId,
+            boolean blue,
+            int kill, int death, int assist,
+            int dealing, int tanking, int healing,
+            List<String> champions) {
+
+        public AthleteTotals {
+            champions = champions == null ? List.of() : List.copyOf(champions);
+        }
+    }
+
+    /**
+     * 세트를 가로질러 선수별로 더한 값.
+     *
+     * <h2>왜 brief 가 이걸 갖고 있나</h2>
+     *
+     * <b>두 곳이 같은 합계를 봐야 하기 때문이다.</b> 프롬프트는 이 표를 모델에게 보여주고
+     * ({@code StoryPrompts.playerTotals}), 대조는 그 합계를 <b>아는 숫자</b>로 넣는다
+     * ({@code FactCheck}). 각자 더하면 언젠가 갈라지고, 갈라지는 순간
+     * <b>우리가 준 숫자를 우리가 지적하는</b> 상태가 된다 — 거짓 양성이 이 장치를 죽인다.
+     *
+     * <p>세트별 줄을 그대로 두고 이걸 <b>더한</b> 이유는 실물 실패에 있다. 모델에게
+     * 세트별 줄만 주고 "수훈 선수를 골라라" 를 시켰더니 합계를 스스로 못 냈다 —
+     * 두 세트의 딜을 "10898의 가한피해와 12468의 가한피해" 로 두 번 적었다.
+     *
+     * <p>이름을 모르는 선수도 <b>뺀 채로 두지 않는다.</b> 화면에 안 쓰는 것과 대조가
+     * 모르는 것은 다른 문제다 — 빼면 그 선수의 숫자가 "brief 에 없는 숫자" 가 된다.
+     *
+     * @return 등장 순서대로. 개인 기록이 없는 매치(이벤트전, D16)에서는 비어 있다
+     */
+    public List<AthleteTotals> athleteTotals() {
+        record Key(Integer athleteId, boolean blue) {
+        }
+        java.util.Map<Key, int[]> sums = new java.util.LinkedHashMap<>();
+        java.util.Map<Key, java.util.LinkedHashSet<String>> picks = new java.util.LinkedHashMap<>();
+
+        for (SetBrief set : sets) {
+            for (PlayerLine line : set.players()) {
+                Key key = new Key(line.athleteId(), line.blue());
+                int[] s = sums.computeIfAbsent(key, k -> new int[6]);
+                s[0] += line.kill();
+                s[1] += line.death();
+                s[2] += line.assist();
+                s[3] += line.dealing();
+                s[4] += line.tanking();
+                s[5] += line.healing();
+                picks.computeIfAbsent(key, k -> new java.util.LinkedHashSet<>())
+                        .add(line.champion());
+            }
+        }
+
+        List<AthleteTotals> out = new ArrayList<>();
+        sums.forEach((key, s) -> out.add(new AthleteTotals(
+                key.athleteId(), key.blue(),
+                s[0], s[1], s[2], s[3], s[4], s[5],
+                List.copyOf(picks.get(key)))));
+        return out;
+    }
 }

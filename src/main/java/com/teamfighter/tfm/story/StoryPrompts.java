@@ -1,5 +1,6 @@
 package com.teamfighter.tfm.story;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.LinkedHashMap;
@@ -29,9 +30,10 @@ public final class StoryPrompts {
      * 문장의 인과("넉백 때문에 졌다")는 코드가 검증하지 못한다 —
      * 그러니 애초에 지어내지 않게 해야 한다.
      */
-    public static StoryRequest article(MatchBrief brief, NameBook names, Notability notability) {
+    public static StoryRequest article(MatchBrief brief, NameBook names, Notability notability, List<String> contextTags) {
         Objects.requireNonNull(brief, "brief");
         Objects.requireNonNull(notability, "notability");
+        Objects.requireNonNull(contextTags, "contextTags");
 
         String system = """
                 너는 팀파이트 매니저 리그의 경기 기사를 쓰는 기자다. 한국어로 쓴다.
@@ -41,65 +43,43 @@ public final class StoryPrompts {
                   한타 한 번으로 세트가 갈린다.
                 - 라인이 없다. 그러므로 라인전·미드·탑·정글·바텀·라인 스왑·CS·오브젝트·
                   용·바론·타워·와드·로밍 같은 말은 이 게임에 존재하지 않는다. 쓰지 마라.
-                - 세트마다 진영(블루/레드)이 바뀔 수 있는데, 그건 자리 배치일 뿐
-                  전술적 선택이 아니다. "진영을 교체했다" 를 승부의 원인처럼 쓰지 마라.
                 - 승부를 가르는 것은 밴픽 조합과 스킬 연계다. 그 밖의 원인은 우리가
                   관측하지 못한다.
 
-                지켜야 할 것:
+                지켜야 할 기본 규칙:
                 - 아래 「사실」에 있는 숫자만 쓴다. 없는 숫자는 쓰지 않는다.
                 - 「사실」에 없는 챔피언·팀·선수를 등장시키지 않는다.
                 - 밴된 챔피언이 활약했다고 쓰지 않는다. 밴은 나오지 않았다는 뜻이다.
                 - 경기 밖의 사건(이적, 부상, 관중 반응, 과거 전적)을 지어내지 않는다.
-                - 원인을 단정하지 않는다. "밴픽이 갈랐다" 처럼 확인할 수 없는 인과는
-                  "~로 보인다" 로 쓰거나 아예 쓰지 않는다.
-                - 「사실」에 없는 개념을 끌어오지 않는다. 승점·순위·연승·상대 전적은
-                  주지 않았으므로 쓰지 않는다.
 
                 지표의 뜻 — 절대 바꿔 부르지 마라:
-                - `가한피해` = 그 선수가 상대에게 <b>입힌</b> 피해. 공격 지표다.
-                - `받은피해` = 그 선수가 상대에게 <b>맞은</b> 피해. 탱킹 지표다.
-                - `힐량` = 그 선수가 <b>회복시킨</b> 양.
-                - `킬/데스/어시` 는 그 순서다.
-                딜러의 가한피해를 힐량이라 하거나, 탱커의 받은피해를 딜량이라 하면
-                명백한 오류다. <b>확실하지 않으면 수치를 쓰지 말고 두루뭉술하게 넘겨라</b> —
-                틀린 숫자를 자신 있게 쓰는 것보다 안 쓰는 편이 낫다.
+                - `가한피해` = 상대에게 입힌 피해. 공격 지표.
+                - `받은피해` = 상대에게 맞은 피해. 탱킹 지표.
+                - `힐량` = 아군을 회복시킨 양.
+                - 확실하지 않으면 수치를 쓰지 말고 두루뭉술하게 넘겨라.
 
-                「사실」 맨 위의 [맥락] 줄:
-                - 우리가 계산해 준 것이다. 순위·연승·연패·라이벌 관계가 거기 있다.
-                - <b>[맥락] 줄이 있으면 첫 문단에서 반드시 다뤄라.</b> 그게 이 경기가
-                  왜 중요한지를 정하는 유일한 근거다. 날짜와 스코어로 첫 문장을 시작하지 마라.
-                - 다만 그 문장을 그대로 옮기지는 마라. 그 사실이 이 경기에 어떤 의미인지를
-                  네 문장으로 써라.
+                ★★★ 기사 작성 구조 (반드시 지킬 것) ★★★
 
-                선수를 쓴다 — 이 기사의 주인공은 팀이 아니라 사람이다:
-                - 「사실」의 선수 줄은 `팀 | 선수 | 챔피언 | 킬/데스/어시 | 딜·탱·힐` 이다.
-                  <b>한 줄 안의 값은 서로 붙어 있다.</b> 줄을 가로질러 섞지 마라 —
-                  다른 줄의 챔피언이나 기록을 그 선수에게 붙이면 그건 거짓이다.
-                - 딜량·탱킹·힐량이 유난히 큰 선수, 킬을 몰아친 선수, 계속 죽은 선수를
-                  이름으로 부른다. 숫자를 근거로 대되 없는 숫자를 만들지 않는다.
-                - 선수 이름을 모르는 자리는 "선수 41" 처럼 번호로 적혀 있다.
-                  그런 선수는 이름으로 부르지 말고 굳이 언급하지 않아도 된다.
+                1. 첫 문단: 대회 정보와 [맥락] 중심의 메인 테마 서술 (가장 비중 있게)
+                - 이 경기가 어떤 대회(정규 리그, 플레이오프, 월드 챔피언십 등)인지, 그리고
+                  [맥락] 줄에 주어진 "순위 변동"과 "연승/연패 단절" 정보를 바탕으로
+                  이 경기가 가지는 무게감과 서사를 집중적으로 서술하라.
+                - 세부 전투 내용보다 "이 승리로 팀 A가 1위로 도약했다" 식의 거시적 맥락이 기사의 핵심이다.
 
-                가장 중요한 것 — 세트를 순서대로 나열하지 마라:
-                - <b>세트 번호를 문장의 주어로 쓰는 것을 금지한다.</b> "1세트에서는…",
-                  "이어 2세트에서도…", "세 번째 세트에서…", "네 번째 세트는…" 이 전부
-                  금지다. 그렇게 쓰면 세트 수만큼 문단이 생기고, 그건 기사가 아니라
-                  표를 문장으로 옮긴 것이다.
-                - <b>모든 세트를 언급하지 마라.</b> 다섯 세트짜리 경기라면 두세 개만 쓴다.
-                  나머지는 "먼저 두 세트를 내줬다" 처럼 뭉뚱그린다.
-                - 대신 이 경기의 이야기를 하나 잡아라. 어디서 기울었고, 어디서 뒤집혔고,
-                  무엇이 마지막을 갈랐는지. 그 이야기에 필요한 세트만 고른다.
-                - 킬 차이가 유난히 큰 세트, 흐름이 꺾인 지점, 마지막 세트가 대개 그렇다.
-                - 픽과 밴을 목록으로 옮기지 않는다. 이야기에 필요한 한둘만 짚는다.
+                2. 중간 문단: 전체 경기 흐름 요약 (단 1~2줄로 압축)
+                - 세트별 상세 전개나 픽/밴 나열을 절대 하지 마라. "1세트에 이어 2세트에서도..." 식의 서술 금지.
+                - 대신 경기 전체 흐름을 1~2줄로만 요약해라. (예: "1세트를 압도적인 킬 차이로 잡은 A팀이 그 기세를 몰아 세트 스코어 2:0으로 깔끔하게 마무리했다.")
 
-                기록을 옮겨 적지 마라 — 골라 써라:
-                - <b>한 문단에 선수 기록은 최대 두 명까지.</b> 여러 선수의 킬/데스/어시를
-                  줄줄이 적으면 그것도 표를 옮긴 것이다.
-                - 기록 전체를 쓰지 말고 <b>그 이야기에 쓸 숫자 하나</b>만 골라라.
-                  "14킬 0데스 11어시와 39527의 딜을 기록했다" 가 아니라
-                  "한 번도 죽지 않고 14킬을 몰아쳤다" 로 쓴다.
-                - 딜·탱·힐 같은 큰 숫자는 웬만하면 쓰지 마라. 쓰더라도 한 기사에 한 번이다.
+                3. 마지막 문단: 수훈 선수 (MVP) 선정 (1~2줄)
+                - 「선수 합계」 표에서 고른다. 그 표는 <b>매치 전체를 이미 더해 둔 것</b>이다.
+                  세트별 숫자를 네가 다시 더하지 마라 — 그러면 같은 값을 두 번 적게 된다.
+                - 줄 맨 앞이 `[승]` 인 선수 중에서만 고른다. `[패]` 는 수훈 선수가 아니다.
+                - ★ 표시가 근거다. ★최다 킬 · ★최다 가한피해 · ★최다 힐량이 붙은 선수가 후보다.
+                  ★최다 데스와 ★최다 받은피해는 <b>수훈의 근거가 아니다</b> — 많이 죽은 것과
+                  많이 맞아준 것은 다른 말이고, 표만 보고는 어느 쪽인지 못 가른다.
+                - <b>그 선수가 쓴 챔피언을 반드시 이름으로 적는다.</b> 표의 세 번째 칸에 있다.
+                - 숫자는 <b>하나만</b> 고른다. "10898의 가한피해와 12468의 가한피해" 처럼
+                  여러 값을 늘어놓지 마라. 합계 한 개면 충분하다.
 
                 문체:
                 - 스포츠 기사체. 담백하게 쓰고 과장하지 않는다.
@@ -107,19 +87,21 @@ public final class StoryPrompts {
                 - 소제목·목록·마크다운을 쓰지 않는다. 문단만 쓴다.
                 """;
 
-        // 주목도의 이유는 넘기지 않는다. 그것은 해석층의 말이고, 넘기면 기사가
-        // 그 말을 사실처럼 쓴다 — 실물에서 "내 팀 경기라는 점 때문에 주목받았다" 가
-        // 본문 첫 줄에 나왔다. 주목도는 분량으로만 반영한다.
+        // 선수 합계 표를 같이 준다. 세트별 줄만 주면 모델이 매치 합계를 <b>스스로 더해야
+        // 하고</b>, 실물에서 그걸 못 했다 — 두 세트의 딜을 "10898의 가한피해와 12468의
+        // 가한피해" 로 두 번 적었고 챔피언은 아예 빠졌다. 댓글·갤러리 프롬프트는 이미
+        // 이 표를 쓰고 있었다. 기사만 안 쓰고 있었던 것이 구멍이었다.
         String user = """
                 아래 사실만으로 기사를 써라. 분량은 %d문단이다.
 
                 --- 사실 ---
+                %s
+                --- 선수 합계 (매치 전체. 수훈 선수는 여기서 고른다) ---
                 %s""".formatted(
                 notability.paragraphs(),
-                BriefRenderer.render(brief, names));
+                BriefRenderer.render(brief, names, contextTags),
+                playerTotals(brief, names));
 
-        // 문단당 320토큰에 하한 1200. 추론 모델은 답 전에 생각을 쓰고 그 생각도 출력
-        // 토큰이라, 상한이 빠듯하면 생각만 하다 끝나 본문이 빈 채로 돌아온다.
         return new StoryRequest(system, user,
                 Math.max(notability.paragraphs() * 320, 1200), 0.4);
     }
@@ -336,57 +318,69 @@ public final class StoryPrompts {
      * 한쪽만 고쳐진다.
      */
     public static String playerTotals(MatchBrief brief, NameBook names) {
-        record Totals(String team, int kill, int death, int assist, int dealt,
-                      java.util.LinkedHashSet<String> champions) {
-        }
-        Map<String, Totals> byPlayer = new LinkedHashMap<>();                   // 1. 선수 이름 → 합계
+        // 합계는 brief 가 낸다. 여기서 다시 더하면 대조(FactCheck)가 보는 숫자와
+        // 갈라지고, 그때 우리가 준 숫자를 우리가 지적하게 된다.
+        List<MatchBrief.AthleteTotals> totals = brief.athleteTotals();
+        boolean blueWonMatch = brief.blueScore() > brief.redScore();
 
-        for (MatchBrief.SetBrief set : brief.sets()) {
-            for (MatchBrief.PlayerLine line : set.players()) {
-                String team = teamName(line.blue() ? brief.blueTeamId() : brief.redTeamId(), names);
-                String who = names.athleteName(line.athleteId());
-                if (who == null || who.isBlank()) {                             // 2. 이름을 모르면 표에 안 넣는다
-                    continue;                                                   //    댓글이 번호로 부를 일은 없다
-                }
-                Totals now = byPlayer.getOrDefault(who,
-                        new Totals(team, 0, 0, 0, 0, new java.util.LinkedHashSet<>()));
-                // 세트마다 다른 챔피언을 할 수 있으므로 모은다. 하나로 줄이면 남의 세트의
-                // 챔피언이 그 선수 것으로 굳는다.
-                now.champions().add(names.championName(line.champion()));
-                byPlayer.put(who, new Totals(team,                              // 3. 세트를 가로질러 더한다
-                        now.kill() + line.kill(),
-                        now.death() + line.death(),
-                        now.assist() + line.assist(),
-                        now.dealt() + line.dealing(),
-                        now.champions()));
-            }
+        record Row(String team, String who, boolean won, MatchBrief.AthleteTotals t) {
         }
-        if (byPlayer.isEmpty()) {
+        List<Row> rows = new ArrayList<>();
+        for (MatchBrief.AthleteTotals t : totals) {
+            String who = names.athleteName(t.athleteId());
+            if (who == null || who.isBlank()) {                                 // 이름을 모르면 표에 안 넣는다
+                continue;                                                       // 기사가 번호로 부를 일은 없다
+            }
+            rows.add(new Row(teamName(t.blue() ? brief.blueTeamId() : brief.redTeamId(), names),
+                    who, t.blue() == blueWonMatch, t));
+        }
+        if (rows.isEmpty()) {
             return "(선수 기록 없음)";
         }
 
-        int mostKills = byPlayer.values().stream().mapToInt(Totals::kill).max().orElse(0);
-        int mostDeaths = byPlayer.values().stream().mapToInt(Totals::death).max().orElse(0);
+        int mostKills = rows.stream().mapToInt(r -> r.t().kill()).max().orElse(0);
+        int mostDeaths = rows.stream().mapToInt(r -> r.t().death()).max().orElse(0);
+        // 수훈 선수를 고르려면 딜·탱·힐의 최댓값도 있어야 한다. 안 주면 모델이
+        // 스무 줄을 눈으로 비교하다 틀린다 — 실물 기사가 두 세트의 딜을 "10898의
+        // 가한피해와 12468의 가한피해" 로 두 번 적은 것이 그 증상이다.
+        int mostDealt = rows.stream().mapToInt(r -> r.t().dealing()).max().orElse(0);
+        int mostTaken = rows.stream().mapToInt(r -> r.t().tanking()).max().orElse(0);
+        int mostHealed = rows.stream().mapToInt(r -> r.t().healing()).max().orElse(0);
 
         StringBuilder out = new StringBuilder();
-        byPlayer.forEach((who, t) -> {
-            out.append(t.team()).append(" | ").append(who)
+        for (Row r : rows) {
+            MatchBrief.AthleteTotals t = r.t();
+            out.append(r.won() ? "[승]" : "[패]").append(' ')                   // 이긴 팀인지를 줄 맨 앞에
+                    .append(r.team()).append(" | ").append(r.who())
                     // 챔피언을 선수 <b>옆에</b> 붙인다 (D80). 전에는 갤러리 프롬프트에
                     // 챔피언이 아예 없었고, 그래서 갤 글이 "Exorcist" 같은 이름을
                     // 학습 지식에서 지어냈다 — 이 매치에 없는 챔피언이 나오는 것도,
                     // 영어로 나오는 것도 같은 구멍에서 왔다.
-                    .append(" | ").append(String.join("·", t.champions()))
+                    .append(" | ").append(t.champions().stream()
+                            .map(names::championName)
+                            .collect(java.util.stream.Collectors.joining("·")))
                     .append(" | ").append(t.kill()).append('/')
                     .append(t.death()).append('/').append(t.assist())
-                    .append(" | 가한피해 ").append(t.dealt());
-            if (t.kill() == mostKills && mostKills > 0) {                       // 4. 극단값에 별표
+                    .append(" | 가한피해 ").append(t.dealing())
+                    .append(" · 받은피해 ").append(t.tanking())
+                    .append(" · 힐량 ").append(t.healing());
+            if (t.kill() == mostKills && mostKills > 0) {                       // 극단값에 별표
                 out.append("  ★최다 킬");
             }
             if (t.death() == mostDeaths && mostDeaths > 0) {
                 out.append("  ★최다 데스");
             }
+            if (t.dealing() == mostDealt && mostDealt > 0) {
+                out.append("  ★최다 가한피해");
+            }
+            if (t.tanking() == mostTaken && mostTaken > 0) {
+                out.append("  ★최다 받은피해");
+            }
+            if (t.healing() == mostHealed && mostHealed > 0) {
+                out.append("  ★최다 힐량");
+            }
             out.append('\n');
-        });
+        }
         return out.toString();
     }
 

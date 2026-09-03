@@ -128,7 +128,8 @@ public class GalleryGenerator {
                                  List<ParsedSchedule> schedules,
                                  Progress progress) {
         MatchBrief brief = MatchBrief.of(match, setsByMatch.get(match.matchKey()));      // 사실만 모은다. 두 등식이 안 맞으면 여기서 던진다
-        List<String> tags = new SeasonBook(schedules).tagsFor(match, reference);         // 맥락 태그 (순위·연패·라이벌). 최대 2개
+        List<String> tags = new SeasonBook(schedules)
+                .tagsFor(match, reference, reference.playerGameTeamId());        // 맥락 태그 (우리 팀·순위·연패·라이벌)
 
         ArticleKey key = keyOf(reference, match);
         GalleryBatch batch = new GalleryBatch(

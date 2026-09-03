@@ -239,13 +239,17 @@ class SeasonBookTest {
                 match(2025, 3, LEAGUE, B, C, 2, 0),      // B 1승 → 둘 다 1위
                 target);
 
+        // 순위 태그는 전·후를 한 줄에 담는다. 공동 1위끼리 붙었으므로 이긴 A 는 1위를
+        // 지키고 진 B 는 밀린다 — 그 <b>변화</b>가 보이는 것이 이 태그의 목적이다.
         assertThat(new SeasonBook(season).tagsFor(target, NAMES))
-                .anyMatch(t -> t.contains("단독 1위"));
+                .anyMatch(t -> t.startsWith("순위:")
+                        && t.contains("에이팀 1위(1승) → 1위")
+                        && t.contains("비팀 1위(1승) → 2위"));
     }
 
     @Test
-    @DisplayName("태그는 두 개를 넘지 않는다 — 넘기면 기사가 태그를 나열한다")
-    void tag_atMostTwo() {
+    @DisplayName("태그는 넷을 넘지 않는다 — 넘기면 기사가 태그를 나열한다")
+    void tag_atMostFour() {
         ParsedSchedule target = match(2025, 20, LEAGUE, A, B, 2, 0);
         List<ParsedSchedule> season = new ArrayList<>();
         // A 도 B 도 3연패를 만들고, 둘 다 같은 순위가 되게 한다
@@ -255,7 +259,41 @@ class SeasonBookTest {
         }
         season.add(target);
 
-        assertThat(new SeasonBook(season).tagsFor(target, NAMES)).hasSizeLessThanOrEqualTo(2);
+        // 상한이 하는 일은 <b>자르는 것</b>이다. 이 판에서 만들 수 있는 태그는
+        // 우리 팀 + 순위 + 연패 둘 = 넷이고, 그것을 넘기지 않는지를 본다.
+        assertThat(new SeasonBook(season).tagsFor(target, NAMES, A))
+                .hasSizeLessThanOrEqualTo(4)
+                .element(0).asString().startsWith("이 경기는 우리 팀");
+    }
+
+    @Test
+    @DisplayName("1연패는 연패가 아니다 — 「1연패 종결」이 제목으로 나갔다")
+    void tag_singleLossIsNotAStreak() {
+        ParsedSchedule target = match(2025, 9, LEAGUE, A, B, 2, 0);
+        List<ParsedSchedule> season = List.of(
+                match(2025, 1, LEAGUE, A, C, 2, 0),      // A 승
+                match(2025, 5, LEAGUE, A, C, 0, 2),      // A 패 → 직전 1패뿐이다
+                target);
+
+        assertThat(new SeasonBook(season).tagsFor(target, NAMES))
+                .noneMatch(t -> t.contains("1연패") || t.contains("1연승"));
+    }
+
+    @Test
+    @DisplayName("우리 팀이 안 뛴 경기는 그 결과가 우리 순위에 무엇을 했는지로 말한다")
+    void tag_perspectiveWhenPlayerIsAbsent() {
+        // C(우리)는 2승. B 가 이겨 1승이 되므로 아직 우리가 1경기 앞선다.
+        ParsedSchedule target = match(2025, 9, LEAGUE, A, B, 0, 2);
+        List<ParsedSchedule> season = List.of(
+                match(2025, 1, LEAGUE, C, A, 2, 0),
+                match(2025, 3, LEAGUE, C, B, 2, 0),
+                target);
+
+        assertThat(new SeasonBook(season).tagsFor(target, NAMES, C))
+                .element(0).asString()
+                .contains("우리 팀")
+                .contains("이 경기에 없다")
+                .contains("1경기 앞선다");
     }
 
     @Test

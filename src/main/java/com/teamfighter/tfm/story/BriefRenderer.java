@@ -71,11 +71,15 @@ public final class BriefRenderer {
             out.append("[맥락] ").append(tag).append('\n');
         }
 
+        // 킬을 <b>팀 이름과 붙여서</b> 적는다. 전에는 "(킬 41 - 29)" 였는데, 맥락 태그는
+        // 완성된 문장으로 주면서 킬만 괄호 안의 숫자로 주니 모델이 주어를 잃었다 —
+        // 실물 기사가 "양팀 모두 41대 29 킬 차이로 전장을 장악했으며" 라고 썼다.
+        // 어느 쪽 숫자인지 문장이 말해 주지 않으면 모델은 그 관계를 지어낸다.
         out.append(blue).append(' ')
                 .append(brief.blueScore()).append(" - ").append(brief.redScore())
                 .append(' ').append(red)
-                .append("  (킬 ").append(brief.blueKill())
-                .append(" - ").append(brief.redKill()).append(")\n");
+                .append("  (매치 총 킬 — ").append(blue).append(' ').append(brief.blueKill())
+                .append(SEP).append(red).append(' ').append(brief.redKill()).append(")\n");
 
         for (MatchBrief.SetBrief set : brief.sets()) {
             String winner = set.blueWon() ? blue : red;
