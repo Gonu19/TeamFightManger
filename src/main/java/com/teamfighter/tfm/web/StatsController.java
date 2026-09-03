@@ -1,6 +1,10 @@
 package com.teamfighter.tfm.web;
 
+import com.teamfighter.tfm.analysis.dao.PairCoverageDao;
 import com.teamfighter.tfm.analysis.pair.PairEffectCalculator;
+import com.teamfighter.tfm.analysis.scrim.ScrimCandidate;
+import com.teamfighter.tfm.analysis.scrim.ScrimDeck;
+import com.teamfighter.tfm.analysis.scrim.ScrimSuggester;
 import com.teamfighter.tfm.analysis.pair.PairEffectCalculator.Side;
 import com.teamfighter.tfm.ingest.entity.ChampionCategory;
 import com.teamfighter.tfm.web.dao.SlotDao;
@@ -57,12 +61,23 @@ public class StatsController {
      */
     private static final int PAIRS_SHOWN = 10;
 
+    /**
+     * 스크림 화면에 그리는 덱 수.
+     *
+     * <p>넷이다. 하나면 "이거 하나뿐이냐" 가 되고, 열이면 고르는 일이 또 하나의 숙제가
+     * 된다. 챔피언이 40종이라 겹치지 않는 덱은 열까지 만들 수 있는데, 그중 앞의 넷이면
+     * 발굴 효율이 가장 높은 것들이다.
+     */
+    private static final int DECKS_SHOWN = 4;
+
     private final StatsDao stats;
     private final SlotDao slots;
+    private final PairCoverageDao coverage;
 
-    public StatsController(StatsDao stats, SlotDao slots) {
+    public StatsController(StatsDao stats, SlotDao slots, PairCoverageDao coverage) {
         this.stats = stats;
         this.slots = slots;
+        this.coverage = coverage;
     }
 
     /**
@@ -128,8 +143,41 @@ public class StatsController {
         model.addAttribute("selectedCategory", tab);
         model.addAttribute("rows", selected == null ? List.of()
                 : stats.tier(selected, scrim, tab));
+
+        /*
+         * 화면 맨 밑의 스크림 추천. 위의 표와 답하는 질문이 다르다 —
+         * 표는 "무엇이 세냐" 이고 이쪽은 "무엇을 아직 모르냐" 다.
+         *
+         * 역할군 탭과 스크림 토글을 <b>안 본다.</b> 그 둘은 지금 보고 있는 표를 거르는
+         * 것이고, 추천은 커리어 전체에서 안 해 본 조합을 찾는 일이다. 탭을 바꿀 때마다
+         * 추천이 흔들리면 사용자는 그것을 추천이 아니라 잡음으로 읽는다.
+         */
+        model.addAttribute("scrimDecks", scrimDecks(selected, aggregated));
+        model.addAttribute("pairsPerDeck", ScrimSuggester.PAIRS_PER_DECK);
+
         model.addAttribute("tab", "tier");
         return "stats/tier";
+    }
+
+    /**
+     * 스크림에서 해 볼 덱.
+     *
+     * <p><b>집계 전인 커리어에는 안 그린다.</b> 그때는 챔피언 표 자체가 비어서 후보를
+     * 못 만들고, 무엇보다 화면이 이미 "집계를 돌려라" 를 말하고 있다 (D82). 거기에
+     * 추천까지 얹으면 할 일이 둘로 보인다.
+     *
+     * <p>후보는 <b>거르지 않은 전체 목록</b>이다. 출전 0회인 챔피언도 넣는다 —
+     * 발굴이 목적이므로 안 나온 챔피언이야말로 값이 크다.
+     */
+    private List<ScrimDeck> scrimDecks(Integer slotId, Set<Integer> aggregated) {
+        if (slotId == null || !aggregated.contains(slotId)) {
+            return List.of();
+        }
+        List<ScrimCandidate> pool = stats.tier(slotId, false, null).stream()
+                .map(row -> new ScrimCandidate(row.championId(), row.code(),
+                        row.nameKo(), row.category(), row.games()))
+                .toList();
+        return ScrimSuggester.suggest(pool, coverage.load(slotId), DECKS_SHOWN);
     }
 
     /**

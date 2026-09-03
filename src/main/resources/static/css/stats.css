@@ -279,3 +279,96 @@ details.vectors[open] > summary { border-radius: 4px 4px 0 0; border-bottom: non
 .reading h2 { color: var(--faint); font-weight: 500; margin-bottom: 0.5rem; }
 .reading ul { margin: 0; padding-left: 1.1rem; }
 .reading li { margin-bottom: 0.4rem; }
+
+/* --- 스크림 추천 덱 --- */
+
+/*
+ * 표 아래에 <b>따로 서는 칸</b>이다. 위 표와 답하는 질문이 다르므로
+ * (무엇이 세냐 / 무엇을 아직 모르냐) 경계를 눈에 보이게 둔다.
+ */
+.scrim-lab {
+    margin: 2.5rem 0 0;
+    padding-top: 1.5rem;
+    border-top: 1px solid var(--line);
+}
+
+.scrim-lab h2 { font-size: 1rem; margin-bottom: 0.35rem; }
+.scrim-lab .note { margin: 0 0 1rem; }
+
+/* 넷이 나란히. 좁아지면 자동으로 줄어든다 — 덱 하나가 220px 아래로는 안 읽힌다 */
+.deck-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.75rem;
+}
+
+.deck {
+    padding: 0.75rem 0.85rem;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 4px;
+}
+
+.deck header { display: flex; align-items: baseline; gap: 0.4rem; }
+.deck-score { font-size: 1.15rem; font-variant-numeric: tabular-nums; }
+.deck-score b { color: var(--gold); }
+.deck-score span { color: var(--faint); font-size: 0.85rem; }
+.deck-label { color: var(--faint); font-size: 0.78rem; }
+
+/*
+ * 여섯 쌍을 세 토막으로. flex 값이 곧 쌍의 수라 <b>눈금이 필요 없다</b> —
+ * 막대 전체가 항상 여섯이기 때문이다.
+ */
+.deck-bar {
+    display: flex;
+    height: 4px;
+    margin: 0.5rem 0 0.65rem;
+    border-radius: 2px;
+    overflow: hidden;
+    background: var(--panel-2);
+}
+
+.deck-bar .seg.new { background: var(--gold); }
+.deck-bar .seg.tried { background: var(--flat); }
+.deck-bar .seg.known { background: var(--line); }
+
+.deck-picks { list-style: none; margin: 0; padding: 0; }
+.deck-picks li {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    padding: 0.15rem 0;
+    font-size: 0.85rem;
+}
+
+.deck-picks .champ { text-decoration: none; white-space: nowrap; }
+.deck-picks .champ:hover { color: var(--gold); }
+
+/* 코드명이 길면(BoomerangHunter) 이쪽이 줄어든다. 이름과 출전 수는 안 줄인다 —
+   "39경 기" 로 줄바꿈되면 숫자가 두 줄이 되어 표가 아니라 흠으로 보인다 */
+.deck-picks .code {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    min-width: 0;
+}
+
+.deck-picks .faint {
+    margin-left: auto;
+    padding-left: 0.3rem;
+    font-size: 0.75rem;
+    white-space: nowrap;
+}
+
+/* 범례의 색 조각. 막대와 같은 색을 써야 설명이 설명이 된다 */
+.key {
+    display: inline-block;
+    width: 0.7rem;
+    height: 0.7rem;
+    border-radius: 2px;
+    vertical-align: middle;
+}
+
+.key.new { background: var(--gold); }
+.key.tried { background: var(--flat); }
+.key.known { background: var(--line); }

@@ -206,6 +206,76 @@
         <b>막대의 눈금은 40~60% 다.</b> 실제 차이가 3%p 대에서 나기 때문이고, 그 밖은
         양끝에 눕는다. 가운데 선이 50% 다.
     </p>
+
+    <!--
+      스크림 추천 덱 — 위 표와 <b>답하는 질문이 다르다.</b>
+
+      표는 "무엇이 세냐" 를 말한다. 그런데 표는 관측이 충분한 것만 담으므로,
+      아무리 들여다봐도 <b>안 해 본 조합은 영영 안 보인다.</b> 실측(슬롯 1)으로
+      듀오 780쌍 중 305쌍(39%)이 공식전에도 스크림에도 한 번도 같이 안 나왔다.
+
+      그 305쌍은 나쁜 조합이 아니라 <b>모르는 조합</b>이다 (D62: 없는 게 아니라
+      안 보이는 것이다). 스크림은 그것을 알아보라고 있는 자리다.
+
+      <b>여기서 "세다" 라고 말하지 않는다.</b> 4인 조합은 실측 최다 9경기라 통계가
+      아니고(D11), 시너지가 실재한다고 확인된 것은 2인까지다(D60). 그래서 이 칸이
+      말하는 것은 딱 하나다 — 이 넷을 뽑으면 모르는 쌍 몇 개를 한 번에 보는가.
+    -->
+    <section class="scrim-lab" th:if="${!scrimDecks.isEmpty()}">
+        <h2>스크림에서 해 볼 덱</h2>
+        <p class="note">
+            4명을 뽑으면 같은 편 듀오가 <b th:text="${pairsPerDeck}">6</b>쌍 생긴다.
+            그중 <b>아직 아무 데서도 안 나온 쌍</b>이 많을수록 그 한 판이 많이 알려준다.
+            <b>센 덱이 아니라 모르는 덱이다</b> — 4인 조합의 강함은 아직 잴 수 없다 (D11 · D60).
+        </p>
+
+        <div class="deck-grid">
+            <article class="deck" th:each="deck : ${scrimDecks}">
+                <header>
+                    <span class="deck-score">
+                        <b th:text="${deck.unexploredPairs}">4</b><span
+                                th:text="'/' + ${pairsPerDeck}">/6</span>
+                    </span>
+                    <span class="deck-label">처음 보는 쌍</span>
+                </header>
+
+                <!-- 여섯 칸을 셋으로 나눠 채운다. 셋의 합이 항상 여섯이라 눈금이 필요 없다 -->
+                <div class="deck-bar" th:attr="title=${deck.unexploredPairs} + '쌍은 처음 · '
+                        + ${deck.scrimTriedPairs} + '쌍은 스크림에서만 · '
+                        + ${deck.knownPairs} + '쌍은 공식전으로 안다'">
+                    <span class="seg new" th:style="'flex:' + ${deck.unexploredPairs}"
+                          th:if="${deck.unexploredPairs > 0}"></span>
+                    <span class="seg tried" th:style="'flex:' + ${deck.scrimTriedPairs}"
+                          th:if="${deck.scrimTriedPairs > 0}"></span>
+                    <span class="seg known" th:style="'flex:' + ${deck.knownPairs}"
+                          th:if="${deck.knownPairs > 0}"></span>
+                </div>
+
+                <ul class="deck-picks">
+                    <li th:each="c : ${deck.champions}">
+                        <!--
+                          챔피언 화면으로 가는 링크는 통계 안에서만 도는 길이다.
+                          창작(연대기·갤러리)으로 나가지 않으므로 D61 에 안 걸린다.
+                        -->
+                        <a class="champ" th:href="@{'/champion/' + ${c.code}(slot=${selectedSlot})}"
+                           th:text="${c.nameKo}">이름</a>
+                        <span class="code" th:text="${c.code}">Code</span>
+                        <!-- 출전 수를 같이 적는다. 이 추천의 근거가 "덜 나왔다" 이기 때문이다 -->
+                        <span class="faint" th:text="${c.games} + '경기'">0경기</span>
+                    </li>
+                </ul>
+            </article>
+        </div>
+
+        <p class="note">
+            <span class="key new"></span> 처음 보는 쌍 ·
+            <span class="key tried"></span> 스크림에서만 해 본 쌍 ·
+            <span class="key known"></span> 공식전으로 아는 쌍
+            <br>
+            덱끼리 챔피언이 겹치지 않는다 — 겹치면 목록이 넷이어도 고를 것은 하나다.
+            역할군은 최소 2종이다(실측 라인업 588개 중 1종은 0건).
+        </p>
+    </section>
 </main>
 </body>
 </html>
