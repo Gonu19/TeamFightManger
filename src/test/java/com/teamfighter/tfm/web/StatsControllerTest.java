@@ -11,10 +11,15 @@ import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.context.WebApplicationContext;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.not;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.flash;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrl;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.redirectedUrlPattern;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
@@ -114,6 +119,101 @@ class StatsControllerTest {
     }
 
     /**
+     * 숫자가 낡았다는 것을 알아채는 자리는 연대기가 아니라 <b>여기</b>다 — 경기를 하고
+     * 왔는데 티어가 그대로일 때. 그때 다른 화면으로 보내면 사용자는 거기서 무엇을
+     * 눌러야 하는지 다시 찾아야 한다 (D83).
+     */
+    @Test
+    @DisplayName("티어 화면에 집계 버튼이 있다")
+    void 티어에_집계_버튼이_있다() throws Exception {
+        int slot = newSlot();
+
+        mvc().perform(get("/tier").param("slot", String.valueOf(slot)))
+                .andExpect(status().isOk())
+                .andExpect(content().string(containsString("action=\"/aggregate\"")))
+                .andExpect(content().string(containsString("name=\"from\" value=\"tier\"")));
+    }
+
+    /**
+     * 집계 버튼도 지금 보고 있는 조건을 실어 보내야 한다. 안 실으면 집계 한 번에
+     * 역할군 탭이 조용히 "전체" 로 돌아가고, 사용자는 자기가 누르지 않은 변화를 본다.
+     */
+    @Test
+    @DisplayName("집계 버튼이 지금 보고 있는 거르개를 실어 보낸다")
+    void 집계_버튼이_거르개를_싣는다() throws Exception {
+        int slot = newSlot();
+
+        String html = mvc().perform(get("/tier")
+                        .param("slot", String.valueOf(slot))
+                        .param("category", "RANGER")
+                        .param("scrim", "true"))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        int form = html.indexOf("action=\"/aggregate\"");
+        assertThat(form).isGreaterThan(-1);
+        String block = html.substring(form, html.indexOf("</form>", form));
+
+        assertThat(block)
+                .contains("name=\"slot\" value=\"" + slot + "\"")
+                .contains("name=\"scrim\" value=\"true\"")
+                .contains("name=\"category\" value=\"RANGER\"");
+    }
+
+    /**
+     * D61 의 반대 방향. 통계 화면에서 창작 쪽으로 넘어가는 길도 없어야 한다.
+     *
+     * <p>집계 버튼을 붙이면서 실제로 걸릴 뻔했다 — 경로가 {@code /story/aggregate} 였고,
+     * 그대로 쓰면 <b>폼의 action 하나로</b> 통계 화면이 {@code /story} 를 알게 된다.
+     * 그래서 {@code /aggregate} 로 옮겼다 (D83). 이 검사가 그 결정을 지킨다.
+     */
+    @Test
+    @DisplayName("티어 본문에 창작 화면으로 가는 길이 없다 (D61)")
+    void 티어에_창작으로_가는_길이_없다() throws Exception {
+        int slot = newSlot();
+
+        String html = mvc().perform(get("/tier").param("slot", String.valueOf(slot)))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsString();
+
+        // 상단 탭은 두 세계가 만나는 유일한 자리라 도려내고, 주석도 걷어낸다.
+        // 주석은 눌러지지 않는다 — 경로를 <b>설명하는</b> 문장까지 위반으로 세면
+        // 이 검사는 "그 얘기를 꺼내지 마라" 가 되고, 그러면 주석이 먼저 사라진다.
+        assertThat(navigable(html))
+                .doesNotContain("/story")
+                .doesNotContain("/gallery");
+    }
+
+    /**
+     * 집계를 돌리고 나면 <b>보고 있던 화면으로</b> 돌아온다. 거르개도 그대로다.
+     *
+     * <p>돌아갈 곳을 경로 문자열이 아니라 이름({@code from})으로 받는 이유는
+     * 열린 리다이렉트를 만들지 않기 위해서다 — 인증이 없는 앱이라(D41·D59) 더 그렇다.
+     */
+    @Test
+    @DisplayName("집계 후 티어로 거르개를 들고 돌아온다")
+    void 집계_후_티어로_돌아온다() throws Exception {
+        int slot = newSlot();
+
+        mvc().perform(post("/aggregate")
+                        .param("from", "tier")
+                        .param("slot", String.valueOf(slot))
+                        .param("scrim", "true")
+                        .param("category", "MELEE"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrlPattern("/tier?*"))
+                .andExpect(flash().attributeExists("notice"));
+    }
+
+    @Test
+    @DisplayName("모르는 from 은 연대기로 보낸다 — 아무 데나 보내지 않는다")
+    void 모르는_from_은_연대기로() throws Exception {
+        mvc().perform(post("/aggregate").param("from", "https://example.com"))
+                .andExpect(status().is3xxRedirection())
+                .andExpect(redirectedUrl("/story"));
+    }
+
+    /**
      * "전체" 는 널이고 그건 정상이다. 널을 그대로 실으면 {@code ?category=} 라는 빈 인자가
      * 주소에 붙고, 그 값은 다시 읽을 때 빈 문자열이라 "전체" 와 뜻이 갈릴 여지가 생긴다.
      */
@@ -126,5 +226,30 @@ class StatsControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(content().string(not(
                         containsString("name=\"category\""))));
+    }
+
+    /**
+     * <b>눌러서 갈 수 있는 것만</b> 남긴 마크업. 둘을 걷어낸다.
+     *
+     * <ol>
+     *   <li><b>상단 탭</b> — D61 이 허락한 유일한 통로다. 거기 {@code /story} 가 있는 것은
+     *       규칙이지 위반이 아니다. {@code StoryControllerTest} 에 같은 것이 있고,
+     *       두 화면이 서로 반대 방향을 지킨다</li>
+     *   <li><b>HTML 주석</b> — Thymeleaf 는 주석을 지우지 않고 그대로 내보낸다.
+     *       주석은 눌러지지 않으므로 경로를 <b>설명하는</b> 문장은 위반이 아니다</li>
+     * </ol>
+     *
+     * <p>탭이 사라지면 {@code indexOf} 가 -1 이 되어 원본을 그대로 돌려주므로,
+     * 그때는 검사가 <b>더 엄격해질 뿐</b> 조용히 통과하지 않는다.
+     */
+    private static String navigable(String html) {
+        int start = html.indexOf("<nav class=\"tabs\"");
+        if (start >= 0) {
+            int end = html.indexOf("</nav>", start);
+            if (end >= 0) {
+                html = html.substring(0, start) + html.substring(end + "</nav>".length());
+            }
+        }
+        return html.replaceAll("(?s)<!--.*?-->", "");
     }
 }

@@ -41,6 +41,7 @@ $env:TFM_DB_PASSWORD = 'postgres'; .\gradlew.bat test
 
 화면: `/tier` · `/champion/{code}` · `/story`(사이클) · `/gallery`
 생성은 요청 밖에서 돌고 진행 막대가 단계를 그린다. **커리어당 하나만 돈다** (D81).
+집계는 화면에서도 돈다 — 연대기 ②, 티어 거르개 줄의 새로고침 아이콘 (약 1.5초).
 
 <details><summary>스크립트 없이 (무엇을 하는지 봐야 할 때)</summary>
 

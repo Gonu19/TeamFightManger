@@ -1,6 +1,5 @@
 package com.teamfighter.tfm.web;
 
-import com.teamfighter.tfm.analysis.AggregationService;
 import com.teamfighter.tfm.story.StoryGenerator;
 import com.teamfighter.tfm.story.dao.ArticleCard;
 import com.teamfighter.tfm.story.dao.ArticleDao;
@@ -71,18 +70,15 @@ public class StoryController {
     private final ArticleDao articles;
     private final SlotDao slots;
     private final CycleDao cycles;
-    private final AggregationService aggregation;
     private final Optional<StoryGenerator> generator;
     private final Optional<StoryJobs> jobs;
 
     public StoryController(ArticleDao articles, SlotDao slots, CycleDao cycles,
-                           AggregationService aggregation,
                            Optional<StoryGenerator> generator,
                            Optional<StoryJobs> jobs) {
         this.articles = articles;
         this.slots = slots;
         this.cycles = cycles;
-        this.aggregation = aggregation;
         this.generator = generator;
         this.jobs = jobs;
     }
@@ -183,32 +179,13 @@ public class StoryController {
      * StoryGeneratorTest 가 그것을 지킨다. 없어진 것은 <b>그 규칙으로 가는 HTTP 문</b>뿐이다.
      */
 
-    /**
-     * <b>사이클 ② — 집계를 다시 돌린다.</b>
+    /*
+     * 사이클 ② (집계 다시 돌리기) 는 여기 있었다 — POST /story/aggregate.
      *
-     * <p>적재는 워처가 자동으로 한다. 집계는 <b>안 한다</b> — 그래서 경기를 하고 세이브를
-     * 저장하면 매치는 목록에 뜨는데 티어와 쌍 효과는 어제 값 그대로다. 그 어긋남은
-     * 화면 어디에도 안 보인다(숫자가 여전히 그럴듯하다).
-     *
-     * <p>적재 완료를 신호로 자동으로 돌리는 것이 자연스러워 보이지만, 그러면 워처가
-     * 저장을 감지할 때마다 집계가 돈다. 그 비용을 아직 안 쟀고, 기동 시 두
-     * {@code ApplicationRunner} 의 순서 문제도 남아 있다({@code decisions/OPEN.md}).
-     *
-     * <p>요청 안에서 돌려도 되는 이유는 <b>1초 남짓</b>이기 때문이다 — 모델 호출과 달리
-     * 바깥으로 나가지 않는다. 그래서 이것만은 작업 잠금을 안 쓴다.
+     * 티어 화면에도 같은 버튼을 붙이면서 AggregateController 의 POST /aggregate 로 옮겼다.
+     * 이 컨트롤러에 두면 통계 화면의 폼이 /story 로 제출하게 되는데, D61 이 끊어 둔 것은
+     * 링크만이 아니라 두 세계가 서로를 아는 것 자체다. 집계는 어느 쪽도 아니다 (D83).
      */
-    @PostMapping("/story/aggregate")
-    public String aggregate(@RequestParam(required = false) Integer slot,
-                            RedirectAttributes redirect) {
-        AggregationService.Result result = aggregation.run();
-        redirect.addFlashAttribute("notice",
-                "집계를 다시 돌렸다 — 카운터 " + result.counterRows() + "행 · 티어 "
-                        + result.performanceRows() + "행 · 쌍 효과 " + result.pairRows() + "행.");
-        if (slot != null) {
-            redirect.addAttribute("slot", slot);
-        }
-        return "redirect:/story";
-    }
 
     /**
      * <b>사이클 ③ — 이 매치의 기사를 쓴다.</b> 연대기 목록의 줄마다 붙은 버튼이다.
