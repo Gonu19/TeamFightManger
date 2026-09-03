@@ -1,7 +1,9 @@
 package com.teamfighter.tfm.web;
 
+import com.teamfighter.tfm.analysis.dao.CounterCandidateDao;
 import com.teamfighter.tfm.analysis.dao.PairCoverageDao;
 import com.teamfighter.tfm.analysis.pair.PairEffectCalculator;
+import com.teamfighter.tfm.analysis.scrim.CounterPick;
 import com.teamfighter.tfm.analysis.scrim.ScrimCandidate;
 import com.teamfighter.tfm.analysis.scrim.ScrimDeck;
 import com.teamfighter.tfm.analysis.scrim.ScrimSuggester;
@@ -70,14 +72,34 @@ public class StatsController {
      */
     private static final int DECKS_SHOWN = 4;
 
+    /**
+     * 카운터를 뽑을 <b>메타 상위</b>의 수.
+     *
+     * <p>여섯이다. 표의 위 여섯이면 추정 승률이 대체로 52% 위이고, 그 아래로 내려가면
+     * "메타 상위" 라는 말이 무의미해진다 — 40명 중 20등을 잡는 픽을 추천할 이유가 없다.
+     */
+    private static final int META_TARGETS = 6;
+
+    /**
+     * 메타 상위로 치기 위한 최소 출전.
+     *
+     * <p>{@code min_sample}(10)과 같은 자리의 값이다. 이게 없으면 <b>2경기 100%</b> 인
+     * 챔피언이 1위로 올라와서, 그것을 잡는 픽을 추천하게 된다 — 잡을 것이 애초에
+     * 없는데 잡는 법을 말하는 셈이다 (D9).
+     */
+    private static final int META_MIN_GAMES = 20;
+
     private final StatsDao stats;
     private final SlotDao slots;
     private final PairCoverageDao coverage;
+    private final CounterCandidateDao counters;
 
-    public StatsController(StatsDao stats, SlotDao slots, PairCoverageDao coverage) {
+    public StatsController(StatsDao stats, SlotDao slots,
+                           PairCoverageDao coverage, CounterCandidateDao counters) {
         this.stats = stats;
         this.slots = slots;
         this.coverage = coverage;
+        this.counters = counters;
     }
 
     /**
@@ -173,11 +195,31 @@ public class StatsController {
         if (slotId == null || !aggregated.contains(slotId)) {
             return List.of();
         }
-        List<ScrimCandidate> pool = stats.tier(slotId, false, null).stream()
+        // 거르지 않은 전체 목록. 이미 추정 승률 순으로 정렬돼 온다.
+        List<TierRow> all = stats.tier(slotId, false, null);
+
+        /*
+         * 메타 상위를 <b>여기서 다시 정하지 않는다.</b> 화면이 그리는 그 순서에서
+         * 위에서부터 집는다 — 순서를 두 곳에서 만들면 표의 1위와 추천이 말하는
+         * 1위가 갈릴 수 있고, 그 어긋남은 둘 다 그럴듯해서 안 보인다.
+         *
+         * 표본이 얇은 챔피언은 뺀다. 2경기 100% 를 1위로 놓고 그것을 잡는 픽을
+         * 추천하면, 잡을 것이 애초에 없는데 잡는 법을 말하는 셈이다 (D9).
+         */
+        List<Integer> targets = all.stream()
+                .filter(row -> row.games() >= META_MIN_GAMES)
+                .limit(META_TARGETS)
+                .map(TierRow::championId)
+                .toList();
+
+        List<CounterPick> picks = counters.load(slotId, targets, PairRow.SIGNAL);
+
+        List<ScrimCandidate> pool = all.stream()
                 .map(row -> new ScrimCandidate(row.championId(), row.code(),
                         row.nameKo(), row.category(), row.games()))
                 .toList();
-        return ScrimSuggester.suggest(pool, coverage.load(slotId), DECKS_SHOWN);
+
+        return ScrimSuggester.suggest(picks, pool, coverage.load(slotId), DECKS_SHOWN);
     }
 
     /**

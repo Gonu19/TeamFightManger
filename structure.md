@@ -57,14 +57,16 @@ A:\project\TeamFighter\
 │   │   │    ├─ PerfMetric                  딜·탱·힐·킬·데스·어시 — 묶음으로 본다
 │   │   │    └─ PairEffectCalculator        역할군 통제 후 방향 있는 쌍
 │   │   ├─ synergy/                          승률 기반. 비어 있다 (D63 이 강등)
-│   │   ├─ scrim/      스크림에서 해 볼 덱 (D85) — 「세다」가 아니라 「모른다」
+│   │   ├─ scrim/      스크림에서 시험할 카운터 덱 (D85 · D86)
 │   │   │    ├─ PairCoverage                쌍마다 무엇을 아나. DB 를 모른다
+│   │   │    ├─ CounterPick                 메타 상위 하나를 잡는 픽 + σ + 관측
 │   │   │    ├─ ScrimCandidate · ScrimDeck  덱 하나 = 4픽 = 듀오 6쌍
-│   │   │    └─ ScrimSuggester              미지 쌍을 가장 많이 걷는 넷을 고른다
+│   │   │    └─ ScrimSuggester              덜 확인된 카운터 우선, 모자라면 발굴
 │   │   └─ dao/         MatchObservationDao · AnalysisConfigDao (D46: 행만 꺼낸다)
 │   │                    CounterWriter · PerformanceWriter · AggRunRecorder
 │   │                    PairObservationDao · PairEffectWriter · ChampionRoleDao
 │   │                    PairCoverageDao     공식전은 집계표, 스크림은 원본에서 (D85)
+│   │                    CounterCandidateDao 메타 상위를 잡는 픽. FOE·DEATH 만 (D86)
 │   ├─ story/           기사·댓글 (D61). 집계와 링크로 잇지 않는다
 │   │   ├─ MatchBrief                       사실 — 세트 합 = 스케줄 스코어를 강제
 │   │   ├─ Notability · NotabilityContext   해석 — 아는 축만으로 분량을 정한다

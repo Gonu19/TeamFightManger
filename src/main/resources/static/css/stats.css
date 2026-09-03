@@ -322,7 +322,7 @@ details.vectors[open] > summary { border-radius: 4px 4px 0 0; border-bottom: non
 .deck-bar {
     display: flex;
     height: 4px;
-    margin: 0.5rem 0 0.65rem;
+    margin: 0.7rem 0 0;
     border-radius: 2px;
     overflow: hidden;
     background: var(--panel-2);
@@ -332,13 +332,60 @@ details.vectors[open] > summary { border-radius: 4px 4px 0 0; border-bottom: non
 .deck-bar .seg.tried { background: var(--flat); }
 .deck-bar .seg.known { background: var(--line); }
 
+.deck-targets {
+    margin: 0.35rem 0 0.6rem;
+    color: var(--dim);
+    font-size: 0.78rem;
+}
+
 .deck-picks { list-style: none; margin: 0; padding: 0; }
+
+/*
+ * 한 자리가 두 줄이다: 챔피언, 그리고 <b>왜 이 픽인가</b>.
+ * 이유를 같은 줄에 넣으면 이름이 밀려 잘리고, 그러면 이유가 이름을 가린다.
+ */
 .deck-picks li {
+    padding: 0.3rem 0;
+    border-top: 1px solid var(--line);
+    font-size: 0.85rem;
+}
+
+.deck-picks li:first-child { border-top: none; }
+
+.pick-head {
     display: flex;
     align-items: baseline;
     gap: 0.35rem;
-    padding: 0.15rem 0;
-    font-size: 0.85rem;
+}
+
+/* 이유 줄. 대상 · σ · 관측 수 · 확인 필요 순으로 왼쪽부터 읽힌다 */
+.pick-why {
+    display: flex;
+    align-items: baseline;
+    gap: 0.35rem;
+    margin-top: 0.1rem;
+    font-size: 0.75rem;
+    color: var(--dim);
+}
+
+.pick-why .target { color: var(--ink); }
+.pick-why .sigma { color: var(--gold); font-variant-numeric: tabular-nums; }
+.pick-why .obs { color: var(--faint); }
+
+/* 발굴 자리는 주장이 없다. 색을 빼서 카운터 줄과 구별한다 */
+.pick-why.dig .target { color: var(--faint); }
+
+/*
+ * 「확인 필요」 — 이 화면의 결론이다. 효과는 있는데 표본이 얇아서 스크림에서
+ * 굳혀야 하는 줄. 눈에 띄어야 하지만 경고는 아니므로 빨강을 안 쓴다.
+ */
+.thin-mark {
+    padding: 0 0.3rem;
+    border: 1px solid var(--gold);
+    border-radius: 2px;
+    color: var(--gold);
+    font-size: 0.7rem;
+    white-space: nowrap;
 }
 
 .deck-picks .champ { text-decoration: none; white-space: nowrap; }
